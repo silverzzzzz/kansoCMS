@@ -1,0 +1,20 @@
+{
+  "name": "@kanso/seo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "JSON-LD, meta tag and feed builders for kansoCMS. Pure functions, no framework.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "schema-dts": "^2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

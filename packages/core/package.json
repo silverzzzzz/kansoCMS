@@ -1,0 +1,26 @@
+{
+  "name": "@kanso/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Domain logic and persistence (D1 / R2) for kansoCMS. Framework-agnostic.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/db/schema/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@cloudflare/workers-types": "^5.20260910.1",
+    "@kanso/shared": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,21 @@
+# deps
+node_modules/
+
+# build output
+dist/
+apps/server/public/admin/
+
+# cloudflare local state
+.wrangler/
+.dev.vars
+.dev.vars.*
+
+# tooling
+*.tsbuildinfo
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/*
+!.vscode/extensions.json
+.idea/

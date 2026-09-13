@@ -1,0 +1,38 @@
+{
+  "name": "@kanso/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "kansoCMS Cloudflare Worker: public site SSR, REST API, admin SPA hosting, R2 media",
+  "exports": {
+    "./api": {
+      "types": "./src/api/index.ts"
+    }
+  },
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "deploy": "wrangler deploy",
+    "types": "wrangler types --strict-vars=false",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate:local": "wrangler d1 migrations apply kanso --local",
+    "db:migrate": "wrangler d1 migrations apply kanso --remote"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "^0.9.1",
+    "@kanso/core": "workspace:*",
+    "@kanso/seo": "workspace:*",
+    "@kanso/shared": "workspace:*",
+    "hono": "^4.13.7",
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.54.6",
+    "@cloudflare/workers-types": "^5.20260910.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "wrangler": "^4.130.0"
+  }
+}

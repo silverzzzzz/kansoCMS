@@ -1,0 +1,20 @@
+{
+  "name": "@kanso/shared",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared zod schemas, types and constants for kansoCMS (browser-safe)",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
