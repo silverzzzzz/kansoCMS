@@ -1,4 +1,5 @@
 import { zValidator } from '@hono/zod-validator'
+import { buildSubmissionsCsv } from '@kanso/core'
 import {
   createFormSchema,
   idSchema,
@@ -19,7 +20,10 @@ async function formContext(c: Parameters<typeof turnstileConfig>[0]) {
 }
 
 export const forms = new Hono<AppEnv>()
-  .get('/', async (c) => c.json({ items: await c.var.kanso.forms.list() }))
+  .get('/', async (c) => {
+    const [items, context] = await Promise.all([c.var.kanso.forms.list(), formContext(c)])
+    return c.json({ items, ...context })
+  })
   .post('/', zValidator('json', createFormSchema, validationHook), async (c) => {
     const item = await c.var.kanso.forms.create(c.req.valid('json'), await formContext(c))
     return c.json({ item }, 201)
@@ -39,6 +43,21 @@ export const forms = new Hono<AppEnv>()
         unread: query.unread === undefined ? undefined : query.unread === 'true',
       })
       return c.json({ ...result, page, perPage })
+    },
+  )
+  .get(
+    '/:id/submissions/export.csv',
+    zValidator('param', idParamSchema, validationHook),
+    async (c) => {
+      const id = c.req.valid('param').id
+      const form = await c.var.kanso.forms.get(id)
+      const rows = await c.var.kanso.forms.submissions.listForExport(id)
+      const body = buildSubmissionsCsv(form.fieldsJson, rows)
+      return c.body(body, 200, {
+        'cache-control': 'no-store',
+        'content-disposition': `attachment; filename="${form.slug}-submissions.csv"`,
+        'content-type': 'text/csv; charset=utf-8',
+      })
     },
   )
   .get(

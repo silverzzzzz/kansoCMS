@@ -41,6 +41,19 @@ function validationIssues(issues: readonly { path: readonly PropertyKey[]; messa
   }))
 }
 
+function submissionMeta(value: Record<string, unknown>): SubmissionMeta {
+  const item = (key: keyof SubmissionMeta) => {
+    const current = value[key]
+    return typeof current === 'string' ? current : null
+  }
+  return {
+    ip: item('ip'),
+    userAgent: item('userAgent'),
+    referrer: item('referrer'),
+    country: item('country'),
+  }
+}
+
 export function formsService(db: Db) {
   async function list() {
     const [formRows, counts] = await Promise.all([
@@ -172,7 +185,17 @@ export function formsService(db: Db) {
       where: and(eq(formSubmissions.formId, formId), eq(formSubmissions.id, id)),
     })
     if (!submission) throw KansoError.notFound('Form submission')
-    return submission
+    return { ...submission, metaJson: submissionMeta(submission.metaJson) }
+  }
+
+  async function listSubmissionsForExport(formId: number) {
+    await get(formId)
+    const rows = await db.query.formSubmissions.findMany({
+      where: eq(formSubmissions.formId, formId),
+      orderBy: [asc(formSubmissions.createdAt), asc(formSubmissions.id)],
+      limit: 10_000,
+    })
+    return rows
   }
 
   async function createSubmission(formId: number, values: SubmissionValues, meta: SubmissionMeta) {
@@ -210,6 +233,7 @@ export function formsService(db: Db) {
     validateSubmission,
     submissions: {
       list: listSubmissions,
+      listForExport: listSubmissionsForExport,
       get: getSubmission,
       create: createSubmission,
       markRead: markSubmissionRead,

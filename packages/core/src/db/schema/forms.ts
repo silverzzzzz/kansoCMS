@@ -1,4 +1,4 @@
-import type { FormField } from '@kanso/shared'
+import type { FormField, SubmissionValues } from '@kanso/shared'
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { timestamps } from './_columns.ts'
@@ -28,7 +28,7 @@ export const formSubmissions = sqliteTable(
     formId: integer('form_id')
       .notNull()
       .references(() => forms.id, { onDelete: 'cascade' }),
-    dataJson: text('data_json', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
+    dataJson: text('data_json', { mode: 'json' }).notNull().$type<SubmissionValues>(),
     /** ip, userAgent, referrer, country — for spam triage, never rendered publicly. */
     metaJson: text('meta_json', { mode: 'json' }).notNull().$type<Record<string, unknown>>(),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),

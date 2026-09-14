@@ -37,8 +37,13 @@ function SettingsPage() {
   const [url, setUrl] = useState(initial?.organization.url ?? '')
   const [logoUrl, setLogoUrl] = useState(initial?.organization.logoUrl ?? '')
   const [sameAs, setSameAs] = useState((initial?.organization.sameAs ?? []).join('\n'))
+  const [fromEmail, setFromEmail] = useState(initial?.forms.fromEmail ?? '')
+  const [fromName, setFromName] = useState(initial?.forms.fromName ?? '')
+  const [formsNotifyTo, setFormsNotifyTo] = useState(initial?.forms.notifyTo ?? '')
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState(initial?.forms.turnstileSiteKey ?? '')
   const [siteSaved, setSiteSaved] = useState(false)
   const [organizationSaved, setOrganizationSaved] = useState(false)
+  const [formsSaved, setFormsSaved] = useState(false)
   const saveSite = useMutation({
     mutationFn: () =>
       unwrap(
@@ -76,6 +81,21 @@ function SettingsPage() {
     onSuccess: async () => {
       setOrganizationSaved(true)
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
+    },
+  })
+  const saveForms = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.settings.forms.$put({
+          json: { fromEmail, fromName, notifyTo: formsNotifyTo, turnstileSiteKey },
+        }),
+      ),
+    onSuccess: async () => {
+      setFormsSaved(true)
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        queryClient.invalidateQueries({ queryKey: ['forms'] }),
+      ])
     },
   })
 
@@ -214,6 +234,68 @@ function SettingsPage() {
         <div className="flex justify-end border-t border-neutral-200 pt-5">
           <Button type="submit" disabled={saveOrganization.isPending}>
             {saveOrganization.isPending ? '保存中…' : '組織設定を保存'}
+          </Button>
+        </div>
+      </form>
+      <form
+        className="mt-8 space-y-5 border border-neutral-200 bg-white p-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          setFormsSaved(false)
+          saveForms.mutate()
+        }}
+      >
+        <h2 className="text-lg font-semibold">フォーム</h2>
+        {formsSaved && <Alert tone="success">フォーム設定を保存しました。</Alert>}
+        {saveForms.error && (
+          <Alert tone="error">
+            {saveForms.error instanceof ApiError ? saveForms.error.message : '保存できませんでした'}
+          </Alert>
+        )}
+        <div className="grid gap-5 sm:grid-cols-2">
+          <Field
+            label="差出人メールアドレス"
+            hint="空なら通知メールを送信しません。Cloudflare Email Service でオンボード済みドメインのアドレスを入力します。"
+          >
+            <input
+              className={inputClass}
+              type="email"
+              value={fromEmail}
+              onChange={(event) => setFromEmail(event.target.value)}
+            />
+          </Field>
+          <Field label="差出人名" hint="空ならサイト名を使います。">
+            <input
+              className={inputClass}
+              value={fromName}
+              onChange={(event) => setFromName(event.target.value)}
+            />
+          </Field>
+          <Field label="既定の通知先" hint="カンマまたは改行区切り、最大 10 件">
+            <textarea
+              className={inputClass}
+              rows={4}
+              value={formsNotifyTo}
+              onChange={(event) => setFormsNotifyTo(event.target.value)}
+            />
+          </Field>
+          <Field label="Turnstile サイトキー">
+            <input
+              className={inputClass}
+              value={turnstileSiteKey}
+              onChange={(event) => setTurnstileSiteKey(event.target.value)}
+            />
+          </Field>
+        </div>
+        <p className="border-l-2 border-neutral-400 bg-neutral-50 p-3 text-sm text-neutral-700">
+          TURNSTILE_SECRET_KEY:{' '}
+          {initial?.turnstileSecretConfigured
+            ? '設定済み'
+            : '未設定 — pnpm --filter @kanso/server exec wrangler secret put TURNSTILE_SECRET_KEY'}
+        </p>
+        <div className="flex justify-end border-t border-neutral-200 pt-5">
+          <Button type="submit" disabled={saveForms.isPending}>
+            {saveForms.isPending ? '保存中…' : 'フォーム設定を保存'}
           </Button>
         </div>
       </form>

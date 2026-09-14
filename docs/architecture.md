@@ -276,6 +276,10 @@ pnpm deploy                                                 # admin build → se
 | 2. フォーム | in-progress | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
 | 3. 仕上げ | todo | revisions、redirects、FTS5 検索、テーマ切替、CI (`.github/workflows`)、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
+フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
+BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
+保護する。IP、User-Agent、リファラー、国などのメタ情報は含めない。
+
 Phase 1 で先送りにした改善候補: 自動生成 excerpt の描画時生成 (§4)、管理画面のブラウザ E2E テスト、投稿タイプ追加時のナビ更新を purge で即時化するか (現状 60 秒 TTL)。
 
 ## 9. 決定事項

@@ -13,6 +13,7 @@ import { settingsService } from './services/settings.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 
 export { extractExcerpt, type RenderOptions, renderRichText } from './content/index.ts'
+export { buildSubmissionsCsv, type SubmissionCsvRow } from './forms/csv.ts'
 export {
   buildSubmissionNotification,
   type SubmissionNotification,

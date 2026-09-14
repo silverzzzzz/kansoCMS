@@ -13,7 +13,7 @@
 | T8 | フォーム定義スキーマ + forms service + 管理 API + 設定 `forms` | done | shared, core, server |
 | T9 | 公開送信 API (`POST /api/v1/public/forms/:slug/submissions`): 検証, honeypot, Turnstile, meta | done | shared, server |
 | T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | done | core, server |
-| T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | todo | server, admin |
+| T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | done | server, admin |
 | T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | todo | shared, core, server, admin |
 | T13 | (小) excerpt を保存せず描画時に生成する (Phase 1 の既知の制限) | todo | core, server |
 
@@ -244,7 +244,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ## T11. 管理画面: フォームと送信
 
-状態: `todo`
+状態: `done`
 
 ### ゴール
 
@@ -265,7 +265,25 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- `GET /forms` は `turnstileAvailable` を返す。設定 API を使えない editor も Turnstile を有効化できるか判断するため。
+- CSV は UTF-8 BOM 付き・CRLF 区切りで、定義順のフィールドを古い送信から最大 10,000 行出力する。数式インジェクションを防ぎ、メタ情報は含めない。
+- 管理画面は `forms/index.tsx`、`forms/new.tsx`、`forms/$id/index.tsx`、`forms/$id/submissions/index.tsx`、`forms/$id/submissions/$sid.tsx` のファイルルートで構成する。
+- 未読の送信詳細を開いたときは一度だけ自動で既読にする。
+- フォーム編集は `validateFormDraft` でクライアント検証し、zod の issue path を dotted path のフィールドエラーへ変換する。
+- 作成・更新とも完全な検証済み body を送り、PATCH も全フィールドを送信する。
+- `forms.submissions.get()` は `metaJson` を `SubmissionMeta` 型に正規化して返す (管理画面の
+  メタ情報表示のため)。`formSubmissions.dataJson` の型は `SubmissionValues` にした。
+- レビュー修正: `FormEditor` の行 `key` に `field.name` / `option.value` を含めていたため、
+  名前や値を 1 文字入力するたびに行が再マウントされてフォーカスが外れていた。行は完全に
+  制御されたコンポーネントなので index キーに変更した (biome-ignore で理由を明記)。
+- スモーク (`:5199`, API 経由): 5 種のフィールドを持つフォームを作成 → 公開送信 3 件
+  (`"`・カンマ・改行を含む値、`=HYPERLINK(...)`、`-cmd|calc`、`+81 …` の電話番号) →
+  一覧で `submissionCount=3` / `unreadCount=3` / `turnstileAvailable=false` → CSV は BOM
+  + CRLF、古い順、引用符エスケープ、`'=` / `'-` ガード、電話番号は無加工、boolean は
+  `true`/`false` → PATCH 既読で `unreadCount=2` → `/admin/forms/12/submissions/18` など
+  SPA のコールド URL が 200 → `PUT /settings/forms` の改行区切り宛先がカンマ結合で保存。
+  サイトキーだけでは `turnstileAvailable` は false のまま (secret も必要)。ブラウザ操作は
+  未確認 (ビルド済みバンドルに新画面が含まれることは確認)。
 
 ---
 

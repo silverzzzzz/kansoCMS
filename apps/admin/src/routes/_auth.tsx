@@ -13,6 +13,7 @@ const navigation = [
   { to: '/post-types', label: '投稿タイプ' },
   { to: '/tags', label: 'タグ' },
   { to: '/media', label: 'メディア' },
+  { to: '/forms', label: 'フォーム' },
 ] as const
 
 export const Route = createFileRoute('/_auth')({
@@ -135,7 +136,16 @@ function AuthLayout() {
 }
 
 type NavLinkProps = {
-  to: '/' | '/pages' | '/posts' | '/post-types' | '/tags' | '/media' | '/settings' | '/api-keys'
+  to:
+    | '/'
+    | '/pages'
+    | '/posts'
+    | '/post-types'
+    | '/tags'
+    | '/media'
+    | '/forms'
+    | '/settings'
+    | '/api-keys'
   label: string
   exact?: boolean
 }

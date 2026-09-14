@@ -8,3 +8,11 @@ export function toDateTimeLocal(iso: string | null): string {
 export function fromDateTimeLocal(value: string): string | null {
   return value ? new Date(value).toISOString() : null
 }
+
+export function formatDateTime(value: string | null, empty = '—'): string {
+  return value
+    ? new Intl.DateTimeFormat('ja-JP', { dateStyle: 'medium', timeStyle: 'short' }).format(
+        new Date(value),
+      )
+    : empty
+}

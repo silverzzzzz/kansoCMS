@@ -11,6 +11,11 @@ export type ListParams = {
 }
 
 export type PostsListParams = ListParams & { type?: string }
+export type SubmissionsListParams = {
+  page?: string
+  perPage?: string
+  unread?: 'true' | 'false'
+}
 
 async function getPages(params: ListParams) {
   return unwrap(api.pages.$get({ query: params }))
@@ -53,6 +58,26 @@ async function getSettings() {
   return unwrap(api.settings.$get())
 }
 
+async function getForms() {
+  return unwrap(api.forms.$get())
+}
+
+async function getForm(id: number) {
+  return unwrap(api.forms[':id'].$get({ param: { id: String(id) } }))
+}
+
+async function getSubmissions(formId: number, params: SubmissionsListParams) {
+  return unwrap(api.forms[':id'].submissions.$get({ param: { id: String(formId) }, query: params }))
+}
+
+async function getSubmission(formId: number, submissionId: number) {
+  return unwrap(
+    api.forms[':id'].submissions[':submissionId'].$get({
+      param: { id: String(formId), submissionId: String(submissionId) },
+    }),
+  )
+}
+
 async function getApiKeys() {
   return unwrap(api['api-keys'].$get())
 }
@@ -64,6 +89,10 @@ export type CategoryItem = Awaited<ReturnType<typeof getCategories>>['items'][nu
 export type PostItem = Awaited<ReturnType<typeof getPost>>['item']
 export type TagItem = Awaited<ReturnType<typeof getTags>>['items'][number]
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>['items'][number]
+export type FormListItem = Awaited<ReturnType<typeof getForms>>['items'][number]
+export type FormItem = Awaited<ReturnType<typeof getForm>>['item']
+export type SubmissionListItem = Awaited<ReturnType<typeof getSubmissions>>['items'][number]
+export type SubmissionItem = Awaited<ReturnType<typeof getSubmission>>['item']
 
 export const pagesListQuery = (params: ListParams) =>
   queryOptions({
@@ -122,6 +151,29 @@ export const settingsQuery = queryOptions({
   queryKey: ['settings'] as const,
   queryFn: getSettings,
 })
+
+export const formsListQuery = queryOptions({
+  queryKey: ['forms', 'list'] as const,
+  queryFn: getForms,
+})
+
+export const formQuery = (id: number) =>
+  queryOptions({
+    queryKey: ['forms', 'detail', id] as const,
+    queryFn: () => getForm(id),
+  })
+
+export const submissionsListQuery = (formId: number, params: SubmissionsListParams) =>
+  queryOptions({
+    queryKey: ['forms', formId, 'submissions', 'list', params] as const,
+    queryFn: () => getSubmissions(formId, params),
+  })
+
+export const submissionQuery = (formId: number, submissionId: number) =>
+  queryOptions({
+    queryKey: ['forms', formId, 'submissions', 'detail', submissionId] as const,
+    queryFn: () => getSubmission(formId, submissionId),
+  })
 
 export const apiKeysQuery = queryOptions({
   queryKey: ['api-keys'] as const,

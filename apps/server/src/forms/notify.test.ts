@@ -37,7 +37,7 @@ const submission: Submission = {
   id: 42,
   formId: baseForm.id,
   dataJson: submissionValues,
-  metaJson: {},
+  metaJson: { ip: null, userAgent: null, referrer: null, country: null },
   createdAt: new Date('2026-09-15T01:00:00Z'),
   readAt: null,
 }

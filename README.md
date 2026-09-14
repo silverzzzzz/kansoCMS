@@ -54,6 +54,11 @@ If port 5173 is taken, start the server alone with a different port:
 
 ### Form notifications (email)
 
+Manage forms under **管理画面 → フォーム**. Each form has its own field definitions and a
+submission inbox, and submissions can be downloaded as CSV. To enable Turnstile, save the site
+key under **設定 → フォーム** and configure the Worker secret with
+`pnpm --filter @kanso/server exec wrangler secret put TURNSTILE_SECRET_KEY`.
+
 Notifications are sent only when **Settings → Forms** has a `fromEmail` and either the form
 or the Forms settings has at least one recipient. In local development the `EMAIL` binding is
 emulated: nothing is delivered, the dev server prints

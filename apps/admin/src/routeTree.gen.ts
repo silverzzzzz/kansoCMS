@@ -14,6 +14,8 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthApiKeysIndexRouteImport } from './routes/_auth/api-keys/index'
+import { Route as AuthFormsIndexRouteImport } from './routes/_auth/forms/index'
+import { Route as AuthFormsNewRouteImport } from './routes/_auth/forms/new'
 import { Route as AuthMediaIndexRouteImport } from './routes/_auth/media/index'
 import { Route as AuthPagesIndexRouteImport } from './routes/_auth/pages/index'
 import { Route as AuthPagesIdRouteImport } from './routes/_auth/pages/$id'
@@ -26,6 +28,9 @@ import { Route as AuthPostsIdRouteImport } from './routes/_auth/posts/$id'
 import { Route as AuthPostsNewRouteImport } from './routes/_auth/posts/new'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthTagsIndexRouteImport } from './routes/_auth/tags/index'
+import { Route as AuthFormsIdIndexRouteImport } from './routes/_auth/forms/$id/index'
+import { Route as AuthFormsIdSubmissionsIndexRouteImport } from './routes/_auth/forms/$id/submissions/index'
+import { Route as AuthFormsIdSubmissionsSidRouteImport } from './routes/_auth/forms/$id/submissions/$sid'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/_auth',
@@ -49,6 +54,16 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
 const AuthApiKeysIndexRoute = AuthApiKeysIndexRouteImport.update({
   id: '/api-keys/',
   path: '/api-keys/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthFormsIndexRoute = AuthFormsIndexRouteImport.update({
+  id: '/forms/',
+  path: '/forms/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthFormsNewRoute = AuthFormsNewRouteImport.update({
+  id: '/forms/new',
+  path: '/forms/new',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthMediaIndexRoute = AuthMediaIndexRouteImport.update({
@@ -111,11 +126,29 @@ const AuthTagsIndexRoute = AuthTagsIndexRouteImport.update({
   path: '/tags/',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthFormsIdIndexRoute = AuthFormsIdIndexRouteImport.update({
+  id: '/forms/$id/',
+  path: '/forms/$id/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthFormsIdSubmissionsIndexRoute =
+  AuthFormsIdSubmissionsIndexRouteImport.update({
+    id: '/forms/$id/submissions/',
+    path: '/forms/$id/submissions/',
+    getParentRoute: () => AuthRoute,
+  } as any)
+const AuthFormsIdSubmissionsSidRoute =
+  AuthFormsIdSubmissionsSidRouteImport.update({
+    id: '/forms/$id/submissions/$sid',
+    path: '/forms/$id/submissions/$sid',
+    getParentRoute: () => AuthRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
+  '/forms/new': typeof AuthFormsNewRoute
   '/pages/$id': typeof AuthPagesIdRoute
   '/pages/new': typeof AuthPagesNewRoute
   '/post-types/$id': typeof AuthPostTypesIdRoute
@@ -123,17 +156,22 @@ export interface FileRoutesByFullPath {
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
   '/api-keys/': typeof AuthApiKeysIndexRoute
+  '/forms/': typeof AuthFormsIndexRoute
   '/media/': typeof AuthMediaIndexRoute
   '/pages/': typeof AuthPagesIndexRoute
   '/post-types/': typeof AuthPostTypesIndexRoute
   '/posts/': typeof AuthPostsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/tags/': typeof AuthTagsIndexRoute
+  '/forms/$id/': typeof AuthFormsIdIndexRoute
+  '/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
+  '/forms/$id/submissions/': typeof AuthFormsIdSubmissionsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/': typeof AuthIndexRoute
+  '/forms/new': typeof AuthFormsNewRoute
   '/pages/$id': typeof AuthPagesIdRoute
   '/pages/new': typeof AuthPagesNewRoute
   '/post-types/$id': typeof AuthPostTypesIdRoute
@@ -141,12 +179,16 @@ export interface FileRoutesByTo {
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
   '/api-keys': typeof AuthApiKeysIndexRoute
+  '/forms': typeof AuthFormsIndexRoute
   '/media': typeof AuthMediaIndexRoute
   '/pages': typeof AuthPagesIndexRoute
   '/post-types': typeof AuthPostTypesIndexRoute
   '/posts': typeof AuthPostsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/tags': typeof AuthTagsIndexRoute
+  '/forms/$id': typeof AuthFormsIdIndexRoute
+  '/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
+  '/forms/$id/submissions': typeof AuthFormsIdSubmissionsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,6 +196,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_auth/': typeof AuthIndexRoute
+  '/_auth/forms/new': typeof AuthFormsNewRoute
   '/_auth/pages/$id': typeof AuthPagesIdRoute
   '/_auth/pages/new': typeof AuthPagesNewRoute
   '/_auth/post-types/$id': typeof AuthPostTypesIdRoute
@@ -161,12 +204,16 @@ export interface FileRoutesById {
   '/_auth/posts/$id': typeof AuthPostsIdRoute
   '/_auth/posts/new': typeof AuthPostsNewRoute
   '/_auth/api-keys/': typeof AuthApiKeysIndexRoute
+  '/_auth/forms/': typeof AuthFormsIndexRoute
   '/_auth/media/': typeof AuthMediaIndexRoute
   '/_auth/pages/': typeof AuthPagesIndexRoute
   '/_auth/post-types/': typeof AuthPostTypesIndexRoute
   '/_auth/posts/': typeof AuthPostsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/tags/': typeof AuthTagsIndexRoute
+  '/_auth/forms/$id/': typeof AuthFormsIdIndexRoute
+  '/_auth/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
+  '/_auth/forms/$id/submissions/': typeof AuthFormsIdSubmissionsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -174,6 +221,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/setup'
+    | '/forms/new'
     | '/pages/$id'
     | '/pages/new'
     | '/post-types/$id'
@@ -181,17 +229,22 @@ export interface FileRouteTypes {
     | '/posts/$id'
     | '/posts/new'
     | '/api-keys/'
+    | '/forms/'
     | '/media/'
     | '/pages/'
     | '/post-types/'
     | '/posts/'
     | '/settings/'
     | '/tags/'
+    | '/forms/$id/'
+    | '/forms/$id/submissions/$sid'
+    | '/forms/$id/submissions/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/setup'
     | '/'
+    | '/forms/new'
     | '/pages/$id'
     | '/pages/new'
     | '/post-types/$id'
@@ -199,18 +252,23 @@ export interface FileRouteTypes {
     | '/posts/$id'
     | '/posts/new'
     | '/api-keys'
+    | '/forms'
     | '/media'
     | '/pages'
     | '/post-types'
     | '/posts'
     | '/settings'
     | '/tags'
+    | '/forms/$id'
+    | '/forms/$id/submissions/$sid'
+    | '/forms/$id/submissions'
   id:
     | '__root__'
     | '/_auth'
     | '/login'
     | '/setup'
     | '/_auth/'
+    | '/_auth/forms/new'
     | '/_auth/pages/$id'
     | '/_auth/pages/new'
     | '/_auth/post-types/$id'
@@ -218,12 +276,16 @@ export interface FileRouteTypes {
     | '/_auth/posts/$id'
     | '/_auth/posts/new'
     | '/_auth/api-keys/'
+    | '/_auth/forms/'
     | '/_auth/media/'
     | '/_auth/pages/'
     | '/_auth/post-types/'
     | '/_auth/posts/'
     | '/_auth/settings/'
     | '/_auth/tags/'
+    | '/_auth/forms/$id/'
+    | '/_auth/forms/$id/submissions/$sid'
+    | '/_auth/forms/$id/submissions/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -267,6 +329,20 @@ declare module '@tanstack/react-router' {
       path: '/api-keys'
       fullPath: '/api-keys/'
       preLoaderRoute: typeof AuthApiKeysIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/forms/': {
+      id: '/_auth/forms/'
+      path: '/forms'
+      fullPath: '/forms/'
+      preLoaderRoute: typeof AuthFormsIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/forms/new': {
+      id: '/_auth/forms/new'
+      path: '/forms/new'
+      fullPath: '/forms/new'
+      preLoaderRoute: typeof AuthFormsNewRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/media/': {
@@ -353,11 +429,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthTagsIndexRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/forms/$id/': {
+      id: '/_auth/forms/$id/'
+      path: '/forms/$id'
+      fullPath: '/forms/$id/'
+      preLoaderRoute: typeof AuthFormsIdIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/forms/$id/submissions/': {
+      id: '/_auth/forms/$id/submissions/'
+      path: '/forms/$id/submissions'
+      fullPath: '/forms/$id/submissions/'
+      preLoaderRoute: typeof AuthFormsIdSubmissionsIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/forms/$id/submissions/$sid': {
+      id: '/_auth/forms/$id/submissions/$sid'
+      path: '/forms/$id/submissions/$sid'
+      fullPath: '/forms/$id/submissions/$sid'
+      preLoaderRoute: typeof AuthFormsIdSubmissionsSidRouteImport
+      parentRoute: typeof AuthRoute
+    }
   }
 }
 
 interface AuthRouteChildren {
   AuthIndexRoute: typeof AuthIndexRoute
+  AuthFormsNewRoute: typeof AuthFormsNewRoute
   AuthPagesIdRoute: typeof AuthPagesIdRoute
   AuthPagesNewRoute: typeof AuthPagesNewRoute
   AuthPostTypesIdRoute: typeof AuthPostTypesIdRoute
@@ -365,16 +463,21 @@ interface AuthRouteChildren {
   AuthPostsIdRoute: typeof AuthPostsIdRoute
   AuthPostsNewRoute: typeof AuthPostsNewRoute
   AuthApiKeysIndexRoute: typeof AuthApiKeysIndexRoute
+  AuthFormsIndexRoute: typeof AuthFormsIndexRoute
   AuthMediaIndexRoute: typeof AuthMediaIndexRoute
   AuthPagesIndexRoute: typeof AuthPagesIndexRoute
   AuthPostTypesIndexRoute: typeof AuthPostTypesIndexRoute
   AuthPostsIndexRoute: typeof AuthPostsIndexRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
   AuthTagsIndexRoute: typeof AuthTagsIndexRoute
+  AuthFormsIdIndexRoute: typeof AuthFormsIdIndexRoute
+  AuthFormsIdSubmissionsSidRoute: typeof AuthFormsIdSubmissionsSidRoute
+  AuthFormsIdSubmissionsIndexRoute: typeof AuthFormsIdSubmissionsIndexRoute
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
   AuthIndexRoute: AuthIndexRoute,
+  AuthFormsNewRoute: AuthFormsNewRoute,
   AuthPagesIdRoute: AuthPagesIdRoute,
   AuthPagesNewRoute: AuthPagesNewRoute,
   AuthPostTypesIdRoute: AuthPostTypesIdRoute,
@@ -382,12 +485,16 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthPostsIdRoute: AuthPostsIdRoute,
   AuthPostsNewRoute: AuthPostsNewRoute,
   AuthApiKeysIndexRoute: AuthApiKeysIndexRoute,
+  AuthFormsIndexRoute: AuthFormsIndexRoute,
   AuthMediaIndexRoute: AuthMediaIndexRoute,
   AuthPagesIndexRoute: AuthPagesIndexRoute,
   AuthPostTypesIndexRoute: AuthPostTypesIndexRoute,
   AuthPostsIndexRoute: AuthPostsIndexRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
   AuthTagsIndexRoute: AuthTagsIndexRoute,
+  AuthFormsIdIndexRoute: AuthFormsIdIndexRoute,
+  AuthFormsIdSubmissionsSidRoute: AuthFormsIdSubmissionsSidRoute,
+  AuthFormsIdSubmissionsIndexRoute: AuthFormsIdSubmissionsIndexRoute,
 }
 
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
