@@ -126,7 +126,11 @@ export function ContentForm({
         )}
       </div>
 
-      <Field label="抜粋" error={errors.excerpt} hint="空の場合は本文から自動生成されます。">
+      <Field
+        label="抜粋"
+        error={errors.excerpt}
+        hint="空の場合は公開時に本文から自動生成されます。"
+      >
         <textarea
           className={inputClass}
           rows={4}

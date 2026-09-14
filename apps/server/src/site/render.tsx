@@ -1,4 +1,4 @@
-import type { Kanso } from '@kanso/core'
+import { effectiveExcerpt, type Kanso } from '@kanso/core'
 import {
   absoluteUrl,
   buildBlogPosting,
@@ -48,7 +48,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
     : ctx.meta({
         title: page.seoTitle ?? page.title,
         path: ownPath,
-        description: page.seoDescription ?? page.excerpt ?? ctx.site.description ?? '',
+        description: page.seoDescription || effectiveExcerpt(page) || ctx.site.description || '',
         canonical,
         ogImage,
         noindex: options.preview || page.noindex,
@@ -102,7 +102,7 @@ export async function renderPost(
   const meta = ctx.meta({
     title: post.seoTitle ?? post.title,
     path: ownPath,
-    description: post.seoDescription ?? post.excerpt ?? ctx.site.description ?? '',
+    description: post.seoDescription || effectiveExcerpt(post) || ctx.site.description || '',
     canonical: options.preview || !post.canonicalUrl ? ownUrl : post.canonicalUrl,
     ogType: 'article',
     ogImage: image ? absoluteUrl(ctx.origin, image) : null,

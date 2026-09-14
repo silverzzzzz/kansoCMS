@@ -1,15 +1,13 @@
-import type { CreatePageInput, ListQuery, RichTextDoc, UpdatePageInput } from '@kanso/shared'
+import type { CreatePageInput, ListQuery, UpdatePageInput } from '@kanso/shared'
 import { isReservedSlug } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
-import { extractExcerpt, renderRichText } from '../content/index.ts'
+import { EMPTY_DOCUMENT, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { pages, postTypes } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
-
-const EMPTY_DOCUMENT: RichTextDoc = { type: 'doc', content: [] }
 
 type RenderContext = { allowRawHtml: boolean }
 
@@ -99,7 +97,7 @@ export function pagesService(db: Db) {
     const status = input.status ?? 'draft'
     let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
     if (status === 'published' && publishedAt === null) publishedAt = new Date()
-    const excerpt = input.excerpt?.trim() ? input.excerpt : extractExcerpt(bodyJson)
+    const excerpt = input.excerpt?.trim() ? input.excerpt : null
 
     try {
       const [created] = await db
@@ -169,14 +167,12 @@ export function pagesService(db: Db) {
     if (input.noindex !== undefined) values.noindex = input.noindex
     if (input.canonicalUrl !== undefined) values.canonicalUrl = input.canonicalUrl
 
-    const bodyJson = input.bodyJson ?? current.bodyJson ?? EMPTY_DOCUMENT
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
       values.bodyHtml = renderRichText(input.bodyJson, context)
     }
-    const finalExcerpt = input.excerpt === undefined ? current.excerpt : input.excerpt
-    if (input.excerpt !== undefined || (input.bodyJson !== undefined && !finalExcerpt?.trim())) {
-      values.excerpt = finalExcerpt?.trim() ? finalExcerpt : extractExcerpt(bodyJson)
+    if (input.excerpt !== undefined) {
+      values.excerpt = input.excerpt?.trim() ? input.excerpt : null
     }
 
     if (input.publishedAt !== undefined) {

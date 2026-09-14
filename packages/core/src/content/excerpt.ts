@@ -1,5 +1,7 @@
 import type { RichTextDoc, RichTextNode } from '@kanso/shared'
 
+export const EMPTY_DOCUMENT: RichTextDoc = { type: 'doc', content: [] }
+
 function textFromNode(node: RichTextNode): string {
   switch (node.type) {
     case 'text':
@@ -48,4 +50,12 @@ function excerptFromHtml(html: string): string {
 export function extractExcerpt(input: RichTextDoc | string, maxLength = 160): string {
   const text = typeof input === 'string' ? excerptFromHtml(input) : excerptFromDocument(input)
   return truncate(text, maxLength)
+}
+
+export function effectiveExcerpt(
+  row: { excerpt: string | null; bodyJson: RichTextDoc | null },
+  maxLength = 160,
+): string {
+  const storedExcerpt = row.excerpt?.trim()
+  return storedExcerpt || extractExcerpt(row.bodyJson ?? EMPTY_DOCUMENT, maxLength)
 }

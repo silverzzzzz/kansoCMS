@@ -176,7 +176,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 - `status`: `draft` / `published`。**予約公開** = `published` かつ `published_at` が未来。公開クエリは常に `status='published' AND published_at <= now` (`pages.publishedNow()` / `posts.postsPublishedNow()`)。
 - `seo_*`: `seo_title`, `seo_description`, `og_media_id`, `noindex`, `canonical_url`。
 - **slug 名前空間**: 最上位 URL は `pages.path` と `post_types.slug` が共有する。`core/services` で衝突を拒否する (`/blog` が投稿タイプなら同名ページは作れない)。予約語は `packages/shared/slug.ts` の `RESERVED_SLUGS` (`admin`, `api`, `media`, `preview`, `sitemap.xml`, `robots.txt`, `feed.xml` …)。
-- `excerpt` は未指定なら本文から生成して保存する。本文を編集しても保存済み excerpt は自動更新されない (Phase 2 で「描画時生成」への変更を検討)。
+- `excerpt` は明示値のみ保存する。未指定・空白の場合、公開側とフィードは本文から `effectiveExcerpt()` で描画時に生成する。管理 API は編集用に保存値 (`null` を含む) をそのまま返す。
 
 ### 本文の扱い
 
@@ -283,7 +283,7 @@ pnpm deploy                                                 # admin build → se
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
 保護する。IP、User-Agent、リファラー、国などのメタ情報は含めない。
 
-Phase 1 で先送りにした改善候補: 自動生成 excerpt の描画時生成 (§4)、管理画面のブラウザ E2E テスト、投稿タイプ追加時のナビ更新を purge で即時化するか (現状 60 秒 TTL)。
+Phase 1 で先送りにした改善候補: 管理画面のブラウザ E2E テスト、投稿タイプ追加時のナビ更新を purge で即時化するか (現状 60 秒 TTL)。
 
 ## 9. 決定事項
 

@@ -15,7 +15,7 @@
 | T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | done | core, server |
 | T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | done | server, admin |
 | T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | done | shared, core, server, admin |
-| T13 | (小) excerpt を保存せず描画時に生成する (Phase 1 の既知の制限) | todo | core, server |
+| T13 | (小) excerpt を保存せず描画時に生成する (Phase 1 の既知の制限) | done | core, server |
 
 Phase 2 の決定事項 (ユーザー確認済み):
 
@@ -362,7 +362,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ## T13. excerpt を描画時に生成する (小)
 
-状態: `todo`
+状態: `done`
 
 ### ゴール
 
@@ -381,4 +381,25 @@ Phase 1 の既知の制限 (本文を編集しても自動生成 excerpt が古�
 
 ### 決定
 
-- (実装中に追記)
+- `effectiveExcerpt(row: { excerpt: string | null; bodyJson: RichTextDoc | null }, maxLength = 160)`
+  を `packages/core/src/content/excerpt.ts` に置き `@kanso/core` から export。保存値は trim して
+  空でなければそれを返し、`null` / `''` / 空白のみは本文から `extractExcerpt` する (本文が `null`
+  または空なら `''`)。`EMPTY_DOCUMENT` は services から `content/excerpt.ts` に移して共有。
+- `pages` / `posts` の `create` / `update` は `input.excerpt` が空白なら `null` を保存し、本文に
+  依存する再生成分岐を削除した。`extractExcerpt` は書き込み経路から消えた。
+- `posts.listPublished` は `bodyJson` を取得したうえで `excerpt: effectiveExcerpt(...)` に差し替え、
+  返却時に `bodyJson` を落とす (戻り値の `excerpt` は `string`)。アーカイブ一覧とフィードの
+  `summary` はこれを使うため変更不要。管理 API の `list` / `get` は保存値 (`null` を含む) をそのまま返す。
+- SSR の meta description は `seoDescription || effectiveExcerpt(row) || site.description || ''`
+  (`??` から `||` に変更。保存済みの `''` がサイト説明を隠さなくなった)。サイトマップと
+  アーカイブの description は元々 excerpt を使っていないので対象外。
+- 既存データは移行しない。過去に保存された自動生成 excerpt は明示値と区別できないため、本文編集に
+  追従させたい場合は管理画面で抜粋欄を空にして保存する (ヒント文を「空の場合は公開時に本文から
+  自動生成されます。」に変更)。
+- テスト: `effectiveExcerpt` の単体 4 件、`routes.test.ts` に本文由来 / 保存値優先の meta 2 件。
+  DB を伴う service テストは既存の方針どおり追加しない。
+- スモーク (`:5199`, curl): 抜粋なしでページ作成 → 保存値 `null`、description は本文由来 → 本文を
+  PATCH → description が新本文に追従 → 抜粋を明示 (前後空白 + `<T13>`) → trim + エスケープ済みで
+  優先 → `""` で PATCH → `null` に戻り本文由来に復帰。投稿でもアーカイブの `<p>`、Atom `<summary>`、
+  記事 meta が本文由来で、本文 PATCH 後に更新されることを確認。管理 API の一覧は `excerpt: null` の
+  まま `bodyJson` を含まない。空本文 + サイト説明未設定では description メタが省略される。

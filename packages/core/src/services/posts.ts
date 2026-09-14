@@ -1,13 +1,7 @@
-import {
-  type CreatePostInput,
-  type ListQuery,
-  mediaUrl,
-  type RichTextDoc,
-  type UpdatePostInput,
-} from '@kanso/shared'
+import { type CreatePostInput, type ListQuery, mediaUrl, type UpdatePostInput } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, desc, eq, exists, inArray, lte, sql } from 'drizzle-orm'
-import { extractExcerpt, renderRichText } from '../content/index.ts'
+import { EMPTY_DOCUMENT, effectiveExcerpt, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import {
   categories,
@@ -21,8 +15,6 @@ import {
 } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
-
-const EMPTY_DOCUMENT: RichTextDoc = { type: 'doc', content: [] }
 
 type RenderContext = { allowRawHtml: boolean }
 type CreateContext = RenderContext & { authorId: number | null }
@@ -156,11 +148,17 @@ export function postsService(db: Db) {
         orderBy: [desc(posts.publishedAt), desc(posts.id)],
         limit: input.perPage,
         offset: (input.page - 1) * input.perPage,
-        columns: { bodyJson: false, bodyHtml: false },
+        columns: { bodyHtml: false },
       }),
       db.select({ value: count() }).from(posts).where(where),
     ])
-    return { items, total: totals[0]?.value ?? 0 }
+    return {
+      items: items.map(({ bodyJson, ...rest }) => ({
+        ...rest,
+        excerpt: effectiveExcerpt({ excerpt: rest.excerpt, bodyJson }),
+      })),
+      total: totals[0]?.value ?? 0,
+    }
   }
 
   async function listPublishedForSitemap() {
@@ -281,7 +279,7 @@ export function postsService(db: Db) {
     const status = input.status ?? 'draft'
     let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
     if (status === 'published' && publishedAt === null) publishedAt = new Date()
-    const excerpt = input.excerpt?.trim() ? input.excerpt : extractExcerpt(bodyJson)
+    const excerpt = input.excerpt?.trim() ? input.excerpt : null
 
     let postId: number
     try {
@@ -340,14 +338,12 @@ export function postsService(db: Db) {
     if (input.noindex !== undefined) values.noindex = input.noindex
     if (input.canonicalUrl !== undefined) values.canonicalUrl = input.canonicalUrl
 
-    const bodyJson = input.bodyJson ?? current.bodyJson ?? EMPTY_DOCUMENT
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
       values.bodyHtml = renderRichText(input.bodyJson, context)
     }
-    const finalExcerpt = input.excerpt === undefined ? current.excerpt : input.excerpt
-    if (input.excerpt !== undefined || (input.bodyJson !== undefined && !finalExcerpt?.trim())) {
-      values.excerpt = finalExcerpt?.trim() ? finalExcerpt : extractExcerpt(bodyJson)
+    if (input.excerpt !== undefined) {
+      values.excerpt = input.excerpt?.trim() ? input.excerpt : null
     }
 
     if (input.publishedAt !== undefined) {

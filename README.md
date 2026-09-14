@@ -114,7 +114,7 @@ curl -H "x-api-key: kanso_…" "http://localhost:5173/api/v1/posts?type=blog&sta
 
 Upload media with `curl -b cookies.txt -H "origin: http://localhost:5173" -F file=@photo.png -F alt="Photo" http://localhost:5173/api/v1/media`.
 
-Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, renders `bodyHtml` and derives `excerpt`. The admin UI is a plain client of this API — `hc<ApiType>` from `apps/server` gives it end-to-end types.
+Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, renders `bodyHtml`, and derives an effective excerpt at render time when no explicit excerpt is stored. The admin UI is a plain client of this API — `hc<ApiType>` from `apps/server` gives it end-to-end types.
 
 ## Deploy
 

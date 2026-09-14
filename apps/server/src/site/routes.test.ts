@@ -1,5 +1,5 @@
 import { type Kanso, KansoError } from '@kanso/core'
-import { type SubmissionValues, submissionSchemaFor } from '@kanso/shared'
+import { type RichTextDoc, type SubmissionValues, submissionSchemaFor } from '@kanso/shared'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEnv, Bindings } from '../env.ts'
@@ -42,9 +42,9 @@ const testPage = {
   parentId: null,
   sortOrder: 0,
   title: 'Contact',
-  bodyJson: null,
+  bodyJson: null as RichTextDoc | null,
   bodyHtml: '<p>Write to us.</p><div data-kanso-form="contact-form"></div>',
-  excerpt: '',
+  excerpt: '' as string | null,
   status: 'published' as const,
   publishedAt: new Date('2026-09-15T00:00:00Z'),
   seoTitle: null,
@@ -142,6 +142,41 @@ function testSetup(
   }
   return { app, createSubmission, env, executionCtx }
 }
+
+describe('site page metadata', () => {
+  const bodyJson: RichTextDoc = {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Body derived description.' }],
+      },
+    ],
+  }
+
+  it('derives the page meta description from the body when the excerpt is missing', async () => {
+    const { app, env, executionCtx } = testSetup({
+      page: { ...testPage, excerpt: null, bodyJson },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta name="description" content="Body derived description."/>')
+  })
+
+  it('prefers a non-blank stored excerpt for the page meta description', async () => {
+    const { app, env, executionCtx } = testSetup({
+      page: { ...testPage, excerpt: '  Stored description.  ', bodyJson },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta name="description" content="Stored description."/>')
+    expect(html).not.toContain('<meta name="description" content="Body derived description."/>')
+  })
+})
 
 describe('site form routes', () => {
   it('renders an embedded form on a published page without a Turnstile script', async () => {
