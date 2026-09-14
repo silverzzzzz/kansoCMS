@@ -8,6 +8,7 @@ import { media } from './media.ts'
 import { pages } from './pages.ts'
 import { postTypes } from './post-types.ts'
 import { posts } from './posts.ts'
+import { publicForms } from './public-forms.ts'
 import { settings } from './settings.ts'
 import { setup } from './setup.ts'
 import { tags } from './tags.ts'
@@ -37,6 +38,7 @@ export const api = new Hono<AppEnv>()
   })
   .route('/setup', setup)
   .route('/auth', auth)
+  .route('/public/forms', publicForms)
   .route('/', protectedApi)
 
 /** Consumed by `hc<ApiType>()` in apps/admin. Type-only export. */

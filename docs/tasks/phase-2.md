@@ -11,7 +11,7 @@
 | # | タスク | 状態 | 範囲 |
 |---|---|---|---|
 | T8 | フォーム定義スキーマ + forms service + 管理 API + 設定 `forms` | done | shared, core, server |
-| T9 | 公開送信 API (`POST /api/v1/public/forms/:slug/submissions`): 検証, honeypot, Turnstile, meta | todo | shared, server |
+| T9 | 公開送信 API (`POST /api/v1/public/forms/:slug/submissions`): 検証, honeypot, Turnstile, meta | done | shared, server |
 | T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | todo | core, server |
 | T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | todo | server, admin |
 | T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | todo | shared, core, server, admin |
@@ -136,7 +136,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ## T9. 公開送信 API
 
-状態: `todo`
+状態: `done`
 
 ### ゴール
 
@@ -152,7 +152,8 @@ Phase 2 の決定事項 (ユーザー確認済み):
 - 応答 (201): `{ ok: true, message: form.successMessage, redirectUrl: form.redirectUrl }`。検証失敗は `onError` の JSON (`details` にフィールド別 `{ path, message }`)。
 - T10 のフック: 保存後に `c.executionCtx.waitUntil(notify(...))` を呼べる位置を用意する (T9 では何もしない)。
 - `apps/server/src/forms/submit.ts` に「本文 → 保存」までを `submitForm(c, form, raw: Record<string, unknown>)` として切り出し、T12 のサイト側 POST から再利用する。
-- テスト: `apps/server/src/forms/turnstile.test.ts` (`fetch` を差し替えて成功/失敗)、honeypot / サイズ上限のユニットテスト (Hono の `app.request` で可)。
+- CORS: ヘッドレス利用 (別オリジンの JS から JSON 送信) のため、この router だけ `hono/cors` を `origin: '*'`, `allowMethods: ['POST', 'OPTIONS']`, `allowHeaders: ['Content-Type']` で付ける (認証なし・cookie 不要なので `*` でよい)。他の API には付けない。
+- テスト: `apps/server/src/forms/turnstile.test.ts` (`fetch` を差し替えて成功/失敗)、honeypot / サイズ上限 / 検証エラーのテストは `apps/server/src/api/public-forms.test.ts` で、`c.set('kanso', stub)` する小さな Hono アプリに `publicForms` と `onError` を載せて `app.request()` で行う (vitest は node 環境。D1 は使わない)。
 
 ### 完了条件
 
@@ -160,7 +161,14 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- 公開ルーターだけに `origin: '*'` の CORS を付け、`protectedApi` の外へ mount する。本文は `Content-Length` と読み取り後の実バイト長の両方で 64 KB 以下を確認する。
+- 3 種の本文を一度だけ読み、JSON はトップレベル object のみ、URL encoded は文字列値、multipart は文字列 part だけを採用してファイルを無視する。
+- honeypot と Turnstile を含む予約キーの除去は再利用可能な `submitForm` 内で行い、検証・保存には渡さない。honeypot 検出時は通常と同じ 201 応答を返し、保存しない。
+- `submitForm` は保存行 (honeypot 時は `null`) と成功表示情報を返し、保存直後に T10 の `waitUntil` 通知を追加できる位置を明示する。
+- レビュー修正 (2026-09-15): 本文を `arrayBuffer()` で丸ごと読んでから長さを見ていたため、`Content-Length` なし (chunked) の巨大本文を Worker がメモリに溜め込めた → `request.body` を `getReader()` で読みつつ累計が 64 KB を超えた時点で `cancel()` して 400 にする `readBody()` に変更し、ストリーム本文のテストを追加。
+- 開発サーバ (Vite) は OPTIONS preflight を自前の CORS 設定で先に応答するため、`:5199` では Worker 側の `hono/cors` の値が見えない (本番では Worker が応答する。ユニットテストで確認済み)。
+- スモーク (`:5199`): urlencoded / JSON / multipart (ファイル無視) の 3 形式で 201 と保存内容・meta (`userAgent`, `referer`, `cf.country`) を確認。required 未入力 400 (`details` にフィールド別)、honeypot 201 で未保存、未知 slug 404、`text/plain` 400、70 KB 本文 (Content-Length あり / chunked) とも 400。
+- 既知の課題 (T12 で対応): required 未入力時の zod 既定メッセージ (`Too small: expected string to have >=1 characters`) は利用者向けではない。サイト側の `<form>` 再描画ではフィールドラベルを使った文言に置き換える。
 
 ---
 
