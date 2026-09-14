@@ -1,3 +1,4 @@
+import type { FormField } from '@kanso/shared'
 import { sql } from 'drizzle-orm'
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { timestamps } from './_columns.ts'
@@ -11,12 +12,12 @@ export const forms = sqliteTable('forms', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
-  fieldsJson: text('fields_json', { mode: 'json' }).notNull().$type<unknown[]>(),
+  fieldsJson: text('fields_json', { mode: 'json' }).notNull().$type<FormField[]>(),
   /** Comma-separated list of notification recipients. Empty = store only. */
   notifyTo: text('notify_to').notNull().default(''),
   successMessage: text('success_message').notNull().default(''),
   redirectUrl: text('redirect_url'),
-  turnstile: integer('turnstile', { mode: 'boolean' }).notNull().default(true),
+  turnstile: integer('turnstile', { mode: 'boolean' }).notNull().default(false),
   ...timestamps,
 })
 

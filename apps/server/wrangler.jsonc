@@ -36,8 +36,8 @@
     "SITE_URL": "http://localhost:5173"
   },
 
-  // Secrets (set with `wrangler secret put`, or .dev.vars locally):
-  //   TURNSTILE_SECRET_KEY
+  // Secrets (set with `wrangler secret put`, or copy .dev.vars.example to .dev.vars locally):
+  //   TURNSTILE_SECRET_KEY=...
 
   "observability": {
     "enabled": true

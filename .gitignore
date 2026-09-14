@@ -9,6 +9,7 @@ apps/server/public/admin/
 .wrangler/
 .dev.vars
 .dev.vars.*
+!.dev.vars.example
 
 # tooling
 *.tsbuildinfo

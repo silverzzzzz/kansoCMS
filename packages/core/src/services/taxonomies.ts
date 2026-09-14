@@ -8,7 +8,7 @@ import type { SQL } from 'drizzle-orm'
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { categories, postTypes, tags } from '../db/schema/index.ts'
-import { KansoError } from '../errors.ts'
+import { isUniqueViolation, KansoError } from '../errors.ts'
 import { hasAncestorCycle } from './page-tree.ts'
 
 function searchPattern(query: string): string {
@@ -24,7 +24,7 @@ function searchTags(query: string): SQL | undefined {
 }
 
 function throwTaxonomyConflict(error: unknown, message: string): never {
-  if (error instanceof Error && /unique constraint failed/i.test(error.message)) {
+  if (isUniqueViolation(error)) {
     throw KansoError.conflict(message)
   }
   throw error

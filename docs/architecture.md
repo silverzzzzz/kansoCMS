@@ -44,7 +44,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 | バリデーション | zod | server / admin / 外部クライアントで共有 |
 | 認証 | メール + パスワード (WebCrypto PBKDF2)、D1 セッション、Cookie | 外部 IdP 不要。`/admin` に Cloudflare Access を被せる運用も可 |
 | メール | Cloudflare Email Service (`send_email` binding) | API キー不要。ドメイン onboarding だけ |
-| Bot 対策 | Turnstile + honeypot | フォーム送信に標準で組込み |
+| Bot 対策 | honeypot + Turnstile (任意) | honeypot は常時。Turnstile はフォームごとに ON/OFF (既定 OFF)、サイトキーは設定画面・シークレットは Worker secret |
 | エディタ | Tiptap (ProseMirror JSON を正) | サーバで JSON → HTML 生成し `body_html` にキャッシュ。クライアント HTML を信用しない |
 | SEO | 自前 `packages/seo` (+ `schema-dts` 型) | JSON-LD (`WebSite` / `WebPage` / `CollectionPage` / `BlogPosting` / `BreadcrumbList` / `Organization`)、OG、sitemap、Atom feed |
 | CSS | 管理画面: Tailwind v4 / 公開テーマ: 素の CSS (CSS 変数) | テーマ作者にビルド依存を持ち込まない |
@@ -273,7 +273,7 @@ pnpm deploy                                                 # admin build → se
 |---|---|---|---|
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
-| 2. フォーム | todo | フォームビルダー、公開送信 API (Turnstile)、submissions 閲覧/CSV、Email Service 通知、テーマ用 `<KansoForm slug="contact" />` | お問い合わせが管理画面設定のみで動く |
+| 2. フォーム | in-progress | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
 | 3. 仕上げ | todo | revisions、redirects、FTS5 検索、テーマ切替、CI (`.github/workflows`)、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 Phase 1 で先送りにした改善候補: 自動生成 excerpt の描画時生成 (§4)、管理画面のブラウザ E2E テスト、投稿タイプ追加時のナビ更新を purge で即時化するか (現状 60 秒 TTL)。
@@ -287,10 +287,13 @@ Phase 1 で先送りにした改善候補: 自動生成 excerpt の描画時生�
 - **本文は ProseMirror JSON を正とし、HTML はサーバで生成** (T3)。クライアント HTML は受け取らない。生 HTML ブロックは `admin` ロールのみ。
 - **公開 HTML は Cache API に 60 秒**、purge はページ・投稿・投稿タイプの変更時のみ (§6)。`stale-while-revalidate` は使わない。
 - **プレビューはセッション認証のみ** (API キー不可)、`noindex` + `no-store`。
+- **Turnstile は既定オフ** (2026-09-15)。フォームごとに有効化し、サイトキーは `settings.forms.turnstileSiteKey`、シークレットは `TURNSTILE_SECRET_KEY` (Worker secret)。両方が揃わないと有効化できない。honeypot は常時。
+- **フォームの埋め込みは Tiptap の `form` ブロックノード** (2026-09-15)。レンダラは `<div data-kanso-form="slug">` のプレースホルダを出し、公開側が描画時にフォーム定義を解決する (ショートコード文字列は使わない)。
+- **通知メールの差出人と既定宛先は設定に持つ** (2026-09-15)。`settings.forms = { fromEmail, fromName, notifyTo, turnstileSiteKey }`。フォームの `notifyTo` が空なら設定の既定宛先、両方空なら保存のみ。`fromEmail` が空ならメール無効。
 
-タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) の各「決定」を参照。
+タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 
 ## 10. 未決事項
 
 1. パッケージ名の scope (`@kanso/*` が npm で取れるか)。workspace 内では `@kanso/*` のまま。
-2. Phase 2 のフォーム: フィールド定義 JSON の zod スキーマと、テーマ側コンポーネントの API。
+2. Phase 2 のフォーム: フィールド定義の zod スキーマは [tasks/phase-2.md](tasks/phase-2.md) T8 で確定。テーマ側の `<KansoForm>` の props は T12 で決める。

@@ -8,6 +8,13 @@
       "when": 1789042995462,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1789410329654,
+      "tag": "0001_forms_turnstile_default",
+      "breakpoints": true
     }
   ]
 }

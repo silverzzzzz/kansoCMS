@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { notifyToSchema } from './forms.ts'
 
 /** Site-wide settings stored as JSON rows in the `settings` table. */
 export const siteSettingsSchema = z.object({
@@ -22,7 +23,16 @@ export const organizationSettingsSchema = z.object({
 })
 export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>
 
+export const formsSettingsSchema = z.object({
+  fromEmail: z.union([z.email(), z.literal('')]).default(''),
+  fromName: z.string().trim().max(100).default(''),
+  notifyTo: notifyToSchema.default(''),
+  turnstileSiteKey: z.string().trim().max(200).default(''),
+})
+export type FormsSettings = z.infer<typeof formsSettingsSchema>
+
 export const SETTINGS_KEYS = {
   site: 'site',
   organization: 'organization',
+  forms: 'forms',
 } as const

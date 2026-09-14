@@ -40,3 +40,17 @@ export class KansoError extends Error {
     return new KansoError('forbidden', message)
   }
 }
+
+/**
+ * True when `error` is (or wraps) a SQLite UNIQUE constraint failure. Drizzle
+ * wraps driver errors in `DrizzleQueryError` whose message is only the query,
+ * so the `cause` chain has to be inspected.
+ */
+export function isUniqueViolation(error: unknown): boolean {
+  let current: unknown = error
+  for (let depth = 0; depth < 5 && current instanceof Error; depth++) {
+    if (/unique constraint failed/i.test(current.message)) return true
+    current = current.cause
+  }
+  return false
+}

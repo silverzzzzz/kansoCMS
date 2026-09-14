@@ -19,7 +19,7 @@ import {
   tags,
   users,
 } from '../db/schema/index.ts'
-import { KansoError } from '../errors.ts'
+import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 
 const EMPTY_DOCUMENT: RichTextDoc = { type: 'doc', content: [] }
@@ -41,7 +41,7 @@ function uniqueIds(ids: number[] | undefined): number[] | undefined {
 }
 
 function throwPostConflict(error: unknown): never {
-  if (error instanceof Error && /unique constraint failed/i.test(error.message)) {
+  if (isUniqueViolation(error)) {
     throw KansoError.conflict('Post slug already exists in this post type')
   }
   throw error

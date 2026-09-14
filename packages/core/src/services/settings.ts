@@ -1,4 +1,9 @@
-import { organizationSettingsSchema, SETTINGS_KEYS, siteSettingsSchema } from '@kanso/shared'
+import {
+  formsSettingsSchema,
+  organizationSettingsSchema,
+  SETTINGS_KEYS,
+  siteSettingsSchema,
+} from '@kanso/shared'
 import { eq } from 'drizzle-orm'
 import type { z } from 'zod'
 import type { Db } from '../db/client.ts'
@@ -30,6 +35,7 @@ export function settingsService(db: Db) {
     set,
     site: () => get(SETTINGS_KEYS.site, siteSettingsSchema),
     organization: () => get(SETTINGS_KEYS.organization, organizationSettingsSchema),
+    forms: () => get(SETTINGS_KEYS.forms, formsSettingsSchema),
   }
 }
 

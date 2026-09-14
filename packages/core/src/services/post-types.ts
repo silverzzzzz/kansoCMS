@@ -3,10 +3,10 @@ import { isReservedSlug } from '@kanso/shared'
 import { and, asc, count, eq, isNull } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { pages, posts, postTypes } from '../db/schema/index.ts'
-import { KansoError } from '../errors.ts'
+import { isUniqueViolation, KansoError } from '../errors.ts'
 
 function throwPostTypeConflict(error: unknown): never {
-  if (error instanceof Error && /unique constraint failed/i.test(error.message)) {
+  if (isUniqueViolation(error)) {
     throw KansoError.conflict('Post type slug already exists')
   }
   throw error

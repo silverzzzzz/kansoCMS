@@ -3,6 +3,7 @@ import type { AppEnv } from '../env.ts'
 import { authenticate, requireAuth } from '../middleware/auth.ts'
 import { apiKeys } from './api-keys.ts'
 import { auth } from './auth.ts'
+import { forms } from './forms.ts'
 import { media } from './media.ts'
 import { pages } from './pages.ts'
 import { postTypes } from './post-types.ts'
@@ -20,6 +21,7 @@ const protectedApi = new Hono<AppEnv>()
   .use('*', requireAuth('read'))
   .on(['POST', 'PUT', 'PATCH', 'DELETE'], '*', requireAuth('write'))
   .route('/api-keys', apiKeys)
+  .route('/forms', forms)
   .route('/media', media)
   .route('/pages', pages)
   .route('/post-types', postTypes)

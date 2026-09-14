@@ -5,7 +5,7 @@ import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
 import { extractExcerpt, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { pages, postTypes } from '../db/schema/index.ts'
-import { KansoError } from '../errors.ts'
+import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
 
@@ -22,7 +22,7 @@ function searchTitle(query: string): SQL {
 }
 
 function throwPageConflict(error: unknown): never {
-  if (error instanceof Error && /unique constraint failed/i.test(error.message)) {
+  if (isUniqueViolation(error)) {
     throw KansoError.conflict('Page path already exists')
   }
   throw error
