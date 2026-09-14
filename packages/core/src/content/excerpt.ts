@@ -17,6 +17,7 @@ function textFromNode(node: RichTextNode): string {
     case 'codeBlock':
     case 'horizontalRule':
     case 'image':
+    case 'form':
     case 'rawHtml':
       return ''
   }

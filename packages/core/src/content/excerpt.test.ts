@@ -45,6 +45,7 @@ describe('extractExcerpt', () => {
         { type: 'rawHtml', attrs: { html: '<p>ignored HTML</p>' } },
         { type: 'image', attrs: { src: '/media/ignored.jpg', alt: 'ignored alt' } },
         { type: 'horizontalRule' },
+        { type: 'form', attrs: { slug: 'ignored-form' } },
       ],
     })
 

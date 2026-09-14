@@ -77,6 +77,7 @@ describe('renderRichText', () => {
         },
         { type: 'horizontalRule' },
         { type: 'image', attrs: { src: 'https://example.com/image.png' } },
+        { type: 'form', attrs: { slug: 'contact' } },
       ],
     })
 
@@ -91,7 +92,8 @@ describe('renderRichText', () => {
         '<ol start="3"><li><p>Third</p></li></ol>' +
         '<blockquote><p>Quote</p></blockquote>' +
         '<pre><code class="language-typescript">const value = "&lt;tag&gt;"</code></pre>' +
-        '<hr><img src="https://example.com/image.png" alt="" loading="lazy">',
+        '<hr><img src="https://example.com/image.png" alt="" loading="lazy">' +
+        '<div data-kanso-form="contact"></div>',
     )
   })
 

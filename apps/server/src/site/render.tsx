@@ -9,8 +9,10 @@ import {
 } from '@kanso/seo'
 import type { Context } from 'hono'
 import { raw } from 'hono/html'
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { AppEnv } from '../env.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
+import { type FormState, prepareForms } from './forms.tsx'
 import { Layout } from './themes/default/layout.tsx'
 import { PostArticle } from './themes/default/post.tsx'
 
@@ -22,12 +24,15 @@ interface RenderOptions {
   preview?: boolean
   /** Reuse a context the caller already loaded instead of querying again. */
   ctx?: SiteRequestContext
+  form?: FormState
+  status?: ContentfulStatusCode
 }
 
 export async function renderPage(c: Context<AppEnv>, page: Page, options: RenderOptions = {}) {
   const ctx = options.ctx ?? (await loadSiteContext(c.var.kanso, c.env.SITE_URL))
   const isHome = page.path === 'home'
   const ownPath = isHome ? '/' : `/${page.path}`
+  const prepared = await prepareForms(c, page.bodyHtml, ownPath, options.form)
   const ogMedia = page.ogMediaId ? await c.var.kanso.media.find(page.ogMediaId) : null
   const canonical =
     options.preview || !page.canonicalUrl ? absoluteUrl(ctx.origin, ownPath) : page.canonicalUrl
@@ -68,18 +73,19 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
     )
   }
 
-  return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav}>
+  const content = (
+    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} scripts={prepared.scripts}>
       {isHome ? (
-        <article class="page">{raw(page.bodyHtml)}</article>
+        <article class="page">{raw(prepared.html)}</article>
       ) : (
         <article class="page">
           <h1>{page.title}</h1>
-          {raw(page.bodyHtml)}
+          {raw(prepared.html)}
         </article>
       )}
-    </Layout>,
+    </Layout>
   )
+  return options.status === undefined ? c.html(content) : c.html(content, options.status)
 }
 
 export async function renderPost(
@@ -89,11 +95,13 @@ export async function renderPost(
   options: RenderOptions = {},
 ) {
   const ctx = options.ctx ?? (await loadSiteContext(c.var.kanso, c.env.SITE_URL))
-  const ownUrl = absoluteUrl(ctx.origin, `/${type.slug}/${post.slug}`)
+  const ownPath = `/${type.slug}/${post.slug}`
+  const ownUrl = absoluteUrl(ctx.origin, ownPath)
+  const prepared = await prepareForms(c, post.bodyHtml, ownPath, options.form)
   const image = post.ogMediaUrl ?? post.coverMedia?.url ?? null
   const meta = ctx.meta({
     title: post.seoTitle ?? post.title,
-    path: `/${type.slug}/${post.slug}`,
+    path: ownPath,
     description: post.seoDescription ?? post.excerpt ?? ctx.site.description ?? '',
     canonical: options.preview || !post.canonicalUrl ? ownUrl : post.canonicalUrl,
     ogType: 'article',
@@ -126,9 +134,15 @@ export async function renderPost(
     ]),
   ]
 
-  return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav}>
-      <PostArticle post={post} typeSlug={type.slug} formatDate={ctx.formatDate} />
-    </Layout>,
+  const content = (
+    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} scripts={prepared.scripts}>
+      <PostArticle
+        post={post}
+        bodyHtml={prepared.html}
+        typeSlug={type.slug}
+        formatDate={ctx.formatDate}
+      />
+    </Layout>
   )
+  return options.status === undefined ? c.html(content) : c.html(content, options.status)
 }

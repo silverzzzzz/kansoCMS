@@ -139,18 +139,25 @@ describe('submissionSchemaFor', () => {
       expect(result.error.issues.map((issue) => issue.path.join('.'))).toEqual(
         expect.arrayContaining(['name', 'consent']),
       )
+      expect(result.error.issues.find((issue) => issue.path[0] === 'name')?.message).toBe(
+        'This field is required',
+      )
     }
   })
 
   it('rejects invalid email, select and overlong values', () => {
-    expect(
-      schema.safeParse({
-        name: 'A name that is too long',
-        email: 'not-an-email',
-        topic: 'unknown',
-        consent: true,
-      }).success,
-    ).toBe(false)
+    const result = schema.safeParse({
+      name: 'A name that is too long',
+      email: 'not-an-email',
+      topic: 'unknown',
+      consent: true,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.find((issue) => issue.path[0] === 'name')?.message).toBe(
+        'Use at most 10 characters',
+      )
+    }
   })
 
   it.each([true, 'on', 'true', '1', 'yes', 'YES'])(

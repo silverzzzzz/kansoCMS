@@ -58,6 +58,7 @@ Manage forms under **管理画面 → フォーム**. Each form has its own fiel
 submission inbox, and submissions can be downloaded as CSV. To enable Turnstile, save the site
 key under **設定 → フォーム** and configure the Worker secret with
 `pnpm --filter @kanso/server exec wrangler secret put TURNSTILE_SECRET_KEY`.
+Insert a **フォーム** block from the editor toolbar to render a public form that works without JavaScript.
 
 Notifications are sent only when **Settings → Forms** has a `fromEmail` and either the form
 or the Forms settings has at least one recipient. In local development the `EMAIL` binding is

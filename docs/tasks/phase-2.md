@@ -14,7 +14,7 @@
 | T9 | 公開送信 API (`POST /api/v1/public/forms/:slug/submissions`): 検証, honeypot, Turnstile, meta | done | shared, server |
 | T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | done | core, server |
 | T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | done | server, admin |
-| T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | todo | shared, core, server, admin |
+| T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | done | shared, core, server, admin |
 | T13 | (小) excerpt を保存せず描画時に生成する (Phase 1 の既知の制限) | todo | core, server |
 
 Phase 2 の決定事項 (ユーザー確認済み):
@@ -289,7 +289,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ## T12. 本文への埋め込みと公開側の `<form>`
 
-状態: `todo`
+状態: `done`
 
 ### ゴール
 
@@ -323,7 +323,40 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- `form` ノードの `attrs.slug` は `slugSchema` で検証する。エディタ側 (`FormBlock.ts`) の既定値は
+  `''` だが、挿入は `FormPicker` (フォーム一覧ダイアログ) 経由で必ず slug 付きで行う。
+- 必須未入力/文字数超過の zod 既定メッセージは shared の `submissionSchemaFor` で
+  `This field is required` / `Use at most N characters` に置き換えた (公開 API の `details` にも同じ文言が出る)。
+- 公開側の文言は既存の 404 と同じく英語 (`Send`、`— Select —`、既定の成功文
+  `Thank you. Your message has been sent.`)。テーマ側 i18n は Phase 3 の課題。
+- `apps/server/src/site/forms.tsx`: `formSlugsIn(html)` / `expandForms(html, forms, { action,
+  turnstileSiteKey, state })` / `prepareForms(c, html, action, state)` / `draftValues(form, raw)` と
+  `<KansoForm form action turnstileSiteKey state>`。`action` はプレビューでも公開パス。
+  Turnstile のスクリプトは「Turnstile ON のフォームが本文にあり、かつサイトキー + secret が揃っている」
+  ときだけ `Layout` の `scripts` prop 経由で `<head>` に入る。
+- `renderPage` / `renderPost` の `RenderOptions` に `form?: FormState` と `status?` を追加。
+  `PostArticle` は展開済み `bodyHtml` を prop で受け取る。
+- `routes.tsx` は `resolveContent(c, path)` でページ/投稿/その他ルートを判別し、GET と POST で共有する。
+  POST は `_form` の slug が本文のプレースホルダに含まれない場合と未知パスで 404、`parseBody` の
+  エラー (64 KB 超・未対応 Content-Type) は `onError` の plain text 400 のまま。応答は常に
+  `cache-control: no-store`。
+- `parseBody` は `apps/server/src/forms/body.ts` に移し、公開 API と site の両方から使う。
+- `docs/architecture.md` の CSP 記述を実態 (未出力) に合わせ、Turnstile 利用時は
+  `https://challenges.cloudflare.com` を許可する必要があることを明記した。
+- レビュー修正: `site.get('/')` が `resolveContent(c, 'home')` を呼んでいたため、`home` ページが無い
+  サイトで毎回 `postTypes.findBySlug('home')` が余分に走っていた → GET は従来の
+  `findPublishedByPath('home')` に戻し、POST だけ `resolveContent` を使う。未使用の `ownPath` を削除。
+- 既知の制限: 公開ページの Cache API (60 秒) はフォーム定義の変更で purge されないため、フォームを
+  編集 (Turnstile の切替など) してから最大 60 秒は古い `<form>` が配信される。
+- スモーク (`:5199`, curl, `.dev.vars` に Turnstile テスト用 secret を一時設定): 5 種のフィールドと
+  存在しない slug のプレースホルダを含む公開ページで、GET はフォーム描画・未知 slug の除去・
+  `<`/`"` のエスケープを確認 → 必須未入力 + 不正メールで 422 (`no-store`、入力値保持、`selected`、
+  `aria-invalid` とフィールド別メッセージ) → 正常送信 200 で成功文 (HTML エスケープ済み) →
+  honeypot 200 で未保存 → 本文にない `_form` / 未知パスで 404 → multipart 200 (ファイル無視) →
+  `text/plain` 400 → Turnstile ON でスクリプトとウィジェット、トークン無しは 422
+  `Turnstile verification failed`、ダミートークンで 200 → `redirectUrl` で 303 `location`。
+  送信一覧 `total=4`。ブラウザ操作と実際の Turnstile ウィジェット表示は未確認 (ビルド済み
+  バンドルに `FormPicker` が含まれることは確認)。
 
 ---
 

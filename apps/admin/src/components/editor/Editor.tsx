@@ -3,6 +3,7 @@ import Image from '@tiptap/extension-image'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { useState } from 'react'
+import { FormBlock } from './FormBlock.ts'
 import { RawHtml } from './RawHtml.ts'
 import { isAllowedLink, Toolbar } from './Toolbar.tsx'
 
@@ -55,6 +56,7 @@ export function Editor({
       }),
       SizedImage,
       RawHtml,
+      FormBlock,
     ],
     content,
     onUpdate: ({ editor: current }) => {

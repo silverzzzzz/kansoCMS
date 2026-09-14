@@ -12,14 +12,15 @@ export interface LayoutProps {
   meta: PageMeta
   jsonLd?: unknown[]
   nav: NavItem[]
+  scripts?: string[]
   children: Child
 }
 
 /**
- * Default theme shell. Zero client-side JavaScript; styling comes from
- * /theme.css in apps/server/public. Fork this directory to make a theme.
+ * Default theme shell. Styling comes from /theme.css in apps/server/public;
+ * optional integration scripts are supplied explicitly by the renderer.
  */
-export function Layout({ meta, jsonLd, nav, children }: LayoutProps) {
+export function Layout({ meta, jsonLd, nav, scripts = [], children }: LayoutProps) {
   return (
     <>
       {raw('<!DOCTYPE html>')}
@@ -27,6 +28,9 @@ export function Layout({ meta, jsonLd, nav, children }: LayoutProps) {
         <head>
           <Head meta={meta} jsonLd={jsonLd} />
           <link rel="stylesheet" href="/theme.css" />
+          {scripts.map((src) => (
+            <script src={src} async defer></script>
+          ))}
         </head>
         <body>
           <header class="site-header">

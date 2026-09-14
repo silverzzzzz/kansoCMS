@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { useState } from 'react'
+import { FormPicker } from '../forms/FormPicker.tsx'
 import { MediaPicker } from '../media/MediaPicker.tsx'
 
 export function isAllowedLink(value: string): boolean {
@@ -8,6 +9,7 @@ export function isAllowedLink(value: string): boolean {
 
 export function Toolbar({ editor }: { editor: Editor }) {
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [formPickerOpen, setFormPickerOpen] = useState(false)
   const buttonClass =
     'border border-neutral-300 bg-white px-2 py-1 text-xs font-medium text-neutral-800 ' +
     'outline-none hover:border-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-950 ' +
@@ -83,6 +85,7 @@ export function Toolbar({ editor }: { editor: Editor }) {
         )}
         {action('区切り線', false, () => editor.chain().focus().setHorizontalRule().run())}
         {action('画像', false, () => setPickerOpen(true))}
+        {action('フォーム', false, () => setFormPickerOpen(true))}
         {action('元に戻す', false, () => editor.chain().focus().undo().run(), !editor.can().undo())}
         {action('やり直す', false, () => editor.chain().focus().redo().run(), !editor.can().redo())}
       </div>
@@ -101,6 +104,14 @@ export function Toolbar({ editor }: { editor: Editor }) {
             })
             .run()
           setPickerOpen(false)
+        }}
+      />
+      <FormPicker
+        open={formPickerOpen}
+        onClose={() => setFormPickerOpen(false)}
+        onSelect={(slug) => {
+          editor.chain().focus().insertContent({ type: 'form', attrs: { slug } }).run()
+          setFormPickerOpen(false)
         }}
       />
     </>

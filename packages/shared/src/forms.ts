@@ -139,14 +139,14 @@ function stringInput(value: unknown): string {
 }
 
 function textValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength)
-  if (required) schema = schema.min(1)
+  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
+  if (required) schema = schema.min(1, 'This field is required')
   return z.preprocess(stringInput, schema)
 }
 
 function emailValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength)
-  if (required) schema = schema.min(1)
+  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
+  if (required) schema = schema.min(1, 'This field is required')
   return z.preprocess(
     stringInput,
     schema.refine((value) => value === '' || z.email().safeParse(value).success, {
@@ -156,8 +156,8 @@ function emailValueSchema(required: boolean, maxLength: number) {
 }
 
 function telephoneValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength)
-  if (required) schema = schema.min(1)
+  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
+  if (required) schema = schema.min(1, 'This field is required')
   return z.preprocess(
     stringInput,
     schema.refine((value) => value === '' || TELEPHONE_PATTERN.test(value), {

@@ -190,7 +190,9 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | パス | ハンドラ | 認証 |
 |---|---|---|
 | `GET /` | `site` — `home` ページ → `settings.site.homePostTypeSlug` の一覧 → プレースホルダ | 公開 |
+| `POST /` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301) | 公開 |
+| `POST /:path+` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
 | `GET /:type/category/:slug`, `GET /:type/tag/:slug` | `site` — 絞込一覧 | 公開 |
@@ -226,6 +228,7 @@ URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は�
 - `WebSite` を毎ページ、`Organization` は `settings.organization.name` がある場合に出力。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList`。
 - `canonical` は `canonical_url` が設定されていればそれ、なければ自 URL (`SITE_URL` 基準)。プレビューでは常に自 URL + `noindex`。
 - ページネーションは `rel=prev/next` を出し、2 ページ目以降も自分自身を canonical にする。
+- `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
 
 ### キャッシュ
 
@@ -238,7 +241,7 @@ URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は�
 ### セキュリティ
 
 - CSRF: Cookie は `SameSite=Lax` + 変更系 API で `Origin` ヘッダ検証。
-- CSP: 公開サイトは `script-src 'self'` (テーマが JS を使わなければ実質 `'none'`)。管理画面は Vite の hash を許可。
+- CSP: 現在は CSP ヘッダーを出力していない。追加する場合、公開サイトで Turnstile を使うときは `script-src` で `https://challenges.cloudflare.com` を許可する。管理画面は Vite の hash を許可する。
 - パスワード: PBKDF2-SHA256 (WebCrypto)、比較はバイト XOR の累積で定数時間にする。API キーは SHA-256 ハッシュ保存。
 - フォーム: Turnstile + honeypot + サイズ上限 + (任意) Workers Rate Limiting binding。
 - アップロード: MIME 許可リスト、拡張子正規化、`Content-Disposition` 制御。SVG は既定で不可。
@@ -300,4 +303,4 @@ Phase 1 で先送りにした改善候補: 自動生成 excerpt の描画時生�
 ## 10. 未決事項
 
 1. パッケージ名の scope (`@kanso/*` が npm で取れるか)。workspace 内では `@kanso/*` のまま。
-2. Phase 2 のフォーム: フィールド定義の zod スキーマは [tasks/phase-2.md](tasks/phase-2.md) T8 で確定。テーマ側の `<KansoForm>` の props は T12 で決める。
+2. **T12 で決定済み**: テーマ側の `<KansoForm>` の props は `form`, `action`, `turnstileSiteKey`, `state`。

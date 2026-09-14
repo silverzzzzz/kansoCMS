@@ -112,6 +112,8 @@ function renderNode(node: RichTextNode, options: RenderOptions): string {
       return '<hr>'
     case 'image':
       return renderImage(node)
+    case 'form':
+      return `<div data-kanso-form="${escapeAttr(node.attrs.slug)}"></div>`
     case 'rawHtml':
       if (!options.allowRawHtml) {
         throw KansoError.forbidden('Raw HTML blocks are not allowed')

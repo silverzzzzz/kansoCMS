@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { slugSchema } from './slug.ts'
 
 export const richTextMarkSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('bold') }),
@@ -104,6 +105,13 @@ interface RichTextRawHtmlNode {
   }
 }
 
+interface RichTextFormNode {
+  type: 'form'
+  attrs: {
+    slug: string
+  }
+}
+
 type RichTextBlockNode =
   | RichTextParagraphNode
   | RichTextHeadingNode
@@ -114,6 +122,7 @@ type RichTextBlockNode =
   | RichTextHorizontalRuleNode
   | RichTextImageNode
   | RichTextRawHtmlNode
+  | RichTextFormNode
 
 const textNodeSchema = z.object({
   type: z.literal('text'),
@@ -199,6 +208,11 @@ const rawHtmlNodeSchema = z.object({
   attrs: z.object({ html: z.string() }),
 })
 
+const formNodeSchema = z.object({
+  type: z.literal('form'),
+  attrs: z.object({ slug: slugSchema }),
+})
+
 blockNodeSchema = z.discriminatedUnion('type', [
   paragraphNodeSchema,
   headingNodeSchema,
@@ -209,6 +223,7 @@ blockNodeSchema = z.discriminatedUnion('type', [
   horizontalRuleNodeSchema,
   imageNodeSchema,
   rawHtmlNodeSchema,
+  formNodeSchema,
 ])
 
 export const richTextNodeSchema = z.discriminatedUnion('type', [
@@ -224,6 +239,7 @@ export const richTextNodeSchema = z.discriminatedUnion('type', [
   horizontalRuleNodeSchema,
   imageNodeSchema,
   rawHtmlNodeSchema,
+  formNodeSchema,
 ])
 export type RichTextNode = z.infer<typeof richTextNodeSchema>
 

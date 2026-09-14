@@ -5,11 +5,12 @@ type Post = Awaited<ReturnType<Kanso['posts']['getWithRelations']>>
 
 export interface PostArticleProps {
   post: Post
+  bodyHtml: string
   typeSlug: string
   formatDate: (date: Date) => string
 }
 
-export function PostArticle({ post, typeSlug, formatDate }: PostArticleProps) {
+export function PostArticle({ post, bodyHtml, typeSlug, formatDate }: PostArticleProps) {
   return (
     <article class="post">
       <h1>{post.title}</h1>
@@ -38,7 +39,7 @@ export function PostArticle({ post, typeSlug, formatDate }: PostArticleProps) {
           ))}
         </nav>
       )}
-      <div class="post-body">{raw(post.bodyHtml)}</div>
+      <div class="post-body">{raw(bodyHtml)}</div>
     </article>
   )
 }
