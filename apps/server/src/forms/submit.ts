@@ -1,12 +1,13 @@
 import { type Kanso, KansoError } from '@kanso/core'
 import type { Context } from 'hono'
 import type { AppEnv } from '../env.ts'
+import { notifySubmission } from './notify.ts'
 import { turnstileConfig, verifyTurnstile } from './turnstile.ts'
 
 const RESERVED_KEYS = new Set(['_hp', 'cf-turnstile-response', '_return', '_form'])
 
-type PublicForm = NonNullable<Awaited<ReturnType<Kanso['forms']['findBySlug']>>>
-type Submission = Awaited<ReturnType<Kanso['forms']['submissions']['create']>>
+export type PublicForm = NonNullable<Awaited<ReturnType<Kanso['forms']['findBySlug']>>>
+export type Submission = Awaited<ReturnType<Kanso['forms']['submissions']['create']>>
 
 export type SubmitFormResult = {
   submission: Submission | null
@@ -62,6 +63,6 @@ export async function submitForm(
     country: requestCountry(c.req.raw),
   })
 
-  // T10: schedule submission notification here with c.executionCtx.waitUntil(...).
+  c.executionCtx.waitUntil(notifySubmission(c, form, submission))
   return successResult(form, submission)
 }

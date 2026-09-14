@@ -78,6 +78,13 @@ export const notifyToSchema = z
     return addresses.join(',')
   })
 
+export function notifyToAddresses(value: string): string[] {
+  return value
+    .split(',')
+    .map((address) => address.trim())
+    .filter(Boolean)
+}
+
 export const redirectUrlSchema = z
   .string()
   .trim()

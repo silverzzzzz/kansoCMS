@@ -79,7 +79,12 @@ function testSetup(form: typeof testForm | null = testForm) {
     .onError(onError)
     .route('/api/v1/public/forms', publicForms)
   const env = { SITE_URL: 'https://example.com' } as Bindings
-  return { app, createSubmission, env, settingsForms, validateSubmissionMock }
+  const executionCtx = {
+    waitUntil: vi.fn(),
+    passThroughOnException: vi.fn(),
+    props: {},
+  }
+  return { app, createSubmission, env, executionCtx, settingsForms, validateSubmissionMock }
 }
 
 afterEach(() => {
@@ -88,11 +93,12 @@ afterEach(() => {
 
 describe('public form submissions', () => {
   it('returns 404 for an unknown form slug', async () => {
-    const { app, createSubmission, env } = testSetup(null)
+    const { app, createSubmission, env, executionCtx } = testSetup(null)
     const response = await app.request(
       '/api/v1/public/forms/missing/submissions',
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(404)
@@ -100,10 +106,11 @@ describe('public form submissions', () => {
       error: { code: 'not_found', message: 'Form not found' },
     })
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('returns the normal success response for a filled honeypot without storing', async () => {
-    const { app, createSubmission, env } = testSetup()
+    const { app, createSubmission, env, executionCtx } = testSetup()
     const response = await app.request(
       '/api/v1/public/forms/contact/submissions',
       {
@@ -112,6 +119,7 @@ describe('public form submissions', () => {
         body: JSON.stringify({ name: 'Bot', _hp: 'https://spam.example' }),
       },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(201)
@@ -121,10 +129,11 @@ describe('public form submissions', () => {
       redirectUrl: '/complete',
     })
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('rejects bodies over 64 KB by declared and actual size', async () => {
-    const { app, createSubmission, env } = testSetup()
+    const { app, createSubmission, env, executionCtx } = testSetup()
     const path = '/api/v1/public/forms/contact/submissions'
     const declared = await app.request(
       path,
@@ -134,6 +143,7 @@ describe('public form submissions', () => {
         body: '{}',
       },
       env,
+      executionCtx,
     )
     const actual = await app.request(
       path,
@@ -143,6 +153,7 @@ describe('public form submissions', () => {
         body: JSON.stringify({ name: 'x'.repeat(65_536) }),
       },
       env,
+      executionCtx,
     )
 
     expect(declared.status).toBe(400)
@@ -154,10 +165,11 @@ describe('public form submissions', () => {
       error: { code: 'validation', message: 'Request body too large' },
     })
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('stops reading a streamed body without Content-Length once it exceeds the limit', async () => {
-    const { app, createSubmission, env } = testSetup()
+    const { app, createSubmission, env, executionCtx } = testSetup()
     let pulls = 0
     const chunk = new TextEncoder().encode('x'.repeat(16 * 1024))
     const stream = new ReadableStream<Uint8Array>({
@@ -174,7 +186,7 @@ describe('public form submissions', () => {
       duplex: 'half',
     })
 
-    const response = await app.request(request, undefined, env)
+    const response = await app.request(request, undefined, env, executionCtx)
 
     expect(response.status).toBe(400)
     await expect(response.json()).resolves.toMatchObject({
@@ -183,14 +195,16 @@ describe('public form submissions', () => {
     // 5 chunks cross 64 KB; the reader must not keep draining the stream after that.
     expect(pulls).toBeLessThanOrEqual(6)
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('returns field details for a required-field error', async () => {
-    const { app, createSubmission, env } = testSetup()
+    const { app, createSubmission, env, executionCtx } = testSetup()
     const response = await app.request(
       '/api/v1/public/forms/contact/submissions',
       { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(400)
@@ -202,10 +216,11 @@ describe('public form submissions', () => {
       },
     })
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('stores a URL-encoded body with request metadata and no reserved keys', async () => {
-    const { app, createSubmission, env, validateSubmissionMock } = testSetup()
+    const { app, createSubmission, env, executionCtx, validateSubmissionMock } = testSetup()
     const response = await app.request(
       '/api/v1/public/forms/contact/submissions',
       {
@@ -219,6 +234,7 @@ describe('public form submissions', () => {
         body: 'name=Alice&terms=on&_form=contact&_return=%2Fcontact',
       },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(201)
@@ -236,10 +252,11 @@ describe('public form submissions', () => {
         country: null,
       },
     )
+    expect(executionCtx.waitUntil).toHaveBeenCalledOnce()
   })
 
   it('stores a JSON object with Cloudflare country metadata', async () => {
-    const { app, createSubmission, env, validateSubmissionMock } = testSetup()
+    const { app, createSubmission, env, executionCtx, validateSubmissionMock } = testSetup()
     const request = new Request('https://example.com/api/v1/public/forms/contact/submissions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -247,7 +264,7 @@ describe('public form submissions', () => {
     })
     Object.defineProperty(request, 'cf', { value: { country: 'JP' } })
 
-    const response = await app.request(request, undefined, env)
+    const response = await app.request(request, undefined, env, executionCtx)
 
     expect(response.status).toBe(201)
     expect(validateSubmissionMock).toHaveBeenCalledWith(testForm, {
@@ -259,10 +276,11 @@ describe('public form submissions', () => {
       { name: 'Bob', terms: false },
       { ip: null, userAgent: null, referrer: null, country: 'JP' },
     )
+    expect(executionCtx.waitUntil).toHaveBeenCalledOnce()
   })
 
   it('ignores multipart files', async () => {
-    const { app, createSubmission, env } = testSetup()
+    const { app, createSubmission, env, executionCtx } = testSetup()
     const body = new FormData()
     body.set('name', 'Carol')
     body.set('_form', 'contact')
@@ -272,6 +290,7 @@ describe('public form submissions', () => {
       '/api/v1/public/forms/contact/submissions',
       { method: 'POST', body },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(201)
@@ -280,12 +299,13 @@ describe('public form submissions', () => {
       { name: 'Carol', terms: false },
       { ip: null, userAgent: null, referrer: null, country: null },
     )
+    expect(executionCtx.waitUntil).toHaveBeenCalledOnce()
   })
 
   it('rejects a Turnstile-enabled form when configuration is missing', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    const { app, createSubmission, env, settingsForms } = testSetup({
+    const { app, createSubmission, env, executionCtx, settingsForms } = testSetup({
       ...testForm,
       turnstile: true,
     })
@@ -297,6 +317,7 @@ describe('public form submissions', () => {
         body: JSON.stringify({ name: 'Dana', 'cf-turnstile-response': 'token' }),
       },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(400)
@@ -306,10 +327,11 @@ describe('public form submissions', () => {
     expect(settingsForms).toHaveBeenCalledOnce()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(createSubmission).not.toHaveBeenCalled()
+    expect(executionCtx.waitUntil).not.toHaveBeenCalled()
   })
 
   it('adds CORS headers only through the public router', async () => {
-    const { app, env } = testSetup()
+    const { app, env, executionCtx } = testSetup()
     const response = await app.request(
       '/api/v1/public/forms/contact/submissions',
       {
@@ -321,6 +343,7 @@ describe('public form submissions', () => {
         },
       },
       env,
+      executionCtx,
     )
 
     expect(response.status).toBe(204)

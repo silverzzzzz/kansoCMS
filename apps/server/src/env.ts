@@ -1,4 +1,4 @@
-import type { D1Database, Fetcher, R2Bucket } from '@cloudflare/workers-types'
+import type { D1Database, Fetcher, R2Bucket, SendEmail } from '@cloudflare/workers-types'
 import type { Kanso } from '@kanso/core'
 import type { Principal } from './middleware/auth.ts'
 
@@ -15,6 +15,8 @@ export interface Bindings {
   DB: D1Database
   MEDIA: R2Bucket
   ASSETS: Fetcher
+  /** Cloudflare Email Service binding for form notifications. */
+  EMAIL: SendEmail
   /** Absolute origin, no trailing slash. */
   SITE_URL: string
 }

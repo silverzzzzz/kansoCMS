@@ -52,6 +52,25 @@ To see the built admin served by the Worker itself, run `pnpm build` once; it la
 If port 5173 is taken, start the server alone with a different port:
 `pnpm --filter @kanso/server exec vite dev --port 5199`.
 
+### Form notifications (email)
+
+Notifications are sent only when **Settings → Forms** has a `fromEmail` and either the form
+or the Forms settings has at least one recipient. In local development the `EMAIL` binding is
+emulated: nothing is delivered, the dev server prints
+`send_email binding called with MessageBuilder:`, and the text and HTML bodies are written to
+files under `.wrangler/`.
+
+To send real email from `wrangler dev`, temporarily add `"remote": true` to the `send_email`
+binding. Real mail will go out; remove that option before committing. In production, onboard the
+`fromEmail` domain first:
+
+```sh
+pnpm --filter @kanso/server exec wrangler email sending enable <domain>
+```
+
+A failed send never fails the form submission. Search the Worker logs for
+`form_notify_failed` to diagnose notification failures.
+
 ## What the public site serves
 
 | URL | Content |

@@ -4,6 +4,7 @@ import {
   type FormField,
   formFieldListSchema,
   formFieldSchema,
+  notifyToAddresses,
   notifyToSchema,
   redirectUrlSchema,
   submissionSchemaFor,
@@ -82,6 +83,13 @@ describe('notifyToSchema', () => {
         Array.from({ length: 11 }, (_, index) => `user${index}@example.com`).join(','),
       ).success,
     ).toBe(false)
+  })
+
+  it('splits a normalized recipient string and drops blanks', () => {
+    expect(notifyToAddresses(' one@example.com, ,two@example.com,')).toEqual([
+      'one@example.com',
+      'two@example.com',
+    ])
   })
 })
 

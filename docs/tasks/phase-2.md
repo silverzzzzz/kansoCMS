@@ -12,7 +12,7 @@
 |---|---|---|---|
 | T8 | フォーム定義スキーマ + forms service + 管理 API + 設定 `forms` | done | shared, core, server |
 | T9 | 公開送信 API (`POST /api/v1/public/forms/:slug/submissions`): 検証, honeypot, Turnstile, meta | done | shared, server |
-| T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | todo | core, server |
+| T10 | メール通知 (Cloudflare Email Service `send_email` バインディング) | done | core, server |
 | T11 | 管理画面: フォーム一覧/編集 (フィールドビルダー), 送信一覧/詳細/CSV, 設定 | todo | server, admin |
 | T12 | 本文への埋め込み: `form` ブロックノード (Tiptap + レンダラ) と公開側の `<form>` 描画 + 非 JS 送信 | todo | shared, core, server, admin |
 | T13 | (小) excerpt を保存せず描画時に生成する (Phase 1 の既知の制限) | todo | core, server |
@@ -174,7 +174,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ## T10. メール通知
 
-状態: `todo`
+状態: `done`
 
 ### ゴール
 
@@ -198,7 +198,47 @@ Phase 2 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- `@cloudflare/workers-types@5.20260910.1` の `SendEmail.send()` は `EmailMessage` と
+  `EmailMessageBuilder` の両方を受け取る。後者の
+  `{ to, from: { email, name }, replyTo?, subject, text, html }` を使い、旧
+  `EmailMessage` + `mimetext` 経路は使わない。成功値は `{ messageId }`。
+- `send_email` は `{ "name": "EMAIL" }` のローカルバインディングとする。
+  `"remote": true` は実サービスへプロキシして実メールを送るため設定せず、README
+  に一時利用時の注意を記載する。本番の差出人ドメインは
+  `wrangler email sending enable <domain>` でオンボーディングする。
+- ローカルの Miniflare は送信せず、`send_email binding called with MessageBuilder:` と
+  From/To/Reply-To/Subject を開発サーバへ出力し、text/html 本文を
+  `.wrangler/` 配下のファイルへ保存して `{ messageId }` を返す。
+- 今回の Vite スモークではエミュレーションと本文ファイル生成は確認できたが、端末表示は
+  From/To/Subject のみで Reply-To 行は表示されなかった。`send()` に Reply-To が渡ることは
+  server テストで確認した。
+- 宛先分解は shared の `notifyToAddresses()` に統一する。フォーム宛先を優先し、空なら
+  設定宛先へフォールバックする。宛先ごとに順次 `send()` し、1件の失敗後も残りを送る。
+- `fromEmail` が空なら `no_from`、宛先が空なら `no_recipients` としてスキップする。
+  差出人名は `fromName || site.title`、Reply-To は定義順で最初の非空 email
+  フィールド値とする。
+- 通知本文は core の純粋関数で、定義順・boolean の `Yes` / `No`・空の欠損値を扱う。
+  HTML のフォーム名、サイト名、ラベル、値、URL はすべてエスケープし、textarea の
+  改行は `<br>` にする。
+- 管理詳細 URL は
+  `${SITE_URL}/admin/forms/${form.id}/submissions/${submission.id}` とする。T11 の詳細
+  ルートもこの規約に合わせる。
+- 保存後のみ `executionCtx.waitUntil()` へ通知 Promise を渡す。通知処理は設定読込を含む
+  全例外を握り、`form_notify_failed` に form/submission ID、message、任意の code
+  だけを記録する。宛先、送信値、件名、本文はログへ出さない。
+- 本番エラーの `E_SENDER_NOT_VERIFIED`、`E_RECIPIENT_NOT_ALLOWED`、
+  `E_RATE_LIMIT_EXCEEDED` などは Error の `code` として同ログへ含める。
+- レビュー修正: Codex が `apps/server` 内で再生成した `worker-configuration.d.ts` は
+  `Cloudflare.GlobalProps { mainModule }` が欠けていたため、リポジトリルートで
+  `pnpm types` を再実行して復元した (差分は `EMAIL: SendEmail` の追加のみ)。
+  `pnpm types` は必ずルートから実行する。
+- スモーク (`:5199`): 宛先 2 件で `send_email binding called with MessageBuilder:` が
+  2 ブロック出力され、`From` は `fromName` 空時にサイト名へフォールバック、
+  `.wrangler/tmp/email/…/email-text|email-html` にエスケープ済み本文
+  (`&lt;b&gt;`、textarea 改行 → `<br>`、checkbox → `Yes`、管理 URL) が保存された。
+  フォーム側 `notifyTo` が設定宛先を上書きすること、`fromEmail` 空で送信なし、
+  honeypot で送信なしを確認。`@cloudflare/vite-plugin` の開発サーバでも `EMAIL` は
+  エミュレートされる。通知は `waitUntil` で走るため送信レスポンスは約 46 ms。
 
 ---
 

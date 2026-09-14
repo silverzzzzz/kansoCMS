@@ -13,6 +13,11 @@ import { settingsService } from './services/settings.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 
 export { extractExcerpt, type RenderOptions, renderRichText } from './content/index.ts'
+export {
+  buildSubmissionNotification,
+  type SubmissionNotification,
+  type SubmissionNotificationInput,
+} from './mail/notification.ts'
 
 export interface KansoBindings {
   db: D1Database
