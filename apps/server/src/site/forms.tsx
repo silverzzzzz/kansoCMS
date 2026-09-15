@@ -3,6 +3,7 @@ import type { Context } from 'hono'
 import type { AppEnv } from '../env.ts'
 import type { PublicForm } from '../forms/submit.ts'
 import { turnstileConfig } from '../forms/turnstile.ts'
+import type { SiteMessages } from '../i18n.ts'
 
 const FORM_PLACEHOLDER_PATTERN = /<div data-kanso-form="([a-z0-9-]+)"><\/div>/g
 const CHECKBOX_TRUE_VALUES = new Set(['on', 'true', '1', 'yes'])
@@ -58,17 +59,19 @@ export function KansoForm({
   action,
   turnstileSiteKey,
   state,
+  messages,
 }: {
   form: PublicForm
   action: string
   turnstileSiteKey: string | null
   state?: FormState
+  messages: SiteMessages['form']
 }) {
   const currentState = state?.slug === form.slug ? state : undefined
   if (currentState?.success) {
     return (
       <div class="kanso-form kanso-form--success" role="status">
-        <p>{form.successMessage || 'Thank you. Your message has been sent.'}</p>
+        <p>{form.successMessage || messages.successDefault}</p>
       </div>
     )
   }
@@ -83,14 +86,14 @@ export function KansoForm({
       formError = error.message
     }
   }
-  if (currentState?.errors && currentState.errors.length === 0) formError = 'Invalid submission'
+  if (currentState?.errors && currentState.errors.length === 0) formError = messages.genericError
 
   return (
     <form method="post" action={action} class="kanso-form">
       <input type="hidden" name="_form" value={form.slug} />
       <div class="kanso-form__hp" aria-hidden="true">
         <label>
-          Leave this field empty
+          {messages.honeypotLabel}
           <input type="text" name="_hp" tabindex={-1} autocomplete="off" />
         </label>
       </div>
@@ -158,7 +161,7 @@ export function KansoForm({
                 aria-invalid={error ? 'true' : undefined}
               >
                 <option value="" selected={value === ''}>
-                  — Select —
+                  {messages.selectPlaceholder}
                 </option>
                 {field.options.map((option) => (
                   <option value={option.value} selected={value === option.value}>
@@ -187,7 +190,7 @@ export function KansoForm({
       {form.turnstile && turnstileSiteKey && (
         <div class="cf-turnstile" data-sitekey={turnstileSiteKey}></div>
       )}
-      <button type="submit">Send</button>
+      <button type="submit">{messages.submit}</button>
     </form>
   )
 }
@@ -195,7 +198,12 @@ export function KansoForm({
 export function expandForms(
   html: string,
   forms: Map<string, PublicForm>,
-  options: { action: string; turnstileSiteKey: string | null; state?: FormState },
+  options: {
+    action: string
+    turnstileSiteKey: string | null
+    state?: FormState
+    messages: SiteMessages['form']
+  },
 ): string {
   return html.replace(FORM_PLACEHOLDER_PATTERN, (_placeholder, slug: string) => {
     const form = forms.get(slug)
@@ -207,7 +215,8 @@ export async function prepareForms(
   c: Context<AppEnv>,
   html: string,
   action: string,
-  state?: FormState,
+  state: FormState | undefined,
+  messages: SiteMessages['form'],
 ): Promise<{ html: string; scripts: string[] }> {
   const slugs = formSlugsIn(html)
   if (slugs.length === 0) return { html, scripts: [] }
@@ -221,7 +230,7 @@ export async function prepareForms(
   const config = loaded.some((form) => form?.turnstile) ? await turnstileConfig(c) : null
   const turnstileSiteKey = config?.siteKey ?? null
   return {
-    html: expandForms(html, forms, { action, turnstileSiteKey, state }),
+    html: expandForms(html, forms, { action, turnstileSiteKey, state, messages }),
     scripts: turnstileSiteKey ? [TURNSTILE_SCRIPT_URL] : [],
   }
 }

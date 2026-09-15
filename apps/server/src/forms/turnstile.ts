@@ -5,16 +5,17 @@ import { secret } from '../secrets.ts'
 
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify'
 
-function verificationFailed(): never {
-  throw KansoError.validation('Turnstile verification failed')
+function verificationFailed(failureMessage: string): never {
+  throw KansoError.validation(failureMessage)
 }
 
 export async function verifyTurnstile(
   secretKey: string,
   token: string | null | undefined,
   remoteIp: string | null,
+  failureMessage: string,
 ): Promise<void> {
-  if (!token?.trim()) verificationFailed()
+  if (!token?.trim()) verificationFailed(failureMessage)
 
   const body = new URLSearchParams({ secret: secretKey, response: token })
   if (remoteIp) body.set('remoteip', remoteIp)
@@ -25,7 +26,7 @@ export async function verifyTurnstile(
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body,
     })
-    if (!response.ok) verificationFailed()
+    if (!response.ok) verificationFailed(failureMessage)
 
     const result: unknown = await response.json()
     if (
@@ -34,10 +35,10 @@ export async function verifyTurnstile(
       !('success' in result) ||
       result.success !== true
     ) {
-      verificationFailed()
+      verificationFailed(failureMessage)
     }
   } catch {
-    verificationFailed()
+    verificationFailed(failureMessage)
   }
 }
 

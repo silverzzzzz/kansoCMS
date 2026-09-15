@@ -229,6 +229,7 @@ URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は�
 - `canonical` は `canonical_url` が設定されていればそれ、なければ自 URL (`SITE_URL` 基準)。プレビューでは常に自 URL + `noindex`。
 - ページネーションは `rel=prev/next` を出し、2 ページ目以降も自分自身を canonical にする。
 - `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
+- `apps/server/src/i18n.ts` は `SiteMessages` と `en` / `ja` カタログを定義し、`resolveMessages(locale)` が BCP 47 の primary subtag を見て `ja`、それ以外や不正値を `en` に解決する。`loadSiteContext()` は `messages` を付加し、テーマコンポーネントには必要な slice だけを渡す (`PostList` は pagination、`KansoForm` は form)。検証文言は `submissionSchemaFor(fields, messages)` へ流れ、HTML フォームと公開 JSON API の `details[].message` が同じローカライズ文言を共有する一方、`KansoError.message` は英語のまま維持する。
 
 ### キャッシュ
 
@@ -276,8 +277,8 @@ pnpm deploy                                                 # admin build → se
 |---|---|---|---|
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
-| 2. フォーム | in-progress | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | todo | revisions、redirects、FTS5 検索、テーマ切替、CI (`.github/workflows`)、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
+| 3. 仕上げ | in-progress | テーマ i18n、キャッシュの全拠点即時無効化、管理画面 E2E (Playwright) ([tasks/phase-3.md](tasks/phase-3.md))、revisions、redirects、FTS5 検索、テーマ切替、CI (`.github/workflows`)、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

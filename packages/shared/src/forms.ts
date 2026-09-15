@@ -131,6 +131,22 @@ export type SubmissionMeta = {
   country: string | null
 }
 
+export type SubmissionMessages = {
+  required: string
+  maxLength: (n: number) => string
+  email: string
+  tel: string
+  select: string
+}
+
+export const DEFAULT_SUBMISSION_MESSAGES: SubmissionMessages = {
+  required: 'This field is required',
+  maxLength: (n) => `Use at most ${n} characters`,
+  email: 'Invalid email address',
+  tel: 'Invalid telephone number',
+  select: 'Select a valid option',
+}
+
 const TELEPHONE_PATTERN = /^[0-9+()\-\s]{3,40}$/
 const CHECKBOX_TRUE_VALUES = new Set(['on', 'true', '1', 'yes'])
 
@@ -138,45 +154,48 @@ function stringInput(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
-function textValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
-  if (required) schema = schema.min(1, 'This field is required')
+function textValueSchema(required: boolean, maxLength: number, messages: SubmissionMessages) {
+  let schema = z.string().trim().max(maxLength, messages.maxLength(maxLength))
+  if (required) schema = schema.min(1, messages.required)
   return z.preprocess(stringInput, schema)
 }
 
-function emailValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
-  if (required) schema = schema.min(1, 'This field is required')
+function emailValueSchema(required: boolean, maxLength: number, messages: SubmissionMessages) {
+  let schema = z.string().trim().max(maxLength, messages.maxLength(maxLength))
+  if (required) schema = schema.min(1, messages.required)
   return z.preprocess(
     stringInput,
     schema.refine((value) => value === '' || z.email().safeParse(value).success, {
-      message: 'Invalid email address',
+      message: messages.email,
     }),
   )
 }
 
-function telephoneValueSchema(required: boolean, maxLength: number) {
-  let schema = z.string().trim().max(maxLength, `Use at most ${maxLength} characters`)
-  if (required) schema = schema.min(1, 'This field is required')
+function telephoneValueSchema(required: boolean, maxLength: number, messages: SubmissionMessages) {
+  let schema = z.string().trim().max(maxLength, messages.maxLength(maxLength))
+  if (required) schema = schema.min(1, messages.required)
   return z.preprocess(
     stringInput,
     schema.refine((value) => value === '' || TELEPHONE_PATTERN.test(value), {
-      message: 'Invalid telephone number',
+      message: messages.tel,
     }),
   )
 }
 
-function selectValueSchema(field: Extract<FormField, { type: 'select' }>) {
+function selectValueSchema(
+  field: Extract<FormField, { type: 'select' }>,
+  messages: SubmissionMessages,
+) {
   const allowed = new Set(field.options.map((option) => option.value))
   return z.preprocess(
     stringInput,
     z.string().refine((value) => allowed.has(value) || (!field.required && value === ''), {
-      message: 'Select a valid option',
+      message: messages.select,
     }),
   )
 }
 
-function checkboxValueSchema(required: boolean) {
+function checkboxValueSchema(required: boolean, messages: SubmissionMessages) {
   return z
     .preprocess(
       (value) =>
@@ -184,30 +203,31 @@ function checkboxValueSchema(required: boolean) {
         (typeof value === 'string' && CHECKBOX_TRUE_VALUES.has(value.toLowerCase())),
       z.boolean(),
     )
-    .refine((value) => !required || value, { message: 'This field is required' })
+    .refine((value) => !required || value, { message: messages.required })
 }
 
 export function submissionSchemaFor(
   fields: FormField[],
+  messages: SubmissionMessages = DEFAULT_SUBMISSION_MESSAGES,
 ): z.ZodType<SubmissionValues, Record<string, unknown>> {
   const shape: Record<string, z.ZodType<string | boolean, unknown>> = {}
   for (const field of fields) {
     switch (field.type) {
       case 'text':
       case 'textarea':
-        shape[field.name] = textValueSchema(field.required, field.maxLength)
+        shape[field.name] = textValueSchema(field.required, field.maxLength, messages)
         break
       case 'email':
-        shape[field.name] = emailValueSchema(field.required, field.maxLength)
+        shape[field.name] = emailValueSchema(field.required, field.maxLength, messages)
         break
       case 'tel':
-        shape[field.name] = telephoneValueSchema(field.required, field.maxLength)
+        shape[field.name] = telephoneValueSchema(field.required, field.maxLength, messages)
         break
       case 'select':
-        shape[field.name] = selectValueSchema(field)
+        shape[field.name] = selectValueSchema(field, messages)
         break
       case 'checkbox':
-        shape[field.name] = checkboxValueSchema(field.required)
+        shape[field.name] = checkboxValueSchema(field.required, messages)
         break
     }
   }

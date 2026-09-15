@@ -135,7 +135,7 @@ function SettingsPage() {
               onChange={(event) => setTitle(event.target.value)}
             />
           </Field>
-          <Field label="言語">
+          <Field label="言語" hint="公開サイトの文言は ja / en に対応しています (それ以外は英語)。">
             <input
               className={inputClass}
               value={locale}

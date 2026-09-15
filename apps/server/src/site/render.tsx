@@ -32,7 +32,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
   const ctx = options.ctx ?? (await loadSiteContext(c.var.kanso, c.env.SITE_URL))
   const isHome = page.path === 'home'
   const ownPath = isHome ? '/' : `/${page.path}`
-  const prepared = await prepareForms(c, page.bodyHtml, ownPath, options.form)
+  const prepared = await prepareForms(c, page.bodyHtml, ownPath, options.form, ctx.messages.form)
   const ogMedia = page.ogMediaId ? await c.var.kanso.media.find(page.ogMediaId) : null
   const canonical =
     options.preview || !page.canonicalUrl ? absoluteUrl(ctx.origin, ownPath) : page.canonicalUrl
@@ -97,7 +97,7 @@ export async function renderPost(
   const ctx = options.ctx ?? (await loadSiteContext(c.var.kanso, c.env.SITE_URL))
   const ownPath = `/${type.slug}/${post.slug}`
   const ownUrl = absoluteUrl(ctx.origin, ownPath)
-  const prepared = await prepareForms(c, post.bodyHtml, ownPath, options.form)
+  const prepared = await prepareForms(c, post.bodyHtml, ownPath, options.form, ctx.messages.form)
   const image = post.ogMediaUrl ?? post.coverMedia?.url ?? null
   const meta = ctx.meta({
     title: post.seoTitle ?? post.title,

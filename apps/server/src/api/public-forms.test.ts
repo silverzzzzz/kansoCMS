@@ -1,5 +1,10 @@
 import { type Kanso, KansoError } from '@kanso/core'
-import { type SubmissionValues, submissionSchemaFor } from '@kanso/shared'
+import {
+  DEFAULT_SUBMISSION_MESSAGES,
+  type SubmissionMessages,
+  type SubmissionValues,
+  submissionSchemaFor,
+} from '@kanso/shared'
 import { Hono } from 'hono'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppEnv, Bindings } from '../env.ts'
@@ -40,8 +45,9 @@ const testForm = {
 function validateSubmission(
   form: Pick<typeof testForm, 'fieldsJson'>,
   raw: Record<string, unknown>,
+  messages: SubmissionMessages = DEFAULT_SUBMISSION_MESSAGES,
 ): SubmissionValues {
-  const result = submissionSchemaFor(form.fieldsJson).safeParse(raw)
+  const result = submissionSchemaFor(form.fieldsJson, messages).safeParse(raw)
   if (!result.success) {
     throw KansoError.validation(
       'Invalid submission',
@@ -54,7 +60,7 @@ function validateSubmission(
   return result.data
 }
 
-function testSetup(form: typeof testForm | null = testForm) {
+function testSetup(form: typeof testForm | null = testForm, locale = 'en') {
   const createSubmission = vi.fn().mockResolvedValue({ id: 10 })
   const validateSubmissionMock = vi.fn(validateSubmission)
   const settingsForms = vi.fn().mockResolvedValue({
@@ -69,7 +75,10 @@ function testSetup(form: typeof testForm | null = testForm) {
       validateSubmission: validateSubmissionMock,
       submissions: { create: createSubmission },
     },
-    settings: { forms: settingsForms },
+    settings: {
+      site: vi.fn().mockResolvedValue({ locale }),
+      forms: settingsForms,
+    },
   })
   const app = new Hono<AppEnv>()
     .use('*', async (c, next) => {
@@ -238,10 +247,14 @@ describe('public form submissions', () => {
     )
 
     expect(response.status).toBe(201)
-    expect(validateSubmissionMock).toHaveBeenCalledWith(testForm, {
-      name: 'Alice',
-      terms: 'on',
-    })
+    expect(validateSubmissionMock).toHaveBeenCalledWith(
+      testForm,
+      {
+        name: 'Alice',
+        terms: 'on',
+      },
+      expect.any(Object),
+    )
     expect(createSubmission).toHaveBeenCalledWith(
       1,
       { name: 'Alice', terms: true },
@@ -267,10 +280,14 @@ describe('public form submissions', () => {
     const response = await app.request(request, undefined, env, executionCtx)
 
     expect(response.status).toBe(201)
-    expect(validateSubmissionMock).toHaveBeenCalledWith(testForm, {
-      name: 'Bob',
-      terms: false,
-    })
+    expect(validateSubmissionMock).toHaveBeenCalledWith(
+      testForm,
+      {
+        name: 'Bob',
+        terms: false,
+      },
+      expect.any(Object),
+    )
     expect(createSubmission).toHaveBeenCalledWith(
       1,
       { name: 'Bob', terms: false },
@@ -328,6 +345,24 @@ describe('public form submissions', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(createSubmission).not.toHaveBeenCalled()
     expect(executionCtx.waitUntil).not.toHaveBeenCalled()
+  })
+
+  it('returns Japanese field details for a Japanese site', async () => {
+    const { app, createSubmission, env, executionCtx } = testSetup(testForm, 'ja')
+    const response = await app.request(
+      '/api/v1/public/forms/contact/submissions',
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' },
+      env,
+      executionCtx,
+    )
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as {
+      error: { message: string; details: { path: string; message: string }[] }
+    }
+    expect(body.error.message).toBe('Invalid submission')
+    expect(body.error.details[0]?.message).toBe('必須項目です')
+    expect(createSubmission).not.toHaveBeenCalled()
   })
 
   it('adds CORS headers only through the public router', async () => {

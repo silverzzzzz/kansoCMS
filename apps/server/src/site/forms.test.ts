@@ -1,6 +1,7 @@
 import { formFieldListSchema } from '@kanso/shared'
 import { describe, expect, it } from 'vitest'
 import type { PublicForm } from '../forms/submit.ts'
+import { en, ja } from '../i18n.ts'
 import { expandForms, formSlugsIn } from './forms.tsx'
 
 const fields = formFieldListSchema.parse([
@@ -59,7 +60,7 @@ describe('expandForms', () => {
     const html = expandForms(
       '<div data-kanso-form="contact"></div>',
       new Map([[form.slug, form]]),
-      { action: '/contact', turnstileSiteKey: null },
+      { action: '/contact', turnstileSiteKey: null, messages: en.form },
     )
 
     expect(html).toContain('<form method="post" action="/contact" class="kanso-form">')
@@ -81,6 +82,7 @@ describe('expandForms', () => {
       expandForms('<p>Before</p><div data-kanso-form="missing"></div><p>After</p>', new Map(), {
         action: '/contact',
         turnstileSiteKey: null,
+        messages: en.form,
       }),
     ).toBe('<p>Before</p><p>After</p>')
   })
@@ -89,7 +91,12 @@ describe('expandForms', () => {
     const html = expandForms(
       '<div data-kanso-form="contact"></div>',
       new Map([[form.slug, form]]),
-      { action: '/contact', turnstileSiteKey: null, state: { slug: 'contact', success: true } },
+      {
+        action: '/contact',
+        turnstileSiteKey: null,
+        state: { slug: 'contact', success: true },
+        messages: en.form,
+      },
     )
 
     expect(html).toContain('Message received.')
@@ -104,6 +111,7 @@ describe('expandForms', () => {
       {
         action: '/contact',
         turnstileSiteKey: null,
+        messages: en.form,
         state: {
           slug: 'contact',
           values: { name: '<Alice "Admin">' },
@@ -123,18 +131,31 @@ describe('expandForms', () => {
     const withKey = expandForms(placeholder, new Map([[form.slug, turnstileForm]]), {
       action: '/contact',
       turnstileSiteKey: 'site-key',
+      messages: en.form,
     })
     const withoutKey = expandForms(placeholder, new Map([[form.slug, turnstileForm]]), {
       action: '/contact',
       turnstileSiteKey: null,
+      messages: en.form,
     })
     const disabled = expandForms(placeholder, new Map([[form.slug, form]]), {
       action: '/contact',
       turnstileSiteKey: 'site-key',
+      messages: en.form,
     })
 
     expect(withKey).toContain('class="cf-turnstile" data-sitekey="site-key"')
     expect(withoutKey).not.toContain('cf-turnstile')
     expect(disabled).not.toContain('cf-turnstile')
+  })
+
+  it('renders the Japanese submit label', () => {
+    const html = expandForms(
+      '<div data-kanso-form="contact"></div>',
+      new Map([[form.slug, form]]),
+      { action: '/contact', turnstileSiteKey: null, messages: ja.form },
+    )
+
+    expect(html).toContain('<button type="submit">送信</button>')
   })
 })

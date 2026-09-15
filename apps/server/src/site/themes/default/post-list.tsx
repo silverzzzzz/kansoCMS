@@ -12,13 +12,21 @@ export interface PostListProps {
   items: PostSummaryItem[]
   pagination: { page: number; totalPages: number; basePath: string }
   formatDate: (date: Date) => string
+  messages: { newer: string; older: string }
 }
 
 function pageHref(basePath: string, page: number): string {
   return page === 1 ? basePath : `${basePath}?page=${page}`
 }
 
-export function PostList({ heading, description, items, pagination, formatDate }: PostListProps) {
+export function PostList({
+  heading,
+  description,
+  items,
+  pagination,
+  formatDate,
+  messages,
+}: PostListProps) {
   return (
     <section class="post-list">
       <h1>{heading}</h1>
@@ -39,10 +47,20 @@ export function PostList({ heading, description, items, pagination, formatDate }
       {pagination.totalPages > 1 && (
         <nav class="pagination">
           {pagination.page > 1 && (
-            <a href={pageHref(pagination.basePath, pagination.page - 1)}>←</a>
+            <a
+              href={pageHref(pagination.basePath, pagination.page - 1)}
+              aria-label={messages.newer}
+            >
+              ←
+            </a>
           )}
           {pagination.page < pagination.totalPages && (
-            <a href={pageHref(pagination.basePath, pagination.page + 1)}>→</a>
+            <a
+              href={pageHref(pagination.basePath, pagination.page + 1)}
+              aria-label={messages.older}
+            >
+              →
+            </a>
           )}
         </nav>
       )}

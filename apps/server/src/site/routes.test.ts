@@ -1,5 +1,11 @@
 import { type Kanso, KansoError } from '@kanso/core'
-import { type RichTextDoc, type SubmissionValues, submissionSchemaFor } from '@kanso/shared'
+import {
+  DEFAULT_SUBMISSION_MESSAGES,
+  type RichTextDoc,
+  type SubmissionMessages,
+  type SubmissionValues,
+  submissionSchemaFor,
+} from '@kanso/shared'
 import { Hono } from 'hono'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEnv, Bindings } from '../env.ts'
@@ -59,8 +65,9 @@ const testPage = {
 function validateSubmission(
   form: Pick<typeof testForm, 'fieldsJson'>,
   raw: Record<string, unknown>,
+  messages: SubmissionMessages = DEFAULT_SUBMISSION_MESSAGES,
 ): SubmissionValues {
-  const result = submissionSchemaFor(form.fieldsJson).safeParse(raw)
+  const result = submissionSchemaFor(form.fieldsJson, messages).safeParse(raw)
   if (!result.success) {
     throw KansoError.validation(
       'Invalid submission',
@@ -77,6 +84,7 @@ function testSetup(
   options: {
     form?: typeof testForm
     page?: typeof testPage
+    locale?: string
     turnstileSiteKey?: string
     turnstileSecretKey?: string
   } = {},
@@ -89,7 +97,7 @@ function testSetup(
       site: vi.fn().mockResolvedValue({
         title: 'Test site',
         description: '',
-        locale: 'en',
+        locale: options.locale ?? 'en',
         timezone: 'UTC',
         logoMediaId: null,
         homePostTypeSlug: null,
@@ -189,6 +197,14 @@ describe('site form routes', () => {
     expect(html).not.toContain('challenges.cloudflare.com/turnstile/v0/api.js')
   })
 
+  it('renders the Japanese submit label for a Japanese site', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'ja' })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('<button type="submit">送信</button>')
+  })
+
   it('loads the Turnstile widget and script only for a configured enabled form', async () => {
     const { app, env, executionCtx } = testSetup({
       form: { ...testForm, turnstile: true },
@@ -221,6 +237,23 @@ describe('site form routes', () => {
     expect(response.status).toBe(422)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.text()).toContain('This field is required')
+  })
+
+  it('re-renders Japanese required-field errors for a Japanese site', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'ja' })
+    const response = await app.request(
+      '/contact',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: '_form=contact-form&name=',
+      },
+      env,
+      executionCtx,
+    )
+
+    expect(response.status).toBe(422)
+    expect(await response.text()).toContain('必須項目です')
   })
 
   it('stores a valid submission and renders the success message', async () => {
@@ -284,5 +317,23 @@ describe('site form routes', () => {
 
     expect(response.status).toBe(404)
     expect(createSubmission).not.toHaveBeenCalled()
+  })
+})
+
+describe('site not found page', () => {
+  it('renders the Japanese message for a Japanese site', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'ja' })
+    const response = await app.request('/missing', undefined, env, executionCtx)
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toContain('お探しのページは見つかりませんでした。')
+  })
+
+  it('falls back to the English message for an unsupported locale', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'fr' })
+    const response = await app.request('/missing', undefined, env, executionCtx)
+
+    expect(response.status).toBe(404)
+    expect(await response.text()).toContain('Page not found.')
   })
 })

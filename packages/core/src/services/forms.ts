@@ -1,6 +1,7 @@
 import type {
   CreateFormInput,
   FormField,
+  SubmissionMessages,
   SubmissionMeta,
   SubmissionValues,
   UpdateFormInput,
@@ -151,8 +152,9 @@ export function formsService(db: Db) {
   function validateSubmission(
     form: { fieldsJson: FormField[] },
     raw: Record<string, unknown>,
+    messages?: SubmissionMessages,
   ): SubmissionValues {
-    const result = submissionSchemaFor(form.fieldsJson).safeParse(raw)
+    const result = submissionSchemaFor(form.fieldsJson, messages).safeParse(raw)
     if (!result.success) {
       throw KansoError.validation('Invalid submission', validationIssues(result.error.issues))
     }

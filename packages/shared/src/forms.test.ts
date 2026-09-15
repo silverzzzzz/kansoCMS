@@ -7,6 +7,7 @@ import {
   notifyToAddresses,
   notifyToSchema,
   redirectUrlSchema,
+  type SubmissionMessages,
   submissionSchemaFor,
   updateFormSchema,
 } from './forms.ts'
@@ -157,6 +158,46 @@ describe('submissionSchemaFor', () => {
       expect(result.error.issues.find((issue) => issue.path[0] === 'name')?.message).toBe(
         'Use at most 10 characters',
       )
+    }
+  })
+
+  it('uses custom submission messages for validation issues', () => {
+    const messages: SubmissionMessages = {
+      required: 'required-custom',
+      maxLength: (n) => `max-${n}`,
+      email: 'email-custom',
+      tel: 'tel-custom',
+      select: 'select-custom',
+    }
+    const customFields = formFieldListSchema.parse([
+      { type: 'text', name: 'required_text', label: 'Required', required: true, maxLength: 5 },
+      { type: 'text', name: 'short_text', label: 'Short', maxLength: 3 },
+      { type: 'email', name: 'email', label: 'Email' },
+      { type: 'tel', name: 'tel', label: 'Telephone' },
+      {
+        type: 'select',
+        name: 'choice',
+        label: 'Choice',
+        options: [{ value: 'valid', label: 'Valid' }],
+      },
+    ])
+    const result = submissionSchemaFor(customFields, messages).safeParse({
+      required_text: '',
+      short_text: 'long',
+      email: 'invalid',
+      tel: 'invalid',
+      choice: 'invalid',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.map((issue) => issue.message)).toEqual([
+        'required-custom',
+        'max-3',
+        'email-custom',
+        'tel-custom',
+        'select-custom',
+      ])
     }
   })
 

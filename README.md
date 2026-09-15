@@ -11,8 +11,8 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 1 complete** — a blog + fixed-page site can be published from the admin UI.
-> Contact forms (Phase 2), revisions, redirects and search (Phase 3) are not built yet.
+> Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
+> Revisions, redirects and search (Phase 3) are not built yet.
 
 ## Layout
 
@@ -78,6 +78,8 @@ A failed send never fails the form submission. Search the Worker logs for
 `form_notify_failed` to diagnose notification failures.
 
 ## What the public site serves
+
+Public-facing strings (404, form labels and validation messages) follow the site `locale` setting — Japanese for `ja`, English otherwise.
 
 | URL | Content |
 | --- | --- |

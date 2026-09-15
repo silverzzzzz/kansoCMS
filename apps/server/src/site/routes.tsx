@@ -11,6 +11,7 @@ import { type Context, Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { parseBody } from '../forms/body.ts'
 import { submitForm } from '../forms/submit.ts'
+import { resolveMessages } from '../i18n.ts'
 import { siteCache } from '../middleware/cache.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { feedResponse, robotsResponse, sitemapResponse } from './feeds.ts'
@@ -52,12 +53,16 @@ site.get('/', async (c) => {
 
   const meta = ctx.meta({ title: null, path: '/' })
   const jsonLd = [buildOrganization(ctx.site), buildWebSite(ctx.site)]
+  const m = ctx.messages
   return c.html(
     <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav}>
       <section class="page">
         <h1>{ctx.site.name}</h1>
+        <p>{m.home.running}</p>
         <p>
-          kansoCMS is running. Create a page with the path <code>home</code> to replace this.
+          {m.home.hintBefore}
+          <code>home</code>
+          {m.home.hintAfter}
         </p>
       </section>
     </Layout>,
@@ -167,9 +172,11 @@ async function handleFormPost(c: Context<AppEnv>, path: string) {
 
   const form = await c.var.kanso.forms.findBySlug(slug)
   if (!form) return notFound(c)
+  const { locale } = await c.var.kanso.settings.site()
+  const messages = resolveMessages(locale)
 
   try {
-    const result = await submitForm(c, form, raw)
+    const result = await submitForm(c, form, raw, messages)
     if (result.redirectUrl) return c.redirect(result.redirectUrl, 303)
     return renderFormState(c, resolved, { slug, success: true })
   } catch (error) {
@@ -216,9 +223,9 @@ async function renderArchive(
 
   const heading =
     term?.kind === 'category'
-      ? `${term.name} – ${type.name}`
+      ? ctx.messages.archive.categoryHeading(term.name, type.name)
       : term?.kind === 'tag'
-        ? `#${term.name} – ${type.name}`
+        ? ctx.messages.archive.tagHeading(term.name, type.name)
         : type.name
   const description = type.description ?? ctx.site.description ?? ''
   // Paginated pages canonicalise to themselves (`/?page=2`), including the home archive.
@@ -258,6 +265,7 @@ async function renderArchive(
         }))}
         pagination={{ page, totalPages, basePath }}
         formatDate={ctx.formatDate}
+        messages={ctx.messages.pagination}
       />
     </Layout>,
   )
@@ -265,12 +273,12 @@ async function renderArchive(
 
 async function notFound(c: Context<AppEnv>) {
   const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
-  const meta = ctx.meta({ title: 'Not Found', path: c.req.path, noindex: true })
+  const meta = ctx.meta({ title: ctx.messages.notFound.title, path: c.req.path, noindex: true })
   return c.html(
     <Layout meta={meta} nav={ctx.nav}>
       <section class="page">
         <h1>404</h1>
-        <p>Page not found.</p>
+        <p>{ctx.messages.notFound.body}</p>
       </section>
     </Layout>,
     404,

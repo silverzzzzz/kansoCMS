@@ -1,5 +1,6 @@
 import type { Kanso } from '@kanso/core'
 import { buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
+import { resolveMessages, type SiteMessages } from '../i18n.ts'
 import { formatDate } from './format.ts'
 import type { NavItem } from './themes/default/layout.tsx'
 
@@ -14,6 +15,7 @@ export interface SiteRequestContext {
   nav: NavItem[]
   /** Post type whose archive is shown at `/` when no `home` page exists. */
   homePostTypeSlug: string | null
+  messages: SiteMessages
   /** Build PageMeta with site-level defaults applied. */
   meta: (overrides: MetaOverrides) => PageMeta
   formatDate: (date: Date) => string
@@ -54,6 +56,7 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     site,
     nav,
     homePostTypeSlug: settings.homePostTypeSlug,
+    messages: resolveMessages(settings.locale),
     formatDate: (date) =>
       formatDate(date, { locale: settings.locale, timeZone: settings.timezone }),
     meta: ({ title, path, ...overrides }) => ({
