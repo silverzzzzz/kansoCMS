@@ -11,8 +11,10 @@
     "dev": "pnpm -r --parallel --stream dev",
     "build": "pnpm --filter @kanso/admin build && pnpm --filter @kanso/server build",
     "deploy": "pnpm build && pnpm --filter @kanso/server deploy",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
     "test": "pnpm -r --if-present test",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium",
     "check": "biome check .",
     "format": "biome format --write .",
     "types": "pnpm --filter @kanso/server types",
@@ -22,6 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",
+    "@playwright/test": "^1.63.0",
     "typescript": "^5.9.3",
     "vitest": "^5.0.0"
   },

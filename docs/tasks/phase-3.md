@@ -13,7 +13,7 @@
 |---|---|---|---|
 | T14 | テーマ i18n: 公開側の固定文言と送信検証メッセージをサイトの `locale` に追従させる (ja / en) | done | shared, core, server, admin |
 | T15 | 公開キャッシュの即時無効化: 管理 API の書き込みで公開 HTML/フィードのキャッシュを purge する | done | core, server |
-| T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | todo | admin, server, tooling |
+| T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | done | admin, server, tooling |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
@@ -118,7 +118,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ## T16. 管理画面のブラウザ E2E テスト (Playwright)
 
-状態: `todo`
+状態: `done` (2026-09-16)
 
 ### ゴール
 
@@ -137,4 +137,11 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- 配置: ルートに [playwright.config.ts](../../playwright.config.ts) と `e2e/` ([helpers.ts](../../e2e/helpers.ts) / [forms.spec.ts](../../e2e/forms.spec.ts))。`@playwright/test` はルートの devDependency のみ (`@types/node` は入れない。`process.env` を読まなければ Playwright 同梱の型で足りる)。ルートに `tsconfig.json` を新設し (`extends tsconfig.base.json`、`lib: ES2022 + DOM`、`types: []`、`include: e2e, playwright.config.ts`)、ルートの `typecheck` を `tsc -p tsconfig.json && pnpm -r typecheck` にした。各パッケージの tsconfig は影響を受けない。
+- スクリプト: `pnpm e2e` (`playwright test`) と `pnpm e2e:install` (`playwright install chromium`)。`pnpm test` には含めない。`.gitignore` に `test-results/` と `playwright-report/`。CI は未導入のまま (Phase 3 の別項目)。
+- 設定: Chromium のみ、`workers: 1`、`retries: 0`、テスト 60 秒 / expect 10 秒、`trace: retain-on-failure`、`use.baseURL = http://localhost:5199`、`extraHTTPHeaders.origin` を baseURL に (CSRF の Origin 検査をブラウザと同条件で通す)。`webServer` は `pnpm --filter @kanso/admin build && pnpm --filter @kanso/server exec vite dev --port 5199` を `/api/v1/health` で待ち (180 秒)、`reuseExistingServer: true` 固定 (開発中に立ち上げた server を使い回す。Worker が `/admin/` を配信するので管理画面の事前ビルドが必須)。
+- 前提データ: `beforeAll` で `GET /api/v1/setup` → `needed` なら `POST /api/v1/setup` で `admin@example.com` / `password123` を作成、既に管理者がいればその資格情報でログインする (seed には依存しない)。API 用に `playwright.request.newContext()` を 1 つ作って `beforeAll` / テスト / `afterAll` で共有する (組み込み `request` フィクスチャはフック間で Cookie を保持しない)。
+- 後片付け: `e2e-` プレフィックスのページ (ページネーションを辿って全件) とフォームを **前後両方** で API 削除 (前回の異常終了の残骸にも耐える。送信はフォーム削除で cascade)。それ以外の DB 内容には触れない。
+- テストは 1 本 (`test.step` で 5 段): ログイン (`/admin/login`、ダッシュボード見出し「おかえりなさい、…」で確認) → フォーム作成 (`/admin/forms/new`: 名前・スラッグ・完了メッセージ `E2E thanks`、既定の 1 フィールドに「フィールドを追加」で 2 つ目。`Field` のヒントがアクセシブル名に混ざるので、フィールド行の `div.border.border-neutral-200.bg-white.p-5` にスコープして `getByLabel(/^名前/)` 等で選ぶ。`data-testid` は追加しなかった) → ページ作成 (`/admin/pages/new`: 状態 `published`、`.editor-content .ProseMirror` に本文、ツールバー「フォーム」→ `role=dialog` の見出し「フォームを選択」→ slug を含むボタン → `.editor-form-block` のテキスト確認 → 保存) → 公開ページ (`browser.newContext({ javaScriptEnabled: false })` で Cookie なし・スクリプトなし: `form.kanso-form` を確認、`form.noValidate = true` にしてブラウザの必須検証だけ外し、空送信の POST が **422** で `.kanso-form__field` 内に `.kanso-form__error`、入力後の POST が 200 で `.kanso-form--success` に `E2E thanks`) → `GET /api/v1/forms` で id を引いて `/admin/forms/:id/submissions` の行に値と「未読」。送信ボタンは `/^(送信|Send)$/` でロケール非依存。
+- ドキュメント: README のローカル開発に「End-to-end tests」節とスクリプト表、architecture.md §7 に `e2e/` の一行、§8 の「Phase 1 で先送りにした改善候補」文を削除。
+- 検証: `pnpm typecheck` / `check` / `test` / `build` 通過。`pnpm e2e` を server 未起動の状態から実行し、webServer の admin ビルド + `vite dev` 起動を含めて 1 passed (14.8 秒、テスト本体 2.9 秒)。終了後にポート 5199 のリスナーなし、ローカル D1 に `e2e-` のページ・フォーム・送信が残っていないことを `wrangler d1 execute --local` で確認。

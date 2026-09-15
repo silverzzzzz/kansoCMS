@@ -52,6 +52,21 @@ To see the built admin served by the Worker itself, run `pnpm build` once; it la
 If port 5173 is taken, start the server alone with a different port:
 `pnpm --filter @kanso/server exec vite dev --port 5199`.
 
+### End-to-end tests
+
+Install Chromium once, then run the Playwright suite:
+
+```sh
+pnpm e2e:install
+pnpm db:migrate:local
+pnpm e2e
+```
+
+`pnpm e2e` builds the admin and starts the Worker on port 5199, or reuses a server already
+running there. The local D1 must have its migrations applied. If setup has not run, the test
+creates `admin@example.com` with password `password123`; otherwise that account and password must
+already exist. Test pages and forms use the `e2e-` slug prefix and are deleted after the run.
+
 ### Form notifications (email)
 
 Manage forms under **管理画面 → フォーム**. Each form has its own field definitions and a
@@ -138,8 +153,9 @@ Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is 
 | `pnpm dev` | Run server and admin dev servers in parallel |
 | `pnpm build` | Build admin, then the Worker (`apps/server/dist`) |
 | `pnpm deploy` | Build and `wrangler deploy` |
-| `pnpm typecheck` | `tsc --noEmit` in every package |
+| `pnpm typecheck` | Type-check Playwright config/E2E and every package |
 | `pnpm test` | Vitest in every package that has tests |
+| `pnpm e2e` / `pnpm e2e:install` | Run Playwright E2E / install its Chromium browser |
 | `pnpm check` / `pnpm format` | Biome lint + format |
 | `pnpm types` | Regenerate `worker-configuration.d.ts` from `wrangler.jsonc` |
 | `pnpm db:generate` | Generate a SQL migration from the Drizzle schema |

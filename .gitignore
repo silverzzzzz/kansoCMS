@@ -13,6 +13,8 @@ apps/server/public/admin/
 
 # tooling
 *.tsbuildinfo
+test-results/
+playwright-report/
 .DS_Store
 Thumbs.db
 
