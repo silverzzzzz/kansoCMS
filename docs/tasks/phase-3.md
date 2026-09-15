@@ -12,7 +12,7 @@
 | # | タスク | 状態 | 範囲 |
 |---|---|---|---|
 | T14 | テーマ i18n: 公開側の固定文言と送信検証メッセージをサイトの `locale` に追従させる (ja / en) | done | shared, core, server, admin |
-| T15 | 公開キャッシュの即時無効化: 管理 API の書き込みで公開 HTML/フィードのキャッシュを purge する | todo | core, server |
+| T15 | 公開キャッシュの即時無効化: 管理 API の書き込みで公開 HTML/フィードのキャッシュを purge する | done | core, server |
 | T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | todo | admin, server, tooling |
 
 Phase 3 の決定事項 (ユーザー確認済み):
@@ -78,7 +78,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ## T15. 公開キャッシュの即時無効化
 
-状態: `todo`
+状態: `done` (2026-09-16)
 
 ### ゴール
 
@@ -104,7 +104,15 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- URL 単位の purge は **廃止** し、サイト全体のキャッシュ世代キーに一本化した。`purgeSiteCache` / `site/paths.ts` / `paths.test.ts` と、API 層で purge のためだけに行っていた `previous` の再読込 (pages / post-types の PATCH・DELETE、posts の作成後・PATCH 前後・DELETE 前の `getWithRelations`) を削除。世代が変われば旧キーは二度と照合されないので `cache.delete()` は不要 (旧エントリは 60 秒 TTL で消える)。
+- 世代の保存先は `settings` テーブルの `cache` 行 (`SETTINGS_KEYS.cache`、`cacheSettingsSchema = { version: string }`、既定 `'0'`)。マイグレーション不要。単調増加ではなく **16 桁 hex の乱数トークン** (`crypto.getRandomValues`) にした: 読まずに 1 回の upsert で回せ、同時書き込みでも順序を気にしなくてよい。
+- core に [cache-version.ts](../../packages/core/src/services/cache-version.ts) (`kanso.cacheVersion.get()` / `bump()`、内部は `settingsService` の get/set を再利用)。
+- server の `siteCacheKey(url, version)` はキーに `__v=<version>` を付ける。`siteCache` は照合前に `cacheVersion.get()` を呼び (既存の `try` 内。失敗時は従来どおり素通し)、hit でも D1 を 1 行読む (小規模サイト前提のトレードオフ。将来 KV に移す余地あり)。
+- 世代の更新は API ルート個別ではなく **ミドルウェア** `bumpSiteCacheVersion` (`await next()` 後、`c.res.ok` のときだけ `bump()` を **await**) を `protectedApi` の `POST/PUT/PATCH/DELETE '*'` に 1 行で掛けた。ページ・投稿・投稿タイプ・カテゴリ・タグ・フォーム・メディア (alt はカバー画像に描画される)・設定を網羅し、API キーや送信削除でも回る (余分な miss 1 回は許容)。4xx や例外では回らない。await するので「PATCH 直後の GET が新しい内容」が決定的に成り立つ。
+- `s-maxage=60` は据え置き (予約公開は世代で検出できない)。`x-kanso-cache` の値は変更なし。
+- テスト: core は `settingsService` をモックして既定値・16 桁 hex・永続化を確認。server は `caches.default` を `Map` で差し替えて MISS → HIT → 世代変更 → MISS、セッション Cookie で `match` 不呼出、`bumpSiteCacheVersion` が 2xx でのみ `bump` を呼ぶ (4xx / `KansoError` では呼ばない) ことを確認。
+- ドキュメント: architecture.md §3 ツリー (paths.ts 削除・cache-version 追加)・§6 キャッシュ・§9・Phase 1 先送り項目、phase-2.md のキャッシュ記述 2 箇所に「T15 で解消」を追記、README のキャッシュ説明。
+- スモーク (`:5199`, Vite の Cloudflare プラグインが Cache API を提供): ページ作成 → Cookie なし GET が `MISS` → 2 回目 `HIT` → 本文 PATCH → 直後の GET が `MISS` で新本文 → `HIT`。無関係な書き込み (タグ作成) でも `/` が `MISS` に戻り、失敗した書き込み (400) では `HIT` のまま。スモークデータは削除済み。
 
 ---
 

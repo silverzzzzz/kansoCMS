@@ -31,8 +31,15 @@ export const formsSettingsSchema = z.object({
 })
 export type FormsSettings = z.infer<typeof formsSettingsSchema>
 
+/** Generation token mixed into the public-site cache key; rotated on every content write. */
+export const cacheSettingsSchema = z.object({
+  version: z.string().min(1).max(64).default('0'),
+})
+export type CacheSettings = z.infer<typeof cacheSettingsSchema>
+
 export const SETTINGS_KEYS = {
   site: 'site',
   organization: 'organization',
   forms: 'forms',
+  cache: 'cache',
 } as const

@@ -6,7 +6,6 @@ import type { AppEnv } from '../env.ts'
 interface SiteCacheApi {
   match(request: string): Promise<Response | undefined>
   put(request: string, response: Response): Promise<void>
-  delete(request: string): Promise<boolean>
 }
 
 function isSiteCacheApi(value: unknown): value is SiteCacheApi {
@@ -16,9 +15,7 @@ function isSiteCacheApi(value: unknown): value is SiteCacheApi {
     'match' in value &&
     typeof value.match === 'function' &&
     'put' in value &&
-    typeof value.put === 'function' &&
-    'delete' in value &&
-    typeof value.delete === 'function'
+    typeof value.put === 'function'
   )
 }
 
@@ -29,11 +26,12 @@ function defaultCache(): SiteCacheApi | null {
   return isSiteCacheApi(storage.default) ? storage.default : null
 }
 
-export function siteCacheKey(url: string): string {
+export function siteCacheKey(url: string, version: string): string {
   const source = new URL(url)
   const key = new URL(source.pathname, source.origin)
   if (source.searchParams.has('page'))
     key.searchParams.set('page', source.searchParams.get('page') ?? '')
+  key.searchParams.set('__v', version)
   return key.toString()
 }
 
@@ -55,8 +53,10 @@ export const siteCache = createMiddleware<AppEnv>(async (c, next) => {
     return
   }
 
-  const key = siteCacheKey(c.req.url)
+  let key: string
   try {
+    const version = await c.var.kanso.cacheVersion.get()
+    key = siteCacheKey(c.req.url, version)
     const hit = await cache.match(key)
     if (hit) {
       const response = new Response(hit.body, hit)
@@ -83,18 +83,8 @@ export const siteCache = createMiddleware<AppEnv>(async (c, next) => {
   }
 })
 
-export function purgeSiteCache(c: Context<AppEnv>, paths: string[]): void {
-  const cache = defaultCache()
-  if (!cache) return
-  try {
-    const origins = new Set([c.env.SITE_URL, new URL(c.req.url).origin])
-    const urls = [...origins].flatMap((origin) =>
-      [...new Set(paths)].map((path) => new URL(path, `${origin}/`).toString()),
-    )
-    c.executionCtx.waitUntil(
-      Promise.allSettled(urls.map((url) => cache.delete(url))).then(() => undefined),
-    )
-  } catch {
-    // Cache failures must never fail a mutation response.
-  }
-}
+/** Rotates the public-site cache generation after a successful mutation. Awaited so the next GET sees it. */
+export const bumpSiteCacheVersion = createMiddleware<AppEnv>(async (c, next) => {
+  await next()
+  if (c.res.ok) await c.var.kanso.cacheVersion.bump()
+})

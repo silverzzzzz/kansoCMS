@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { authenticate, requireAuth } from '../middleware/auth.ts'
+import { bumpSiteCacheVersion } from '../middleware/cache.ts'
 import { apiKeys } from './api-keys.ts'
 import { auth } from './auth.ts'
 import { forms } from './forms.ts'
@@ -21,6 +22,7 @@ import { tags } from './tags.ts'
 const protectedApi = new Hono<AppEnv>()
   .use('*', requireAuth('read'))
   .on(['POST', 'PUT', 'PATCH', 'DELETE'], '*', requireAuth('write'))
+  .on(['POST', 'PUT', 'PATCH', 'DELETE'], '*', bumpSiteCacheVersion)
   .route('/api-keys', apiKeys)
   .route('/forms', forms)
   .route('/media', media)

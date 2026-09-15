@@ -34,7 +34,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
 - **入力検証**: API は `@hono/zod-validator` の `zValidator` + `validationHook`。
 - **RPC 型**: `apps/server/src/api/index.ts` の `api` はメソッドチェーンで組み、`ApiType` が admin の `hc<ApiType>` に流れるようにする。
 - **時刻**: DB は unix 秒 (`mode: 'timestamp'`)。API の JSON では ISO 8601 文字列。
-- **キャッシュ**: 公開 HTML は 60 秒キャッシュ ([cache.ts](../../apps/server/src/middleware/cache.ts))。POST は通らない。フォーム定義の変更は purge しない (60 秒で反映)。
+- **キャッシュ**: 公開 HTML は 60 秒キャッシュ ([cache.ts](../../apps/server/src/middleware/cache.ts))。POST は通らない。フォーム定義の変更は purge しない (60 秒で反映。Phase 3 T15 でキャッシュ世代キーにより解消)。
 - **secret の扱い**: `Bindings` ([env.ts](../../apps/server/src/env.ts)) は生成された `Env` と一致していなければならず、`wrangler types` は `.dev.vars` の有無で出力が変わる。secret は `Bindings` に足さず、`apps/server/src/secrets.ts` の `secret(env, name)` 経由で読む (T8 で追加)。
 - **禁止**: git 操作 (commit/stash/checkout など)、ポート 5173 の使用 (別プロセスが占有中。開発サーバは `--port 5199`)、`worker-configuration.d.ts` の手編集 (`pnpm types` で再生成はよい)、既存マイグレーション SQL の編集 (変更は新しいマイグレーションを追加)。
 - **D1 マイグレーション**: `pnpm db:generate` の出力は必ず読んでから採用する。D1 はマイグレーション全体を暗黙のトランザクションで実行するため `PRAGMA foreign_keys=OFF` が効かず、drizzle-kit の「テーブル再作成」パターンで親テーブルを `DROP` すると `ON DELETE CASCADE` の子行がリモートで消える。親を作り直すときは「`__new_親` を作成 → コピー → 子も `__new_親` を参照する `__new_子` として作り直し → コピー → 旧子 `DROP` → 旧親 `DROP` → `RENAME` (SQLite が FK 参照先を書き換える) → index 再作成」の順で手書きし、行のある DB に適用して確認する (例: [0001_forms_turnstile_default.sql](../../packages/core/migrations/0001_forms_turnstile_default.sql))。ファイル名は `NNNN_意味のある名前.sql` とし、`meta/_journal.json` の `tag` を合わせる。
@@ -347,7 +347,7 @@ Phase 2 の決定事項 (ユーザー確認済み):
   サイトで毎回 `postTypes.findBySlug('home')` が余分に走っていた → GET は従来の
   `findPublishedByPath('home')` に戻し、POST だけ `resolveContent` を使う。未使用の `ownPath` を削除。
 - 既知の制限: 公開ページの Cache API (60 秒) はフォーム定義の変更で purge されないため、フォームを
-  編集 (Turnstile の切替など) してから最大 60 秒は古い `<form>` が配信される。
+  編集 (Turnstile の切替など) してから最大 60 秒は古い `<form>` が配信される (Phase 3 T15 でキャッシュ世代キーにより解消)。
 - スモーク (`:5199`, curl, `.dev.vars` に Turnstile テスト用 secret を一時設定): 5 種のフィールドと
   存在しない slug のプレースホルダを含む公開ページで、GET はフォーム描画・未知 slug の除去・
   `<`/`"` のエスケープを確認 → 必須未入力 + 不正メールで 422 (`no-store`、入力値保持、`selected`、

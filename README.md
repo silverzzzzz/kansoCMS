@@ -95,7 +95,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 
 Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Every page carries `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata.
 
-Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Saving a page, post or post type purges the affected URLs; requests carrying an admin session bypass the cache.
+Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Every content write through the admin API rotates a site-wide cache generation, so changes show up immediately in every data centre; requests carrying an admin session bypass the cache.
 
 ## Using the API
 

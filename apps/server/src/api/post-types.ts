@@ -9,8 +9,6 @@ import {
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
-import { purgeSiteCache } from '../middleware/cache.ts'
-import { postTypePurgePaths } from '../site/paths.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
 const typeIdParamSchema = z.object({ typeId: idSchema })
@@ -70,16 +68,12 @@ export const postTypes = new Hono<AppEnv>()
     zValidator('json', updatePostTypeSchema, validationHook),
     async (c) => {
       const id = c.req.valid('param').id
-      const previous = await c.var.kanso.postTypes.get(id)
       const item = await c.var.kanso.postTypes.update(id, c.req.valid('json'))
-      purgeSiteCache(c, [...postTypePurgePaths(previous.slug), ...postTypePurgePaths(item.slug)])
       return c.json({ item })
     },
   )
   .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
     const id = c.req.valid('param').id
-    const previous = await c.var.kanso.postTypes.get(id)
     await c.var.kanso.postTypes.delete(id)
-    purgeSiteCache(c, postTypePurgePaths(previous.slug))
     return c.json({ ok: true })
   })

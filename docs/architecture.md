@@ -84,7 +84,6 @@ kansoCMS/
 │   │   │   │   ├── head.tsx        # <Head>: title/meta/OG/canonical/prev/next/feed/JSON-LD を一括出力
 │   │   │   │   ├── feeds.ts        # sitemap.xml / robots.txt / :type/feed.xml
 │   │   │   │   ├── preview.tsx     # /preview/:kind/:id (セッション必須, noindex, no-store)
-│   │   │   │   ├── paths.ts        # purge 対象 URL の組み立て (page / post / post type)
 │   │   │   │   └── themes/default/ # layout.tsx, post-list.tsx, post.tsx (CSS は public/theme.css)
 │   │   │   ├── media/              # /media/:key+ → R2 (immutable Cache-Control)
 │   │   │   └── admin.ts            # /admin/* → ASSETS の /admin/index.html を返す (SPA fallback)
@@ -109,7 +108,7 @@ kansoCMS/
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth, pages (+page-tree), post-types, posts, taxonomies, media, settings
+│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, taxonomies, media, settings
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt
 │   │   │   ├── auth/               # PBKDF2 パスワードハッシュ
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
@@ -234,9 +233,10 @@ URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は�
 ### キャッシュ
 
 - 公開 HTML は `middleware/cache.ts` の `siteCache` が Workers Cache API (`caches.default`) に `cache-control: public, s-maxage=60` で保存する。応答には `x-kanso-cache: HIT | MISS | BYPASS` を付ける。Cache API は `stale-while-revalidate` を解釈しないので使わない。
-- キャッシュキーは `origin + pathname` (+ `page` クエリのみ)。それ以外のクエリ (`utm_*` など) は同一エントリに畳む。
+- キャッシュキーは `origin + pathname` (+ `page` クエリのみ) + `__v=<cache generation>`。それ以外のクエリ (`utm_*` など) は同一エントリに畳む。世代は `settings` の `cache` 行にランダムトークンとして保存する。
 - 対象外: `GET` 以外、`kanso_session` Cookie を持つリクエスト (管理者は常に最新を見る)、`/preview/*`、200 以外の応答。`caches` が無い環境 (workers.dev や単体テスト) では素通し。
-- purge: ページ・投稿・投稿タイプの作成/更新/削除時に `site/paths.ts` が組み立てた URL (詳細、所属一覧、カテゴリ/タグ一覧、feed、トップ、sitemap) を旧値・新値の両方について `caches.default.delete()` する (`SITE_URL` とリクエスト origin の両方)。カテゴリ・タグ・設定の変更は purge せず 60 秒 TTL で反映。KV や Cache Tags は使わない。
+- `/api/v1` の管理ルートで書き込みが成功するたびに `bumpSiteCacheVersion` が世代を更新する。ページ・投稿・投稿タイプ・カテゴリ・タグ・フォーム・メディア・設定に加え、API キーや送信削除でも更新される (余分な 1 回の miss は許容)。キー自体が変わるため `cache.delete()` は使わず、全データセンターで次の GET が自然に miss する。
+- 公開 GET は cache hit を含めて `settings` 1 行を D1 から読む。小規模サイト向けの単純さを優先したトレードオフで、将来は KV への移行余地を残す。予約公開は世代更新では検出できないため、従来どおり 60 秒 TTL で反映する。
 - `/media/*` は immutable。差し替えは新キー発行で対応。
 
 ### セキュリティ
@@ -284,7 +284,7 @@ pnpm deploy                                                 # admin build → se
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
 保護する。IP、User-Agent、リファラー、国などのメタ情報は含めない。
 
-Phase 1 で先送りにした改善候補: 管理画面のブラウザ E2E テスト、投稿タイプ追加時のナビ更新を purge で即時化するか (現状 60 秒 TTL)。
+Phase 1 で先送りにした改善候補: 管理画面のブラウザ E2E テスト。
 
 ## 9. 決定事項
 
@@ -293,7 +293,7 @@ Phase 1 で先送りにした改善候補: 管理画面のブラウザ E2E テ�
 - **管理画面ルーターは TanStack Router** (file-based, `autoCodeSplitting`)。ルートファイルは `Route` 以外を export しない。
 - **`/media` は Worker 経由で配信** (v1)。R2 カスタムドメイン直配信は将来の切替候補。
 - **本文は ProseMirror JSON を正とし、HTML はサーバで生成** (T3)。クライアント HTML は受け取らない。生 HTML ブロックは `admin` ロールのみ。
-- **公開 HTML は Cache API に 60 秒**、purge はページ・投稿・投稿タイプの変更時のみ (§6)。`stale-while-revalidate` は使わない。
+- **公開 HTML は Cache API に 60 秒**、管理 API の書き込み成功時にサイト全体のキャッシュ世代を更新し、全データセンターで次の GET を miss にする (§6)。`stale-while-revalidate` は使わない。
 - **プレビューはセッション認証のみ** (API キー不可)、`noindex` + `no-store`。
 - **Turnstile は既定オフ** (2026-09-15)。フォームごとに有効化し、サイトキーは `settings.forms.turnstileSiteKey`、シークレットは `TURNSTILE_SECRET_KEY` (Worker secret)。両方が揃わないと有効化できない。honeypot は常時。
 - **フォームの埋め込みは Tiptap の `form` ブロックノード** (2026-09-15)。レンダラは `<div data-kanso-form="slug">` のプレースホルダを出し、公開側が描画時にフォーム定義を解決する (ショートコード文字列は使わない)。

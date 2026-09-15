@@ -4,6 +4,7 @@
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import { createDb } from './db/client.ts'
 import { authService } from './services/auth.ts'
+import { cacheVersionService } from './services/cache-version.ts'
 import { formsService } from './services/forms.ts'
 import { mediaService } from './services/media.ts'
 import { pagesService } from './services/pages.ts'
@@ -40,6 +41,7 @@ export function createKanso(bindings: KansoBindings) {
     db,
     bucket: bindings.media,
     auth: authService(db),
+    cacheVersion: cacheVersionService(db),
     forms: formsService(db),
     media: mediaService(db, bindings.media),
     settings: settingsService(db),
