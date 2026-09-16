@@ -1,6 +1,6 @@
-# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E)
+# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E / CI / リビジョン / リダイレクト)
 
-目的: Phase 1–2 で先送りにした運用面の課題を順に解消する。**公開サイトの文言をサイトのロケールに追従させ、更新が即時に公開に反映され、管理画面の主要操作がブラウザ E2E で守られている** 状態にする。
+目的: Phase 1–2 で先送りにした運用面の課題を順に解消する。**公開サイトの文言をサイトのロケールに追従させ、更新が即時に公開に反映され、管理画面の主要操作がブラウザ E2E と CI で守られ、誤った保存や URL 変更から運用者が復帰できる** 状態にする。
 
 運用ルール ([Phase 2](phase-2.md) と同じ):
 
@@ -14,10 +14,14 @@
 | T14 | テーマ i18n: 公開側の固定文言と送信検証メッセージをサイトの `locale` に追従させる (ja / en) | done | shared, core, server, admin |
 | T15 | 公開キャッシュの即時無効化: 管理 API の書き込みで公開 HTML/フィードのキャッシュを purge する | done | core, server |
 | T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | done | admin, server, tooling |
+| T17 | CI (GitHub Actions): push / PR で 4 ゲートと Playwright E2E を実行する | done | tooling |
+| T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | todo | shared, core, server, admin |
+| T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | todo | shared, core, server, admin |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
 1. 上記 3 件を **T14 → T15 → T16 の順** に進める (2026-09-16)。
+2. 続けて **T17 → T18 → T19 の順** に進める (2026-09-16、「進めて」)。残りの Phase 3 項目 (FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso`、管理画面 i18n) は T19 完了後に再提案する。
 
 ---
 
@@ -145,3 +149,107 @@ Phase 3 の決定事項 (ユーザー確認済み):
 - テストは 1 本 (`test.step` で 5 段): ログイン (`/admin/login`、ダッシュボード見出し「おかえりなさい、…」で確認) → フォーム作成 (`/admin/forms/new`: 名前・スラッグ・完了メッセージ `E2E thanks`、既定の 1 フィールドに「フィールドを追加」で 2 つ目。`Field` のヒントがアクセシブル名に混ざるので、フィールド行の `div.border.border-neutral-200.bg-white.p-5` にスコープして `getByLabel(/^名前/)` 等で選ぶ。`data-testid` は追加しなかった) → ページ作成 (`/admin/pages/new`: 状態 `published`、`.editor-content .ProseMirror` に本文、ツールバー「フォーム」→ `role=dialog` の見出し「フォームを選択」→ slug を含むボタン → `.editor-form-block` のテキスト確認 → 保存) → 公開ページ (`browser.newContext({ javaScriptEnabled: false })` で Cookie なし・スクリプトなし: `form.kanso-form` を確認、`form.noValidate = true` にしてブラウザの必須検証だけ外し、空送信の POST が **422** で `.kanso-form__field` 内に `.kanso-form__error`、入力後の POST が 200 で `.kanso-form--success` に `E2E thanks`) → `GET /api/v1/forms` で id を引いて `/admin/forms/:id/submissions` の行に値と「未読」。送信ボタンは `/^(送信|Send)$/` でロケール非依存。
 - ドキュメント: README のローカル開発に「End-to-end tests」節とスクリプト表、architecture.md §7 に `e2e/` の一行、§8 の「Phase 1 で先送りにした改善候補」文を削除。
 - 検証: `pnpm typecheck` / `check` / `test` / `build` 通過。`pnpm e2e` を server 未起動の状態から実行し、webServer の admin ビルド + `vite dev` 起動を含めて 1 passed (14.8 秒、テスト本体 2.9 秒)。終了後にポート 5199 のリスナーなし、ローカル D1 に `e2e-` のページ・フォーム・送信が残っていないことを `wrangler d1 execute --local` で確認。
+
+---
+
+## T17. CI (GitHub Actions)
+
+状態: `done` (2026-09-16)
+
+### ゴール
+
+- `main` への push と pull request で、4 ゲート (`typecheck` / `check` / `test` / `build`) と Playwright E2E が自動実行される。
+
+### 現状 (調査済み)
+
+- `.github/` は無い。remote は `github.com/silverzzzzz/kansoCMS`。`packageManager: pnpm@10.32.1`、`engines.node >= 22`。
+- T16 の `pnpm e2e` は `webServer` で admin ビルド + `vite dev --port 5199` を起動し、`pnpm db:migrate:local` (= `wrangler d1 migrations apply kanso --local`) 済みのローカル D1 を前提にする。管理者がいなければ setup API で作るので seed は不要。
+
+### 仕様 (実装前に再確認)
+
+- `.github/workflows/ci.yml` 1 本。トリガーは `push` (branches: main) と `pull_request`。`concurrency` で同一 ref の古い実行をキャンセル。
+- ジョブ 2 つを並列に: `gates` = checkout → `pnpm/action-setup` (`packageManager` を読む) → `setup-node` (Node 24、`cache: pnpm`) → `pnpm install --frozen-lockfile` → `typecheck` → `check` → `test` → `build`。`e2e` = 同じセットアップ → `pnpm exec playwright install --with-deps chromium` → `pnpm db:migrate:local` → `pnpm e2e` → 失敗時に `playwright-report/` と `test-results/` を artifact 化。各ジョブに `timeout-minutes`。
+- Wrangler はログインなしのローカルモードだけを使う (`WRANGLER_SEND_METRICS=false`)。Cloudflare の secret は CI に置かない (デプロイは対象外)。
+- GitHub Actions は手元で実行できないので、fresh clone (`git clone` → `pnpm install --frozen-lockfile` → `pnpm db:migrate:local` → `pnpm e2e`) を非対話シェルで通して同等性を確認する。管理者のいない DB で setup 経路も通る。
+- README に CI の一文、architecture.md のロードマップから「CI」を済へ。
+
+### 完了条件
+
+- 共通条件。fresh clone の非対話実行が通り、ワークフロー YAML の構文が検証済み。
+
+### 決定
+
+- [.github/workflows/ci.yml](../../.github/workflows/ci.yml) 1 本。トリガーは `push` (branches: `main`) と `pull_request` (ブランチ制限なし)。`concurrency.group = ci-${{ github.workflow }}-${{ github.ref }}`、`cancel-in-progress: true`。ワークフロー全体に `WRANGLER_SEND_METRICS: 'false'`。Cloudflare の secret / token は置かない (デプロイは対象外、Wrangler はローカルモードのみ)。
+- ジョブは `gates` (timeout 15 分) と `e2e` (timeout 20 分) の 2 つで `needs` なしの並列。共通セットアップは `actions/checkout@v4` → `pnpm/action-setup@v4` (version 指定なし = `package.json` の `packageManager` を読む) → `actions/setup-node@v4` (`node-version: 24`, `cache: pnpm`) → `pnpm install --frozen-lockfile`。action はメジャータグ (`@v4`) で固定し SHA ピンはしない。
+- `gates`: `pnpm typecheck` → `pnpm check` → `pnpm test` → `pnpm build`。`e2e`: `pnpm exec playwright install --with-deps chromium` → `pnpm db:migrate:local` → `pnpm e2e` → 失敗時のみ `actions/upload-artifact@v4` で `playwright-report` + `test-results` (`if-no-files-found: ignore`)。E2E の管理者は spec 側の setup 経路で作られるので seed ステップは無い。
+- ドキュメント: README のスクリプト表の下に CI の一文、architecture.md §3 ツリーに `e2e/` と `.github/workflows/ci.yml` を追加し「まだ無いもの」を `examples/astro-blog` のみに更新 (`core/mail` / `api/forms` は Phase 2 で作成済みだった)、§7 に CI の一行、§8 ロードマップの CI を済へ。
+- 検証: GitHub Actions は手元で走らせられないので、fresh clone (`git clone` → `CI=true pnpm install --frozen-lockfile` → `pnpm db:migrate:local` → `pnpm e2e`、stdin なし) を通した。migrations は `Using fallback value in non-interactive context: yes` で確認なしに適用、`pnpm e2e` は server 未起動から webServer で admin ビルド + `vite dev` を立ち上げて 1 passed (28 秒)、終了コード 0、ポート 5199 解放。YAML は `js-yaml` でパース確認。4 ゲートも本リポジトリで通過 (161 tests)。
+- 注意 (Windows のみ): ローカル D1 (workerd) は長いパスで `internal error` になる (`AppData\Local\Temp\claude\...` 配下の clone では `select 1` すら失敗)。検証用 clone は短いパス (`%TEMP%\kcs`) に置いた。CI の ubuntu には無関係。
+- 未実施: 実際の Actions 実行はユーザーの push 後に初回が走る。失敗したら `playwright-report` artifact を見る。
+
+---
+
+## T18. リビジョン (固定ページ・投稿の更新履歴と復元)
+
+状態: `todo`
+
+### ゴール
+
+- 固定ページ・投稿を保存するたびに **保存前の状態** が履歴として残り (対象ごとに最新 20 件)、管理画面の編集画面から任意の履歴に復元できる。
+
+### 現状 (調査済み)
+
+- architecture.md §5 に `revisions` (id, target, target_id, snapshot_json, user_id, created_at、最新 N 件のみ保持) が「未作成」として計画されている。
+- `pages.update` / `posts.update` ([pages.ts](../../packages/core/src/services/pages.ts) / [posts.ts](../../packages/core/src/services/posts.ts)) は `current = await get(id)` の後、`db.batch` で本体 (+ 子孫パス / 分類・タグ) を書く。`context` は `{ allowRawHtml }`。投稿の分類・タグは `post_categories` / `post_tags`。
+- API の `principal` は `{ kind: 'session', user }` か `{ kind: 'apiKey' }`。管理画面の編集画面 ([pages/$id.tsx](../../apps/admin/src/routes/_auth/pages/$id.tsx) / posts) は loader の item を `useState` 初期値にシードし、Editor は `editorKey` で再マウントする。
+
+### 仕様 (実装前に再確認)
+
+- テーブル `revisions`: `id`, `target_type` (`'page' | 'post'`), `target_id`, `snapshot_json` (text/json), `user_id` (users FK, `set null`), `created_at`。index `(target_type, target_id, created_at)`。マイグレーション `0002_revisions.sql` は `drizzle-kit generate` の出力。ポリモーフィックなので pages/posts への FK は張らず、ページ・投稿の削除時に同じ `batch` で履歴も削除する。
+- スナップショットは「復元に必要な入力」: page = title, slug, parentId, sortOrder, bodyJson, excerpt, status, publishedAt, seoTitle, seoDescription, ogMediaId, noindex, canonicalUrl。post = title, slug, bodyJson, excerpt, status, publishedAt, coverMediaId, categoryIds, tagIds, seoTitle, seoDescription, ogMediaId, noindex, canonicalUrl (`postTypeId` は変えない)。`packages/shared` に `pageRevisionSnapshotSchema` / `postRevisionSnapshotSchema` を置き、読み出し時に検証する。
+- 記録タイミング: `update` の **直前状態** を同じ `batch` で保存し、`REVISIONS_PER_TARGET = 20` を超える古い行を削除する。作成時は記録しない (最新の状態は本体行そのもの)。復元も `update` 経由なので、復元前の状態が自動で残る。
+- `user_id` は API 層で `principal.kind === 'session'` のとき `user.id`、API キーなら `null`。core の update コンテキストに `userId: number | null` を追加する。
+- API (write 権限): `GET /api/v1/pages/:id/revisions` → `{ items: [{ id, createdAt, user: { id, name } | null, title, status }] }` (snapshot 抜き、新しい順)。`GET /api/v1/pages/:id/revisions/:rid` → `{ item }` (snapshot 込み)。`POST /api/v1/pages/:id/revisions/:rid/restore` → `update` を呼び `{ item }`。posts も同じ形。
+- 管理画面: 編集画面のフォーム下に「履歴」セクション (日時・ユーザー名・タイトル・状態・「復元」ボタン)。復元は `ConfirmDialog` → restore API → クエリ無効化 → フォームを復元後の内容で再シード (route component を `item.updatedAt` を key にした内部コンポーネントに分ける等)。差分表示はしない。
+- ドキュメント: architecture.md §3 ツリー・§5 テーブル (未作成 → 作成済み)・§9、README の Status (「Revisions … not built yet」)。
+
+### 完了条件
+
+- 共通条件。スモーク: ページを 2 回保存 → 履歴 2 件 → 古い方を復元 → 本文が戻り履歴が 3 件になる。投稿でも分類・タグが復元される。
+
+### 決定
+
+- (実装中に追記)
+
+---
+
+## T19. リダイレクト
+
+状態: `todo`
+
+### ゴール
+
+- 旧 URL から新 URL への 301/302 を管理画面で登録でき、固定ページのパス変更・投稿のスラッグ変更時には自動で 301 が作られる。
+
+### 現状 (調査済み)
+
+- 公開側 [routes.tsx](../../apps/server/src/site/routes.tsx) の `site.get('/:path{.+}')` は `resolveContent` が `null` なら `notFound`。404 は Cache API に入らない (200 のみ格納)。
+- `packages/shared` の `redirectUrlSchema` (フォーム用: http(s) URL か `/` 始まりのパス) が再利用できる。予約スラッグは `isReservedSlug`。
+
+### 仕様 (実装前に再確認)
+
+- テーブル `redirects`: `id`, `from_path` (unique、先頭・末尾スラッシュなしで正規化)、`to` (`/path` か絶対 URL)、`status` (301 | 302、既定 301)、`created_at`, `updated_at`。マイグレーション `0003_redirects.sql`。
+- shared: `createRedirectSchema` / `updateRedirectSchema` (`fromPath` は前後の `/` を除去して正規化、空や予約スラッグは不可、`to` は `redirectUrlSchema`、from と to が同じなら validation エラー)。
+- core `redirectsService`: `list` / `get` / `create` / `update` / `delete` / `findByPath(path)` / `recordPathChange(oldPath, newPath)` = `old → /new` (301) を upsert、`to === '/old'` の既存行を `/new` に書き換え (チェーン防止)、`from === new` の行を削除 (新パスには実体がある)。
+- 自動作成: `pages.update` でパスが変わった全ページ (子孫含む) と、`posts.update` でスラッグが変わった投稿 (`/{type}/{old}` → `/{type}/{new}`)。投稿タイプのスラッグ変更は対象外 (決定に明記)。
+- 公開側: `resolveContent` が `null` のときだけ `redirects.findByPath(path)` を引き、あれば `c.redirect(to, status)`。実体のあるパスではリダイレクトは効かない (実体優先) ことをドキュメントに書く。
+- API `/api/v1/redirects` (list + `q`、create、patch、delete)。管理画面 `/admin/redirects` (一覧・追加フォーム・削除、ナビに「リダイレクト」)。
+- ドキュメント: architecture.md §3・§5・§6 (ルーティング)・§9、README の Status。
+
+### 完了条件
+
+- 共通条件。スモーク: ページのスラッグを変更 → 旧 URL が 301 で新 URL へ。手動登録 `/old` → `https://example.com/` が 302。
+
+### 決定
+
+- (実装中に追記)

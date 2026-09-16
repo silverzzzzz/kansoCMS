@@ -124,9 +124,11 @@ kansoCMS/
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
 │       └── src/                    # jsonld.ts, meta.ts, sitemap.ts, feed.ts, xml.ts
 │
+├── e2e/                            # Playwright E2E (§7)。playwright.config.ts はルート
+├── .github/workflows/ci.yml        # GitHub Actions: gates (4 ゲート) + e2e (§7)
 ├── docs/
 │   ├── architecture.md             # 本書
-│   └── tasks/phase-1.md            # Phase 1 タスクボード (仕様の正本 + 各タスクの決定)
+│   └── tasks/phase-N.md            # フェーズごとのタスクボード (仕様の正本 + 各タスクの決定)
 ├── package.json                    # scripts: dev / build / deploy / typecheck / test / check / db:*
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
@@ -135,7 +137,7 @@ kansoCMS/
 └── README.md
 ```
 
-まだ無いもの (計画のみ): `examples/astro-blog`, `.github/workflows`, `core/mail`, `api/forms`。
+まだ無いもの (計画のみ): `examples/astro-blog`。
 
 ### 依存の向き
 
@@ -268,6 +270,7 @@ pnpm deploy                                                 # admin build → se
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。
 - `pnpm build`: admin → `apps/server/public/admin/` → server の `vite build` が `public/` ごと client 出力へ同梱。
 - `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。
+- `.github/workflows/ci.yml`: 2 ジョブ (`gates`: typecheck/check/test/build、`e2e`: Chromium + ローカル D1 で Playwright)。デプロイは CI に含めない。
 - `SITE_URL` (`wrangler.jsonc` の `vars`) は canonical / JSON-LD / sitemap / feed の絶対 URL に使う。本番では実ドメインに書き換える。
 - Email (Phase 2): `wrangler email sending enable <domain>` で送信ドメインを有効化。未設定でもフォームは D1 保存のみで動く（メールは opt-in）。
 - 秘密情報は `wrangler secret put` (Phase 2 で `TURNSTILE_SECRET_KEY`)。セッションは D1 に乱数 ID で保存するため署名用シークレットは不要。
@@ -279,7 +282,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright) ([tasks/phase-3.md](tasks/phase-3.md))。残: revisions、redirects、FTS5 検索、テーマ切替、CI (`.github/workflows`)、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`) ([tasks/phase-3.md](tasks/phase-3.md))。残: revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

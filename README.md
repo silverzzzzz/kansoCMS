@@ -161,6 +161,8 @@ Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is 
 | `pnpm db:generate` | Generate a SQL migration from the Drizzle schema |
 | `pnpm db:migrate:local` / `pnpm db:migrate` | Apply migrations to local / remote D1 |
 
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs the four gates and the Playwright E2E on every push to `main` and on pull requests.
+
 ## License
 
 MIT
