@@ -1,4 +1,4 @@
-import { type ContentStatus, type RichTextDoc, slugify } from '@kanso/shared'
+import { type ContentStatus, type RichTextDoc, SLUG_PATTERN, slugify } from '@kanso/shared'
 import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
 import { Editor } from '../editor/Editor.tsx'
@@ -79,7 +79,7 @@ export function ContentForm({
             className={inputClass}
             value={value.slug}
             required
-            pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+            pattern={SLUG_PATTERN.source}
             onChange={(event) => {
               setSlugEdited(true)
               change('slug', event.target.value)

@@ -14,7 +14,8 @@ export const RESERVED_SLUGS = [
   'feed.xml',
 ] as const
 
-export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
+// biome-ignore lint/complexity/noUselessEscapeInRegex: `.source` feeds HTML `pattern` attributes, which browsers compile with the `v` flag (unescaped `-` is a syntax error there)
+export const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9\-]*[a-z0-9])?$/
 
 export const slugSchema = z
   .string()
