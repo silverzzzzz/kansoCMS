@@ -10,6 +10,7 @@ import { mediaService } from './services/media.ts'
 import { pagesService } from './services/pages.ts'
 import { postTypesService } from './services/post-types.ts'
 import { postsService } from './services/posts.ts'
+import { revisionsService } from './services/revisions.ts'
 import { settingsService } from './services/settings.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 
@@ -48,6 +49,7 @@ export function createKanso(bindings: KansoBindings) {
     pages: pagesService(db),
     postTypes: postTypesService(db),
     posts: postsService(db),
+    revisions: revisionsService(db),
     taxonomies: taxonomiesService(db),
   }
 }

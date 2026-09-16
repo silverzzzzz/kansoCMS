@@ -6,13 +6,14 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Server-rendered HTML with JSON-LD, Open Graph, `sitemap.xml`, `robots.txt` and an Atom feed per post type — no client JS
 - The same content over a headless JSON API (`/api/v1`, API-key auth) for Astro / Next / anything else
 - Admin UI with a Tiptap editor, media library (R2) and draft preview
+- Revision history keeps the latest 20 pre-save states and restores them from the admin UI
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> Revisions, redirects and search (Phase 3) are not built yet.
+> Redirects and search (Phase 3) are not built yet.
 
 ## Layout
 

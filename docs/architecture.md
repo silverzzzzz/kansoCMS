@@ -108,7 +108,7 @@ kansoCMS/
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, taxonomies, media, settings
+│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, taxonomies, media, settings
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt
 │   │   │   ├── auth/               # PBKDF2 パスワードハッシュ
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
@@ -118,8 +118,8 @@ kansoCMS/
 │   │   └── drizzle.config.ts
 │   │
 │   ├── shared/                     # @kanso/shared — zod スキーマ / 型 / 定数。ブラウザ安全
-│   │   └── src/                    # auth, pages, posts, taxonomies, media, settings, richtext, content,
-│   │                               #   query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
+│   │   └── src/                    # auth, pages, posts, revisions, taxonomies, media, settings, richtext,
+│   │                               #   content, query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
 │   │
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
 │       └── src/                    # jsonld.ts, meta.ts, sitemap.ts, feed.ts, xml.ts
@@ -170,7 +170,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
 | `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
-| `revisions` | id, target (`page`/`post`), target_id, snapshot_json, user_id, created_at | Phase 3。最新 N 件のみ保持 (未作成) |
+| `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 
 `forms` / `form_submissions` はテーブルだけ初期マイグレーションに含まれ、Phase 2 でサービスと API を載せる。
 
@@ -202,6 +202,9 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable` | 公開 |
 | `GET /api/v1/health`, `/setup`, `POST /api/v1/setup`, `/auth/login` | 初期化・ログイン | 公開 |
 | `/api/v1/**` (それ以外) | 管理 API (CRUD)。`GET` は `read`、変更系は `write` | セッション or `x-api-key` |
+| `GET /api/v1/pages/:id/revisions`, `GET /api/v1/posts/:id/revisions` | 固定ページ / 投稿の更新前スナップショット一覧 (最新 20 件) | セッション or `x-api-key` (`read`) |
+| `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
+| `POST /api/v1/pages/:id/revisions/:revisionId/restore`, `POST /api/v1/posts/:id/revisions/:revisionId/restore` | リビジョンを `update` 経由で復元 | セッション or `x-api-key` (`write`) |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
 | `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
 
@@ -300,6 +303,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **Turnstile は既定オフ** (2026-09-15)。フォームごとに有効化し、サイトキーは `settings.forms.turnstileSiteKey`、シークレットは `TURNSTILE_SECRET_KEY` (Worker secret)。両方が揃わないと有効化できない。honeypot は常時。
 - **フォームの埋め込みは Tiptap の `form` ブロックノード** (2026-09-15)。レンダラは `<div data-kanso-form="slug">` のプレースホルダを出し、公開側が描画時にフォーム定義を解決する (ショートコード文字列は使わない)。
 - **通知メールの差出人と既定宛先は設定に持つ** (2026-09-15)。`settings.forms = { fromEmail, fromName, notifyTo, turnstileSiteKey }`。フォームの `notifyTo` が空なら設定の既定宛先、両方空なら保存のみ。`fromEmail` が空ならメール無効。
+- **リビジョンは更新前スナップショットを対象ごとに最新 20 件保持する** (2026-09-16)。内容が同じでも更新ごとに記録し、復元も `update` を通すため復元前の状態が履歴に残る。削除済みのメディア・カテゴリ・タグ・親ページへの参照は復元時に除外する。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

@@ -3,10 +3,17 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError, fieldErrors } from '../../../api/errors.ts'
-import { pageQuery, pagesListQuery } from '../../../api/queries.ts'
+import {
+  type PageItem,
+  type PageListItem,
+  pageQuery,
+  pageRevisionsQuery,
+  pagesListQuery,
+} from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
+import { RevisionList } from '../../../components/content/RevisionList.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { Alert, Button, Field, inputClass } from '../../../components/ui.tsx'
 import { fromDateTimeLocal, toDateTimeLocal } from '../../../lib/datetime.ts'
@@ -19,6 +26,7 @@ export const Route = createFileRoute('/_auth/pages/$id')({
     const id = Number(params.id)
     await Promise.all([
       context.queryClient.ensureQueryData(pageQuery(id)),
+      context.queryClient.ensureQueryData(pageRevisionsQuery(id)),
       context.queryClient.ensureQueryData(pagesListQuery({ perPage: '100' })),
     ])
   },
@@ -29,25 +37,77 @@ function EditPage() {
   const { id: idParam } = Route.useParams()
   const id = Number(idParam)
   const queryClient = useQueryClient()
-  const navigate = useNavigate({ from: '/pages/$id' })
   const page = useQuery(pageQuery(id))
   const pages = useQuery(pagesListQuery({ perPage: '100' }))
+  const revisions = useQuery(pageRevisionsQuery(id))
   const item = page.data?.item
+  const [formKey, setFormKey] = useState(0)
+  const [restoreId, setRestoreId] = useState<number | null>(null)
+  const restore = useMutation({
+    mutationFn: (revisionId: number) =>
+      unwrap(
+        api.pages[':id'].revisions[':revisionId'].restore.$post({
+          param: { id: String(id), revisionId: String(revisionId) },
+        }),
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['pages'] })
+      setRestoreId(null)
+      setFormKey((key) => key + 1)
+    },
+  })
+
+  if (!item) return <p>読み込み中…</p>
+  return (
+    <div>
+      {restore.error && (
+        <div className="mb-6">
+          <Alert tone="error">
+            {restore.error instanceof ApiError
+              ? restore.error.message
+              : '履歴を復元できませんでした'}
+          </Alert>
+        </div>
+      )}
+      <EditPageForm key={formKey} id={id} item={item} pages={pages.data?.items ?? []} />
+      <RevisionList
+        items={revisions.data?.items ?? []}
+        pending={restore.isPending}
+        onRestore={setRestoreId}
+      />
+      <ConfirmDialog
+        open={restoreId !== null}
+        title="この履歴を復元"
+        description="現在の内容は履歴に保存されます。"
+        confirmLabel="復元"
+        pending={restore.isPending}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => {
+          if (restoreId !== null) restore.mutate(restoreId)
+        }}
+      />
+    </div>
+  )
+}
+
+function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: PageListItem[] }) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate({ from: '/pages/$id' })
   const [content, setContent] = useState<ContentFormValue>(() => ({
-    title: item?.title ?? '',
-    slug: item?.slug ?? '',
-    status: item?.status ?? 'draft',
-    publishedAt: toDateTimeLocal(item?.publishedAt ?? null),
-    bodyJson: item?.bodyJson ?? { type: 'doc', content: [] },
-    excerpt: item?.excerpt ?? '',
-    seoTitle: item?.seoTitle ?? '',
-    seoDescription: item?.seoDescription ?? '',
-    ogMediaId: item?.ogMediaId ?? null,
-    noindex: item?.noindex ?? false,
-    canonicalUrl: item?.canonicalUrl ?? '',
+    title: item.title,
+    slug: item.slug,
+    status: item.status,
+    publishedAt: toDateTimeLocal(item.publishedAt),
+    bodyJson: item.bodyJson ?? { type: 'doc', content: [] },
+    excerpt: item.excerpt ?? '',
+    seoTitle: item.seoTitle ?? '',
+    seoDescription: item.seoDescription ?? '',
+    ogMediaId: item.ogMediaId,
+    noindex: item.noindex,
+    canonicalUrl: item.canonicalUrl ?? '',
   }))
-  const [parentId, setParentId] = useState<number | null>(item?.parentId ?? null)
-  const [sortOrder, setSortOrder] = useState(item?.sortOrder ?? 0)
+  const [parentId, setParentId] = useState<number | null>(item.parentId)
+  const [sortOrder, setSortOrder] = useState(item.sortOrder)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const save = useMutation({
     mutationFn: () =>
@@ -84,9 +144,8 @@ function EditPage() {
     },
   })
   const errors = fieldErrors(save.error)
-  const excluded = descendantIds(pages.data?.items ?? [], id)
+  const excluded = descendantIds(pages, id)
 
-  if (!item) return <p>読み込み中…</p>
   return (
     <div>
       <PageHeading
@@ -147,7 +206,7 @@ function EditPage() {
               }
             >
               <option value="">なし</option>
-              {flattenPageTree(pages.data?.items ?? [])
+              {flattenPageTree(pages)
                 .filter(({ page: option }) => !excluded.has(option.id))
                 .map(({ page: option, depth }) => (
                   <option key={option.id} value={option.id}>

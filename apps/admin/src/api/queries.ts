@@ -25,6 +25,10 @@ async function getPage(id: number) {
   return unwrap(api.pages[':id'].$get({ param: { id: String(id) } }))
 }
 
+async function getPageRevisions(id: number) {
+  return unwrap(api.pages[':id'].revisions.$get({ param: { id: String(id) } }))
+}
+
 async function getPostTypes() {
   return unwrap(api['post-types'].$get())
 }
@@ -43,6 +47,10 @@ async function getPosts(params: PostsListParams) {
 
 async function getPost(id: number) {
   return unwrap(api.posts[':id'].$get({ param: { id: String(id) } }))
+}
+
+async function getPostRevisions(id: number) {
+  return unwrap(api.posts[':id'].revisions.$get({ param: { id: String(id) } }))
 }
 
 async function getTags(q?: string) {
@@ -84,9 +92,11 @@ async function getApiKeys() {
 
 export type PageItem = Awaited<ReturnType<typeof getPage>>['item']
 export type PageListItem = Awaited<ReturnType<typeof getPages>>['items'][number]
+export type PageRevisionItem = Awaited<ReturnType<typeof getPageRevisions>>['items'][number]
 export type PostTypeItem = Awaited<ReturnType<typeof getPostType>>['item']
 export type CategoryItem = Awaited<ReturnType<typeof getCategories>>['items'][number]
 export type PostItem = Awaited<ReturnType<typeof getPost>>['item']
+export type PostRevisionItem = Awaited<ReturnType<typeof getPostRevisions>>['items'][number]
 export type TagItem = Awaited<ReturnType<typeof getTags>>['items'][number]
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>['items'][number]
 export type FormListItem = Awaited<ReturnType<typeof getForms>>['items'][number]
@@ -104,6 +114,12 @@ export const pageQuery = (id: number) =>
   queryOptions({
     queryKey: ['pages', 'detail', id] as const,
     queryFn: () => getPage(id),
+  })
+
+export const pageRevisionsQuery = (id: number) =>
+  queryOptions({
+    queryKey: ['pages', id, 'revisions'] as const,
+    queryFn: () => getPageRevisions(id),
   })
 
 export const postTypesQuery = queryOptions({
@@ -133,6 +149,12 @@ export const postQuery = (id: number) =>
   queryOptions({
     queryKey: ['posts', 'detail', id] as const,
     queryFn: () => getPost(id),
+  })
+
+export const postRevisionsQuery = (id: number) =>
+  queryOptions({
+    queryKey: ['posts', id, 'revisions'] as const,
+    queryFn: () => getPostRevisions(id),
   })
 
 export const tagsQuery = (q?: string) =>

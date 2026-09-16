@@ -5,7 +5,9 @@ import { api } from '../../../api/client.ts'
 import { ApiError, fieldErrors } from '../../../api/errors.ts'
 import {
   categoriesQuery,
+  type PostItem,
   postQuery,
+  postRevisionsQuery,
   postTypesQuery,
   type TagItem,
   tagsQuery,
@@ -13,6 +15,7 @@ import {
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
+import { RevisionList } from '../../../components/content/RevisionList.tsx'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { TagInput } from '../../../components/TagInput.tsx'
@@ -25,6 +28,7 @@ export const Route = createFileRoute('/_auth/posts/$id')({
   loader: async ({ context, params }) => {
     const post = await context.queryClient.ensureQueryData(postQuery(Number(params.id)))
     await Promise.all([
+      context.queryClient.ensureQueryData(postRevisionsQuery(Number(params.id))),
       context.queryClient.ensureQueryData(postTypesQuery),
       context.queryClient.ensureQueryData(categoriesQuery(post.item.postTypeId)),
       context.queryClient.ensureQueryData(tagsQuery()),
@@ -36,30 +40,82 @@ export const Route = createFileRoute('/_auth/posts/$id')({
 function EditPostPage() {
   const id = Number(Route.useParams().id)
   const queryClient = useQueryClient()
-  const navigate = useNavigate({ from: '/posts/$id' })
   const post = useQuery(postQuery(id))
+  const revisions = useQuery(postRevisionsQuery(id))
+  const item = post.data?.item
+  const [formKey, setFormKey] = useState(0)
+  const [restoreId, setRestoreId] = useState<number | null>(null)
+  const restore = useMutation({
+    mutationFn: (revisionId: number) =>
+      unwrap(
+        api.posts[':id'].revisions[':revisionId'].restore.$post({
+          param: { id: String(id), revisionId: String(revisionId) },
+        }),
+      ),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['posts'] })
+      setRestoreId(null)
+      setFormKey((key) => key + 1)
+    },
+  })
+
+  if (!item) return <p>読み込み中…</p>
+  return (
+    <div>
+      {restore.error && (
+        <div className="mb-6">
+          <Alert tone="error">
+            {restore.error instanceof ApiError
+              ? restore.error.message
+              : '履歴を復元できませんでした'}
+          </Alert>
+        </div>
+      )}
+      <EditPostForm key={formKey} id={id} item={item} />
+      <RevisionList
+        items={revisions.data?.items ?? []}
+        pending={restore.isPending}
+        onRestore={setRestoreId}
+      />
+      <ConfirmDialog
+        open={restoreId !== null}
+        title="この履歴を復元"
+        description="現在の内容は履歴に保存されます。"
+        confirmLabel="復元"
+        pending={restore.isPending}
+        onClose={() => setRestoreId(null)}
+        onConfirm={() => {
+          if (restoreId !== null) restore.mutate(restoreId)
+        }}
+      />
+    </div>
+  )
+}
+
+function EditPostForm({ id, item }: { id: number; item: PostItem }) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate({ from: '/posts/$id' })
   const types = useQuery(postTypesQuery)
   const allTags = useQuery(tagsQuery())
-  const item = post.data?.item
-  const type = types.data?.items.find((candidate) => candidate.id === item?.postTypeId)
-  const categories = useQuery({ ...categoriesQuery(item?.postTypeId ?? 0), enabled: Boolean(item) })
+  const type = types.data?.items.find((candidate) => candidate.id === item.postTypeId)
+  const categories = useQuery(categoriesQuery(item.postTypeId))
   const [content, setContent] = useState<ContentFormValue>(() => ({
-    title: item?.title ?? '',
-    slug: item?.slug ?? '',
-    status: item?.status ?? 'draft',
-    publishedAt: toDateTimeLocal(item?.publishedAt ?? null),
-    bodyJson: item?.bodyJson ?? { type: 'doc', content: [] },
-    excerpt: item?.excerpt ?? '',
-    seoTitle: item?.seoTitle ?? '',
-    seoDescription: item?.seoDescription ?? '',
-    ogMediaId: item?.ogMediaId ?? null,
-    noindex: item?.noindex ?? false,
-    canonicalUrl: item?.canonicalUrl ?? '',
+    title: item.title,
+    slug: item.slug,
+    status: item.status,
+    publishedAt: toDateTimeLocal(item.publishedAt),
+    bodyJson: item.bodyJson ?? { type: 'doc', content: [] },
+    excerpt: item.excerpt ?? '',
+    seoTitle: item.seoTitle ?? '',
+    seoDescription: item.seoDescription ?? '',
+    ogMediaId: item.ogMediaId,
+    noindex: item.noindex,
+    canonicalUrl: item.canonicalUrl ?? '',
   }))
-  const [coverMediaId, setCoverMediaId] = useState<number | null>(item?.coverMediaId ?? null)
-  const [categoryIds, setCategoryIds] = useState<number[]>(item?.categoryIds ?? [])
+  const [coverMediaId, setCoverMediaId] = useState<number | null>(item.coverMediaId)
+  const [categoryIds, setCategoryIds] = useState<number[]>(item.categoryIds)
   const [selectedTags, setSelectedTags] = useState<TagItem[]>(() =>
-    (allTags.data?.items ?? []).filter((tag) => item?.tagIds.includes(tag.id)),
+    (allTags.data?.items ?? []).filter((tag) => item.tagIds.includes(tag.id)),
   )
   const [confirmOpen, setConfirmOpen] = useState(false)
   const save = useMutation({
@@ -98,7 +154,7 @@ function EditPostPage() {
     },
   })
   const errors = fieldErrors(save.error)
-  if (!item || !type) return <p>読み込み中…</p>
+  if (!type) return <p>読み込み中…</p>
   const categoryRows = flattenPageTree(
     (categories.data?.items ?? []).map((category) => ({ ...category, title: category.name })),
   )

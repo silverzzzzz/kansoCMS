@@ -15,7 +15,7 @@
 | T15 | 公開キャッシュの即時無効化: 管理 API の書き込みで公開 HTML/フィードのキャッシュを purge する | done | core, server |
 | T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | done | admin, server, tooling |
 | T17 | CI (GitHub Actions): push / PR で 4 ゲートと Playwright E2E を実行する | done | tooling |
-| T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | todo | shared, core, server, admin |
+| T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | done | shared, core, server, admin |
 | T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | todo | shared, core, server, admin |
 
 Phase 3 の決定事項 (ユーザー確認済み):
@@ -191,7 +191,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ## T18. リビジョン (固定ページ・投稿の更新履歴と復元)
 
-状態: `todo`
+状態: `done` (2026-09-16)
 
 ### ゴール
 
@@ -219,7 +219,17 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- テーブル [revisions.ts](../../packages/core/src/db/schema/revisions.ts) / マイグレーション `0002_revisions.sql` (drizzle-kit 生成): `target_type` は text enum (`page` | `post`)、`user_id` は users FK (`set null`)、index `(target_type, target_id, created_at)`。pages / posts への FK は張らず、`deletePage` / `deletePost` の `batch` に `revisions.deleteStatement` を足して履歴も消す。
+- スナップショットは [shared/revisions.ts](../../packages/shared/src/revisions.ts) の `pageRevisionSnapshotSchema = pageFieldsSchema`、`postRevisionSnapshotSchema = postFieldsSchema.omit({ postTypeId })` (= 更新 API の入力そのもの)。`snapshot_json` は drizzle の `mode: 'json'` で保存し、読み出し (`list` / `get`) 時に zod で検証、壊れていれば validation エラー。`list` は検証済みスナップショットから title / status だけ返す。
+- 記録は [revisionsService](../../packages/core/src/services/revisions.ts) の `recordStatements(target, id, snapshot, userId)` = insert + 「新しい 20 件以外を delete」(`notInArray` サブクエリ) を `pages.update` / `posts.update` の既存 `batch` に連結する。内容が同じでも更新ごとに記録し、作成時は記録しない。`publishedAt` は ISO 文字列で保存。
+- `user_id` は API 層の `currentUserId(principal)` (`session` → `user.id`、API キー → `null`) で決め、core の `UpdateContext = RenderContext & { userId: number | null }` として渡す。
+- API: `GET …/revisions` (一覧、snapshot 抜き) と `GET …/revisions/:revisionId` (snapshot 込み) は **read** スコープ (仕様では write としていたが読み取り専用なので `protectedApi` の既定に従う)、`POST …/revisions/:revisionId/restore` は write。一覧は先に `pages.get` / `posts.get` を呼んで対象が無ければ 404。param は `revisionParamSchema` (`id`, `revisionId`)。
+- 復元 (`restoreRevision`) はスナップショットを `update` に流す前に **消えた参照を除外** する: 親ページ (存在しない・自分自身)、OG 画像・カバー画像 (media に無い)、カテゴリ (同じ投稿タイプに存在するもののみ)、タグ (存在するもののみ)。復元も `update` なので復元前の状態が履歴に残り、公開キャッシュの purge も通常更新と同じ。
+- 管理画面: 編集ルートを外側 (`EditPage` / `EditPostPage`: 履歴クエリ・復元 mutation・`ConfirmDialog`) と内側フォーム (`EditPageForm` / `EditPostForm`、`key={formKey}`) に分割。復元成功時は `invalidateQueries(['pages' | 'posts'])` を await してから `formKey` を進め、再取得した item でフォーム (投稿はカテゴリ・タグ選択も) を再シードする。一覧は共通の [RevisionList](../../apps/admin/src/components/content/RevisionList.tsx) (日時・ユーザー・タイトル・状態・復元)。loader で revisions も prefetch。差分表示は無し。
+- テスト: [pages.test.ts](../../apps/server/src/api/pages.test.ts) (一覧の 404 経路と restore の `{ allowRawHtml, userId }` 転送)、[revisions.test.ts](../../packages/shared/src/revisions.test.ts)。4 ゲート通過 (165 tests)。
+- スモーク (Playwright でブラウザ操作、port 5199): ページを 2 回保存 → 履歴 2 件 (新しい順、ユーザー "Admin") → 古い方を復元 → タイトル・本文が v1 に戻り履歴 3 件。投稿は API でカテゴリ・タグを外した後に復元 → `categoryIds` / `tagIds` が戻り、チェックボックスとタグチップも再シードされる。ページ削除後は `GET …/revisions` が 404。
+- 既知 (T18 と無関係、既存): スラッグ入力の `pattern` 属性 `[a-z0-9-]` が最近の Chromium (`v` フラグ) で無効な正規表現と判定されコンソールにエラーが出る (ブラウザ側検証がスキップされるだけで保存は zod で検証済み)。別コミットで `\-` にエスケープして修正。
+- ドキュメント: architecture.md §3 (services / shared の一覧)・§4 `revisions` 行 (未作成 → 作成済み)・§5 の 3 エンドポイント・§9 に決定を追記。README の機能一覧に 1 行、Status を「Redirects and search … not built yet」へ。
 
 ---
 

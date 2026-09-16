@@ -1,4 +1,10 @@
-import { type CreatePostInput, type ListQuery, mediaUrl, type UpdatePostInput } from '@kanso/shared'
+import {
+  type CreatePostInput,
+  type ListQuery,
+  mediaUrl,
+  type PostRevisionSnapshot,
+  type UpdatePostInput,
+} from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, desc, eq, exists, inArray, lte, sql } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, effectiveExcerpt, renderRichText } from '../content/index.ts'
@@ -15,9 +21,11 @@ import {
 } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
+import { revisionsService } from './revisions.ts'
 
 type RenderContext = { allowRawHtml: boolean }
 type CreateContext = RenderContext & { authorId: number | null }
+type UpdateContext = RenderContext & { userId: number | null }
 type PostListQuery = ListQuery & { postTypeId?: number }
 
 function searchPattern(query: string): string {
@@ -47,6 +55,8 @@ export function postsPublishedNow(now = new Date()) {
 }
 
 export function postsService(db: Db) {
+  const revisions = revisionsService(db)
+
   async function hydrate(row: typeof posts.$inferSelect) {
     const [categoryRows, tagRows, author, cover, ogMedia] = await Promise.all([
       db
@@ -318,8 +328,24 @@ export function postsService(db: Db) {
     return get(postId)
   }
 
-  async function update(id: number, input: UpdatePostInput, context: RenderContext) {
+  async function update(id: number, input: UpdatePostInput, context: UpdateContext) {
     const current = await get(id)
+    const snapshot: PostRevisionSnapshot = {
+      title: current.title,
+      slug: current.slug,
+      bodyJson: current.bodyJson ?? EMPTY_DOCUMENT,
+      excerpt: current.excerpt,
+      status: current.status,
+      publishedAt: current.publishedAt?.toISOString() ?? null,
+      coverMediaId: current.coverMediaId,
+      categoryIds: current.categoryIds,
+      tagIds: current.tagIds,
+      seoTitle: current.seoTitle,
+      seoDescription: current.seoDescription,
+      ogMediaId: current.ogMediaId,
+      noindex: current.noindex,
+      canonicalUrl: current.canonicalUrl,
+    }
     const categoryIds = uniqueIds(input.categoryIds)
     const tagIds = uniqueIds(input.tagIds)
     await assertMediaExists(db, input.coverMediaId)
@@ -376,6 +402,7 @@ export function postsService(db: Db) {
         db.update(posts).set(values).where(eq(posts.id, id)),
         ...categoryStatements,
         ...tagStatements,
+        ...revisions.recordStatements('post', id, snapshot, context.userId),
       ])
       return get(id)
     } catch (error) {
@@ -385,7 +412,61 @@ export function postsService(db: Db) {
 
   async function deletePost(id: number): Promise<void> {
     await get(id)
-    await db.delete(posts).where(eq(posts.id, id))
+    await db.batch([
+      db.delete(posts).where(eq(posts.id, id)),
+      revisions.deleteStatement('post', id),
+    ])
+  }
+
+  async function restoreRevision(id: number, revisionId: number, context: UpdateContext) {
+    const current = await get(id)
+    const revision = await revisions.get('post', id, revisionId)
+    const snapshot = revision.snapshot as PostRevisionSnapshot
+    const mediaIds = [snapshot.coverMediaId, snapshot.ogMediaId].filter(
+      (mediaId): mediaId is number => mediaId !== null,
+    )
+    const [mediaRows, categoryRows, tagRows] = await Promise.all([
+      mediaIds.length > 0
+        ? db.select({ id: media.id }).from(media).where(inArray(media.id, mediaIds))
+        : Promise.resolve([]),
+      snapshot.categoryIds.length > 0
+        ? db
+            .select({ id: categories.id })
+            .from(categories)
+            .where(
+              and(
+                inArray(categories.id, snapshot.categoryIds),
+                eq(categories.postTypeId, current.postTypeId),
+              ),
+            )
+        : Promise.resolve([]),
+      snapshot.tagIds.length > 0
+        ? db.select({ id: tags.id }).from(tags).where(inArray(tags.id, snapshot.tagIds))
+        : Promise.resolve([]),
+    ])
+    const existingMediaIds = new Set(mediaRows.map((row) => row.id))
+    const existingCategoryIds = new Set(categoryRows.map((row) => row.id))
+    const existingTagIds = new Set(tagRows.map((row) => row.id))
+
+    return update(
+      id,
+      {
+        ...snapshot,
+        coverMediaId:
+          snapshot.coverMediaId !== null && existingMediaIds.has(snapshot.coverMediaId)
+            ? snapshot.coverMediaId
+            : null,
+        ogMediaId:
+          snapshot.ogMediaId !== null && existingMediaIds.has(snapshot.ogMediaId)
+            ? snapshot.ogMediaId
+            : null,
+        categoryIds: snapshot.categoryIds.filter((categoryId) =>
+          existingCategoryIds.has(categoryId),
+        ),
+        tagIds: snapshot.tagIds.filter((tagId) => existingTagIds.has(tagId)),
+      },
+      context,
+    )
   }
 
   return {
@@ -397,6 +478,7 @@ export function postsService(db: Db) {
     get,
     create,
     update,
+    restoreRevision,
     delete: deletePost,
   }
 }

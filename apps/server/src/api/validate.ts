@@ -19,3 +19,4 @@ export function validationHook(result: ValidationResult): void {
 }
 
 export const idParamSchema = z.object({ id: idSchema })
+export const revisionParamSchema = z.object({ id: idSchema, revisionId: idSchema })

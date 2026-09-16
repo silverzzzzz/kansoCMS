@@ -1,15 +1,22 @@
-import type { CreatePageInput, ListQuery, UpdatePageInput } from '@kanso/shared'
+import type {
+  CreatePageInput,
+  ListQuery,
+  PageRevisionSnapshot,
+  UpdatePageInput,
+} from '@kanso/shared'
 import { isReservedSlug } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
-import { pages, postTypes } from '../db/schema/index.ts'
+import { media, pages, postTypes } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
+import { revisionsService } from './revisions.ts'
 
 type RenderContext = { allowRawHtml: boolean }
+type UpdateContext = RenderContext & { userId: number | null }
 
 function searchPattern(query: string): string {
   return `%${query.replace(/[\\%_]/g, '\\$&')}%`
@@ -32,6 +39,8 @@ export function publishedNow(now = new Date()) {
 }
 
 export function pagesService(db: Db) {
+  const revisions = revisionsService(db)
+
   async function list(query: ListQuery) {
     const page = query.page ?? 1
     const perPage = query.perPage ?? 20
@@ -127,8 +136,23 @@ export function pagesService(db: Db) {
     }
   }
 
-  async function update(id: number, input: UpdatePageInput, context: RenderContext) {
+  async function update(id: number, input: UpdatePageInput, context: UpdateContext) {
     const current = await get(id)
+    const snapshot: PageRevisionSnapshot = {
+      title: current.title,
+      slug: current.slug,
+      parentId: current.parentId,
+      sortOrder: current.sortOrder,
+      bodyJson: current.bodyJson ?? EMPTY_DOCUMENT,
+      excerpt: current.excerpt,
+      status: current.status,
+      publishedAt: current.publishedAt?.toISOString() ?? null,
+      seoTitle: current.seoTitle,
+      seoDescription: current.seoDescription,
+      ogMediaId: current.ogMediaId,
+      noindex: current.noindex,
+      canonicalUrl: current.canonicalUrl,
+    }
     await assertMediaExists(db, input.ogMediaId)
     const allPages = await db
       .select({ id: pages.id, slug: pages.slug, parentId: pages.parentId, path: pages.path })
@@ -197,7 +221,11 @@ export function pagesService(db: Db) {
       )
 
     try {
-      await db.batch([db.update(pages).set(values).where(eq(pages.id, id)), ...descendantUpdates])
+      await db.batch([
+        db.update(pages).set(values).where(eq(pages.id, id)),
+        ...descendantUpdates,
+        ...revisions.recordStatements('page', id, snapshot, context.userId),
+      ])
       return get(id)
     } catch (error) {
       throwPageConflict(error)
@@ -236,10 +264,43 @@ export function pagesService(db: Db) {
       )
 
     try {
-      await db.batch([db.delete(pages).where(eq(pages.id, id)), ...updates])
+      await db.batch([
+        db.delete(pages).where(eq(pages.id, id)),
+        ...updates,
+        revisions.deleteStatement('page', id),
+      ])
     } catch (error) {
       throwPageConflict(error)
     }
+  }
+
+  async function restoreRevision(id: number, revisionId: number, context: UpdateContext) {
+    const revision = await revisions.get('page', id, revisionId)
+    const snapshot = revision.snapshot as PageRevisionSnapshot
+    const [parent, ogMedia] = await Promise.all([
+      snapshot.parentId === null || snapshot.parentId === id
+        ? Promise.resolve(null)
+        : db.query.pages.findFirst({
+            where: eq(pages.id, snapshot.parentId),
+            columns: { id: true },
+          }),
+      snapshot.ogMediaId === null
+        ? Promise.resolve(null)
+        : db.query.media.findFirst({
+            where: eq(media.id, snapshot.ogMediaId),
+            columns: { id: true },
+          }),
+    ])
+
+    return update(
+      id,
+      {
+        ...snapshot,
+        parentId: parent?.id ?? null,
+        ogMediaId: ogMedia?.id ?? null,
+      },
+      context,
+    )
   }
 
   return {
@@ -271,6 +332,7 @@ export function pagesService(db: Db) {
     get,
     create,
     update,
+    restoreRevision,
     delete: deletePage,
   }
 }
