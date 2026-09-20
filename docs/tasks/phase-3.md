@@ -16,7 +16,7 @@
 | T16 | 管理画面のブラウザ E2E テスト (Playwright): ログイン → ページ作成 (フォーム埋め込み) → 公開 → 送信 → 送信一覧 | done | admin, server, tooling |
 | T17 | CI (GitHub Actions): push / PR で 4 ゲートと Playwright E2E を実行する | done | tooling |
 | T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | done | shared, core, server, admin |
-| T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | todo | shared, core, server, admin |
+| T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | done | shared, core, server, admin |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
@@ -235,7 +235,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ## T19. リダイレクト
 
-状態: `todo`
+状態: `done` (2026-09-21)
 
 ### ゴール
 
@@ -262,4 +262,14 @@ Phase 3 の決定事項 (ユーザー確認済み):
 
 ### 決定
 
-- (実装中に追記)
+- テーブル [redirects.ts](../../packages/core/src/db/schema/redirects.ts) / マイグレーション `0003_redirects.sql` (drizzle-kit 生成): `from_path` は unique、`to` は text、`status` は integer (既定 301、`$type<RedirectStatus>`)、`created_at` / `updated_at`。pages / posts への FK は張らない (実体が消えてもリダイレクトは残す)。
+- 正規化は [shared/redirects.ts](../../packages/shared/src/redirects.ts) の `normalizeRedirectPath` (前後の空白と `/` を除去、連続する `/` を 1 つに畳む) に集約。`redirectFromPathSchema` は正規化後に「空でない」「500 文字以内」「空白・`?`・`#` を含まない」「先頭セグメントが予約スラッグでない」を検査。`to` は既存の `redirectUrlSchema` (絶対 URL か `/` 始まり) を再利用し、`fromPath` と同じ宛先はオブジェクト単位の refine で `to` 側の validation エラーにする (`Redirect target equals its source`)。`update` でも マージ後の値で同じ検査をする。
+- core [redirectsService](../../packages/core/src/services/redirects.ts): `list(q?)` (`from_path` / `to` の部分一致、`from_path` 昇順)、`get` / `create` / `update` / `delete` / `findByPath`。`from_path` の unique 違反は `KansoError.conflict('Redirect path already exists')`。
+- 自動作成は `pathChangeStatements(oldPath, newPath)` (statement の配列を返すだけ) を `pages.update` / `posts.update` の既存 `batch` に連結する。順序は ① 新パス宛の行を削除 (新 URL には実体がある) → ② `to` が旧パスだった行を新パスへ付け替え (チェーン防止) → ③ 旧パス → 新パスの 301 を upsert。
+- 対象は**公開済み**のみ: ページは自分と子孫 (`status === 'published'` の行だけ)、投稿は `status === 'published'` かつ slug 変更時に `{type}/{old}` → `{type}/{new}`。下書きの変更と投稿タイプのスラッグ変更は対象外 (仕様どおり)。
+- 公開側 [routes.tsx](../../apps/server/src/site/routes.tsx) は `notFound(c)` を `missing(c, path)` に置き換え、**実体が無いときだけ** `redirects.findByPath` を引く (実体優先)。ヒットすれば `c.redirect(to, status)`、無ければ従来どおりテーマの 404。リダイレクト応答は 301/302 なので siteCache には入らない (200 のみ格納)。クエリ文字列は転送先に引き継がない。
+- API `/api/v1/redirects` は `protectedApi` の既定どおり GET が read、POST/PATCH/DELETE が write (書き込みでキャッシュ世代も更新)。管理画面 [/admin/redirects](../../apps/admin/src/routes/_auth/redirects/index.tsx) は検索・追加フォーム・インライン編集 (`form` 属性で行外のフォームに紐付け)・`ConfirmDialog` 削除。ナビに「リダイレクト」を追加。
+- テスト: [shared/redirects.test.ts](../../packages/shared/src/redirects.test.ts)、[api/redirects.test.ts](../../apps/server/src/api/redirects.test.ts)、[site/routes.test.ts](../../apps/server/src/site/routes.test.ts) に 4 ケース (内部 301 / 外部 302 / 実体優先で `findByPath` を呼ばない / 未登録は 404)。4 ゲート通過 (178 tests)。
+- スモーク (port 5199、API + Playwright): `/manual-x/` 登録 → 正規化されて `manual-x`、`GET /manual-x` が 302 で `https://example.com/`。重複登録は 409、自己参照は 400 (`details[0].path = 'to'`)。公開ページの slug 変更で旧 URL が 301 → 新 URL、戻すと旧 URL は 200 に戻り残るのは `new → /old` の 1 行だけ (チェーンなし)。未登録パスは 404。管理画面から追加 → `GET /ui-x` が 301、削除で行が消える。コンソールエラーなし。
+- 注意: ブリーフに「validation は 422」と誤記したため Codex が `middleware/error.ts` を 422 に変えていた。`validation → 400` が既存の契約なので revert し、テストの期待値も 400 に戻した。
+- ドキュメント: architecture.md §3 (ツリー)・§4 `redirects` 行・§5 (`/:path+` の解決順とエンドポイント表)・§6 (リダイレクトはキャッシュしない)・§8 ロードマップ (revisions / redirects を済へ)・§9 に決定を追記。README は機能一覧に 1 行、Status を「Search (Phase 3) is not built yet.」、URL 表にリダイレクト行。

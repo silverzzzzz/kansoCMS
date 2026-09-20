@@ -7,13 +7,14 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - The same content over a headless JSON API (`/api/v1`, API-key auth) for Astro / Next / anything else
 - Admin UI with a Tiptap editor, media library (R2) and draft preview
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
+- Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> Redirects and search (Phase 3) are not built yet.
+> Search (Phase 3) is not built yet.
 
 ## Layout
 
@@ -101,6 +102,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | --- | --- |
 | `/` | The page whose path is `home`; otherwise the archive of the post type set as *home* in settings; otherwise a placeholder |
 | `/company`, `/company/team` | Fixed pages, resolved by their full `path` |
+| `/old-path` | A managed 301/302 redirect when no published page or post matches the path |
 | `/blog` | Post-type archive, 10 per page, `?page=2` … (`page=1` and invalid values redirect to the bare URL) |
 | `/blog/hello-world` | A post: `BlogPosting` + `BreadcrumbList` JSON-LD, `og:type=article`, `rel=alternate` to the feed |
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |

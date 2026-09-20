@@ -76,7 +76,7 @@ kansoCMS/
 │   │   │   ├── env.ts              # AppEnv (Bindings = worker-configuration.d.ts の Env, Variables = kanso/principal)
 │   │   │   ├── middleware/         # kanso (services 注入) / auth (session・API key・CSRF) / cache / error
 │   │   │   ├── api/                # /api/v1 (JSON): setup, auth, api-keys, pages, post-types(+categories),
-│   │   │   │                       #   posts, tags, media, settings。validate.ts (zValidator hook), principal.ts
+│   │   │   │                       #   posts, tags, media, redirects, settings。validate.ts (zValidator hook), principal.ts
 │   │   │   ├── site/               # 公開サイト SSR (hono/jsx)
 │   │   │   │   ├── routes.tsx      # /, /:path+ (page → type → post → category/tag → 404)、siteCache
 │   │   │   │   ├── context.ts      # loadSiteContext: settings / nav / meta() / formatDate を 1 回で用意
@@ -97,7 +97,7 @@ kansoCMS/
 │       ├── src/
 │       │   ├── main.tsx / router.tsx   # TanStack Router (basepath /admin), QueryClient
 │       │   ├── routes/             # file-based: setup, login, _auth/(index, pages, posts, post-types,
-│       │   │                       #   tags, media, settings, api-keys)。routeTree.gen.ts は生成物
+│       │   │                       #   tags, media, forms, redirects, settings, api-keys)。routeTree.gen.ts は生成物
 │       │   ├── api/                # hc<ApiType>() クライアント, queries (TanStack Query), errors
 │       │   ├── components/         # ui, content/ContentForm, editor/ (Tiptap), media/ (picker, upload)
 │       │   └── lib/                # datetime, page-tree
@@ -108,7 +108,7 @@ kansoCMS/
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, taxonomies, media, settings
+│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, taxonomies, media, settings
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt
 │   │   │   ├── auth/               # PBKDF2 パスワードハッシュ
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
@@ -118,7 +118,7 @@ kansoCMS/
 │   │   └── drizzle.config.ts
 │   │
 │   ├── shared/                     # @kanso/shared — zod スキーマ / 型 / 定数。ブラウザ安全
-│   │   └── src/                    # auth, pages, posts, revisions, taxonomies, media, settings, richtext,
+│   │   └── src/                    # auth, pages, posts, revisions, redirects, taxonomies, media, settings, richtext,
 │   │                               #   content, query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
 │   │
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
@@ -171,6 +171,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
 | `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
+| `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 
 `forms` / `form_submissions` はテーブルだけ初期マイグレーションに含まれ、Phase 2 でサービスと API を載せる。
 
@@ -192,7 +193,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 |---|---|---|
 | `GET /` | `site` — `home` ページ → `settings.site.homePostTypeSlug` の一覧 → プレースホルダ | 公開 |
 | `POST /` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
-| `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301) | 公開 |
+| `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301)。実体がなければ `redirects.from_path` を解決 | 公開 |
 | `POST /:path+` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
@@ -205,10 +206,11 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /api/v1/pages/:id/revisions`, `GET /api/v1/posts/:id/revisions` | 固定ページ / 投稿の更新前スナップショット一覧 (最新 20 件) | セッション or `x-api-key` (`read`) |
 | `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/pages/:id/revisions/:revisionId/restore`, `POST /api/v1/posts/:id/revisions/:revisionId/restore` | リビジョンを `update` 経由で復元 | セッション or `x-api-key` (`write`) |
+| `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302 リダイレクトの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
 | `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
 
-URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は作れないので一意)。
+URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (同じ最上位 slug は作れないので一意)。実体のある公開コンテンツをリダイレクトより優先する。
 
 解決順序 (Static Assets は Worker より先に評価される):
 `assets (/admin/*.js, /theme.css …)` → `Hono: /api/v1` → `/media` → `/admin/*` (SPA fallback) → `/*` (site) → 404 (テーマの 404 ページ)。
@@ -240,6 +242,7 @@ URL 解決順序は **ページ → 投稿タイプ** (同じ最上位 slug は�
 - 公開 HTML は `middleware/cache.ts` の `siteCache` が Workers Cache API (`caches.default`) に `cache-control: public, s-maxage=60` で保存する。応答には `x-kanso-cache: HIT | MISS | BYPASS` を付ける。Cache API は `stale-while-revalidate` を解釈しないので使わない。
 - キャッシュキーは `origin + pathname` (+ `page` クエリのみ) + `__v=<cache generation>`。それ以外のクエリ (`utm_*` など) は同一エントリに畳む。世代は `settings` の `cache` 行にランダムトークンとして保存する。
 - 対象外: `GET` 以外、`kanso_session` Cookie を持つリクエスト (管理者は常に最新を見る)、`/preview/*`、200 以外の応答。`caches` が無い環境 (workers.dev や単体テスト) では素通し。
+- リダイレクト応答は 301/302 なので Cache API には保存しない。変更は管理 API 書き込み時のキャッシュ世代更新とは独立して、次のリクエストから D1 の最新行を参照する。
 - `/api/v1` の管理ルートで書き込みが成功するたびに `bumpSiteCacheVersion` が世代を更新する。ページ・投稿・投稿タイプ・カテゴリ・タグ・フォーム・メディア・設定に加え、API キーや送信削除でも更新される (余分な 1 回の miss は許容)。キー自体が変わるため `cache.delete()` は使わず、全データセンターで次の GET が自然に miss する。
 - 公開 GET は cache hit を含めて `settings` 1 行を D1 から読む。小規模サイト向けの単純さを優先したトレードオフで、将来は KV への移行余地を残す。予約公開は世代更新では検出できないため、従来どおり 60 秒 TTL で反映する。
 - `/media/*` は immutable。差し替えは新キー発行で対応。
@@ -285,7 +288,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`) ([tasks/phase-3.md](tasks/phase-3.md))。残: revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects ([tasks/phase-3.md](tasks/phase-3.md))。残: FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -304,6 +307,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **フォームの埋め込みは Tiptap の `form` ブロックノード** (2026-09-15)。レンダラは `<div data-kanso-form="slug">` のプレースホルダを出し、公開側が描画時にフォーム定義を解決する (ショートコード文字列は使わない)。
 - **通知メールの差出人と既定宛先は設定に持つ** (2026-09-15)。`settings.forms = { fromEmail, fromName, notifyTo, turnstileSiteKey }`。フォームの `notifyTo` が空なら設定の既定宛先、両方空なら保存のみ。`fromEmail` が空ならメール無効。
 - **リビジョンは更新前スナップショットを対象ごとに最新 20 件保持する** (2026-09-16)。内容が同じでも更新ごとに記録し、復元も `update` を通すため復元前の状態が履歴に残る。削除済みのメディア・カテゴリ・タグ・親ページへの参照は復元時に除外する。
+- **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

@@ -14,6 +14,7 @@ const navigation = [
   { to: '/tags', label: 'タグ' },
   { to: '/media', label: 'メディア' },
   { to: '/forms', label: 'フォーム' },
+  { to: '/redirects', label: 'リダイレクト' },
 ] as const
 
 export const Route = createFileRoute('/_auth')({
@@ -144,6 +145,7 @@ type NavLinkProps = {
     | '/tags'
     | '/media'
     | '/forms'
+    | '/redirects'
     | '/settings'
     | '/api-keys'
   label: string

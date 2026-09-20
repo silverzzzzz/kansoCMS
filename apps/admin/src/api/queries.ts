@@ -57,6 +57,10 @@ async function getTags(q?: string) {
   return unwrap(api.tags.$get({ query: q ? { q } : {} }))
 }
 
+async function getRedirects(q?: string) {
+  return unwrap(api.redirects.$get({ query: q ? { q } : {} }))
+}
+
 async function getMedia(params: ListParams) {
   const query = { page: params.page, perPage: params.perPage, q: params.q }
   return unwrap(api.media.$get({ query }))
@@ -98,6 +102,7 @@ export type CategoryItem = Awaited<ReturnType<typeof getCategories>>['items'][nu
 export type PostItem = Awaited<ReturnType<typeof getPost>>['item']
 export type PostRevisionItem = Awaited<ReturnType<typeof getPostRevisions>>['items'][number]
 export type TagItem = Awaited<ReturnType<typeof getTags>>['items'][number]
+export type RedirectItem = Awaited<ReturnType<typeof getRedirects>>['items'][number]
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>['items'][number]
 export type FormListItem = Awaited<ReturnType<typeof getForms>>['items'][number]
 export type FormItem = Awaited<ReturnType<typeof getForm>>['item']
@@ -161,6 +166,12 @@ export const tagsQuery = (q?: string) =>
   queryOptions({
     queryKey: ['tags', 'list', q ?? ''] as const,
     queryFn: () => getTags(q),
+  })
+
+export const redirectsQuery = (q?: string) =>
+  queryOptions({
+    queryKey: ['redirects', 'list', q ?? ''] as const,
+    queryFn: () => getRedirects(q),
   })
 
 export const mediaListQuery = (params: ListParams) =>

@@ -21,6 +21,7 @@ import {
 } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
+import { redirectsService } from './redirects.ts'
 import { revisionsService } from './revisions.ts'
 
 type RenderContext = { allowRawHtml: boolean }
@@ -55,6 +56,7 @@ export function postsPublishedNow(now = new Date()) {
 }
 
 export function postsService(db: Db) {
+  const redirects = redirectsService(db)
   const revisions = revisionsService(db)
 
   async function hydrate(row: typeof posts.$inferSelect) {
@@ -397,11 +399,25 @@ export function postsService(db: Db) {
             ...tagIds.map((tagId) => db.insert(postTags).values({ postId: id, tagId })),
           ]
 
+    let redirectStatements: ReturnType<typeof redirects.pathChangeStatements> = []
+    if (input.slug !== undefined && input.slug !== current.slug && current.status === 'published') {
+      const postType = await db.query.postTypes.findFirst({
+        where: eq(postTypes.id, current.postTypeId),
+        columns: { slug: true },
+      })
+      if (!postType) throw KansoError.notFound('Post type')
+      redirectStatements = redirects.pathChangeStatements(
+        `${postType.slug}/${current.slug}`,
+        `${postType.slug}/${input.slug}`,
+      )
+    }
+
     try {
       await db.batch([
         db.update(posts).set(values).where(eq(posts.id, id)),
         ...categoryStatements,
         ...tagStatements,
+        ...redirectStatements,
         ...revisions.recordStatements('post', id, snapshot, context.userId),
       ])
       return get(id)

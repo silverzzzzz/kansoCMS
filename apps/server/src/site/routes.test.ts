@@ -85,6 +85,7 @@ function testSetup(
     form?: typeof testForm
     page?: typeof testPage
     locale?: string
+    redirect?: { to: string; status: 301 | 302 } | null
     turnstileSiteKey?: string
     turnstileSecretKey?: string
   } = {},
@@ -92,6 +93,7 @@ function testSetup(
   const form = options.form ?? testForm
   const page = options.page ?? testPage
   const createSubmission = vi.fn().mockResolvedValue({ id: 10 })
+  const findByPath = vi.fn().mockResolvedValue(options.redirect ?? null)
   const kanso: Kanso = Object.assign(Object.create(null), {
     settings: {
       site: vi.fn().mockResolvedValue({
@@ -122,6 +124,7 @@ function testSetup(
       list: vi.fn().mockResolvedValue([]),
       findBySlug: vi.fn().mockResolvedValue(undefined),
     },
+    redirects: { findByPath },
     forms: {
       findBySlug: vi
         .fn()
@@ -148,7 +151,7 @@ function testSetup(
     passThroughOnException: vi.fn(),
     props: {},
   }
-  return { app, createSubmission, env, executionCtx }
+  return { app, createSubmission, findByPath, env, executionCtx }
 }
 
 describe('site page metadata', () => {
@@ -335,5 +338,46 @@ describe('site not found page', () => {
 
     expect(response.status).toBe(404)
     expect(await response.text()).toContain('Page not found.')
+  })
+})
+
+describe('site redirects', () => {
+  it('redirects a missing path to an internal target with status 301', async () => {
+    const { app, env, executionCtx, findByPath } = testSetup({
+      redirect: { to: '/new', status: 301 },
+    })
+    const response = await app.request('/old', undefined, env, executionCtx)
+
+    expect(response.status).toBe(301)
+    expect(response.headers.get('location')).toBe('/new')
+    expect(findByPath).toHaveBeenCalledWith('old')
+  })
+
+  it('redirects a missing path to an external target with status 302', async () => {
+    const { app, env, executionCtx } = testSetup({
+      redirect: { to: 'https://example.com/', status: 302 },
+    })
+    const response = await app.request('/old', undefined, env, executionCtx)
+
+    expect(response.status).toBe(302)
+    expect(response.headers.get('location')).toBe('https://example.com/')
+  })
+
+  it('prefers existing content over a redirect', async () => {
+    const { app, env, executionCtx, findByPath } = testSetup({
+      redirect: { to: '/new', status: 301 },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+
+    expect(response.status).toBe(200)
+    expect(findByPath).not.toHaveBeenCalled()
+  })
+
+  it('keeps returning 404 when no redirect exists', async () => {
+    const { app, env, executionCtx, findByPath } = testSetup()
+    const response = await app.request('/unknown', undefined, env, executionCtx)
+
+    expect(response.status).toBe(404)
+    expect(findByPath).toHaveBeenCalledWith('unknown')
   })
 })

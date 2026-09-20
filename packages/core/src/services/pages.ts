@@ -13,6 +13,7 @@ import { media, pages, postTypes } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
+import { redirectsService } from './redirects.ts'
 import { revisionsService } from './revisions.ts'
 
 type RenderContext = { allowRawHtml: boolean }
@@ -39,6 +40,7 @@ export function publishedNow(now = new Date()) {
 }
 
 export function pagesService(db: Db) {
+  const redirects = redirectsService(db)
   const revisions = revisionsService(db)
 
   async function list(query: ListQuery) {
@@ -155,7 +157,13 @@ export function pagesService(db: Db) {
     }
     await assertMediaExists(db, input.ogMediaId)
     const allPages = await db
-      .select({ id: pages.id, slug: pages.slug, parentId: pages.parentId, path: pages.path })
+      .select({
+        id: pages.id,
+        slug: pages.slug,
+        parentId: pages.parentId,
+        path: pages.path,
+        status: pages.status,
+      })
       .from(pages)
 
     const parentId = input.parentId === undefined ? current.parentId : input.parentId
@@ -220,10 +228,26 @@ export function pagesService(db: Db) {
           .where(eq(pages.id, page.id)),
       )
 
+    const redirectStatements = [
+      ...(current.status === 'published'
+        ? redirects.pathChangeStatements(current.path, targetPath)
+        : []),
+      ...allPages.flatMap((page) => {
+        const newPath = paths.get(page.id)
+        return page.id !== id &&
+          page.status === 'published' &&
+          newPath !== undefined &&
+          newPath !== page.path
+          ? redirects.pathChangeStatements(page.path, newPath)
+          : []
+      }),
+    ]
+
     try {
       await db.batch([
         db.update(pages).set(values).where(eq(pages.id, id)),
         ...descendantUpdates,
+        ...redirectStatements,
         ...revisions.recordStatements('page', id, snapshot, context.userId),
       ])
       return get(id)

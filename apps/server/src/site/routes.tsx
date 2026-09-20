@@ -81,7 +81,7 @@ site.get('/:path{.+}', async (c) => {
   }
 
   const resolved = await resolveContent(c, path)
-  if (!resolved) return notFound(c)
+  if (!resolved) return missing(c, path)
   if (resolved.kind === 'page') return renderPage(c, resolved.page)
   if (resolved.kind === 'post') return renderPost(c, resolved.post, resolved.type)
 
@@ -98,7 +98,7 @@ site.get('/:path{.+}', async (c) => {
   if (segments.length === 2 && segments[1] === 'feed.xml') return feedResponse(c, type)
   if (segments.length === 3 && segments[1] === 'category') {
     const category = await c.var.kanso.taxonomies.findCategoryBySlug(type.id, segments[2] ?? '')
-    if (!category) return notFound(c)
+    if (!category) return missing(c, path)
     return renderArchive(
       c,
       await loadSiteContext(c.var.kanso, c.env.SITE_URL),
@@ -109,7 +109,7 @@ site.get('/:path{.+}', async (c) => {
   }
   if (segments.length === 3 && segments[1] === 'tag') {
     const tag = await c.var.kanso.taxonomies.findTagBySlug(segments[2] ?? '')
-    if (!tag) return notFound(c)
+    if (!tag) return missing(c, path)
     return renderArchive(
       c,
       await loadSiteContext(c.var.kanso, c.env.SITE_URL),
@@ -118,7 +118,7 @@ site.get('/:path{.+}', async (c) => {
       { kind: 'tag', ...tag },
     )
   }
-  return notFound(c)
+  return missing(c, path)
 })
 
 site.post('/:path{.+}', (c) => handleFormPost(c, c.req.param('path').replace(/\/+$/, '')))
@@ -283,4 +283,10 @@ async function notFound(c: Context<AppEnv>) {
     </Layout>,
     404,
   )
+}
+
+async function missing(c: Context<AppEnv>, path: string) {
+  const hit = await c.var.kanso.redirects.findByPath(path)
+  if (hit) return c.redirect(hit.to, hit.status)
+  return notFound(c)
 }

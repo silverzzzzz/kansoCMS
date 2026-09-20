@@ -26,6 +26,7 @@ import { Route as AuthPostTypesNewRouteImport } from './routes/_auth/post-types/
 import { Route as AuthPostsIndexRouteImport } from './routes/_auth/posts/index'
 import { Route as AuthPostsIdRouteImport } from './routes/_auth/posts/$id'
 import { Route as AuthPostsNewRouteImport } from './routes/_auth/posts/new'
+import { Route as AuthRedirectsIndexRouteImport } from './routes/_auth/redirects/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthTagsIndexRouteImport } from './routes/_auth/tags/index'
 import { Route as AuthFormsIdIndexRouteImport } from './routes/_auth/forms/$id/index'
@@ -116,6 +117,11 @@ const AuthPostsNewRoute = AuthPostsNewRouteImport.update({
   path: '/posts/new',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthRedirectsIndexRoute = AuthRedirectsIndexRouteImport.update({
+  id: '/redirects/',
+  path: '/redirects/',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthSettingsIndexRoute = AuthSettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/pages/': typeof AuthPagesIndexRoute
   '/post-types/': typeof AuthPostTypesIndexRoute
   '/posts/': typeof AuthPostsIndexRoute
+  '/redirects/': typeof AuthRedirectsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/tags/': typeof AuthTagsIndexRoute
   '/forms/$id/': typeof AuthFormsIdIndexRoute
@@ -184,6 +191,7 @@ export interface FileRoutesByTo {
   '/pages': typeof AuthPagesIndexRoute
   '/post-types': typeof AuthPostTypesIndexRoute
   '/posts': typeof AuthPostsIndexRoute
+  '/redirects': typeof AuthRedirectsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/tags': typeof AuthTagsIndexRoute
   '/forms/$id': typeof AuthFormsIdIndexRoute
@@ -209,6 +217,7 @@ export interface FileRoutesById {
   '/_auth/pages/': typeof AuthPagesIndexRoute
   '/_auth/post-types/': typeof AuthPostTypesIndexRoute
   '/_auth/posts/': typeof AuthPostsIndexRoute
+  '/_auth/redirects/': typeof AuthRedirectsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/tags/': typeof AuthTagsIndexRoute
   '/_auth/forms/$id/': typeof AuthFormsIdIndexRoute
@@ -234,6 +243,7 @@ export interface FileRouteTypes {
     | '/pages/'
     | '/post-types/'
     | '/posts/'
+    | '/redirects/'
     | '/settings/'
     | '/tags/'
     | '/forms/$id/'
@@ -257,6 +267,7 @@ export interface FileRouteTypes {
     | '/pages'
     | '/post-types'
     | '/posts'
+    | '/redirects'
     | '/settings'
     | '/tags'
     | '/forms/$id'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
     | '/_auth/pages/'
     | '/_auth/post-types/'
     | '/_auth/posts/'
+    | '/_auth/redirects/'
     | '/_auth/settings/'
     | '/_auth/tags/'
     | '/_auth/forms/$id/'
@@ -415,6 +427,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthPostsNewRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/redirects/': {
+      id: '/_auth/redirects/'
+      path: '/redirects'
+      fullPath: '/redirects/'
+      preLoaderRoute: typeof AuthRedirectsIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/settings/': {
       id: '/_auth/settings/'
       path: '/settings'
@@ -468,6 +487,7 @@ interface AuthRouteChildren {
   AuthPagesIndexRoute: typeof AuthPagesIndexRoute
   AuthPostTypesIndexRoute: typeof AuthPostTypesIndexRoute
   AuthPostsIndexRoute: typeof AuthPostsIndexRoute
+  AuthRedirectsIndexRoute: typeof AuthRedirectsIndexRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
   AuthTagsIndexRoute: typeof AuthTagsIndexRoute
   AuthFormsIdIndexRoute: typeof AuthFormsIdIndexRoute
@@ -490,6 +510,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthPagesIndexRoute: AuthPagesIndexRoute,
   AuthPostTypesIndexRoute: AuthPostTypesIndexRoute,
   AuthPostsIndexRoute: AuthPostsIndexRoute,
+  AuthRedirectsIndexRoute: AuthRedirectsIndexRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
   AuthTagsIndexRoute: AuthTagsIndexRoute,
   AuthFormsIdIndexRoute: AuthFormsIdIndexRoute,
