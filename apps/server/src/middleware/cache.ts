@@ -31,6 +31,8 @@ export function siteCacheKey(url: string, version: string): string {
   const key = new URL(source.pathname, source.origin)
   if (source.searchParams.has('page'))
     key.searchParams.set('page', source.searchParams.get('page') ?? '')
+  if (source.pathname === '/search' && source.searchParams.has('q'))
+    key.searchParams.set('q', source.searchParams.get('q') ?? '')
   key.searchParams.set('__v', version)
   return key.toString()
 }

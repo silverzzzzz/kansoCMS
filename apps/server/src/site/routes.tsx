@@ -6,7 +6,7 @@ import {
   buildOrganization,
   buildWebSite,
 } from '@kanso/seo'
-import { POSTS_PER_PAGE } from '@kanso/shared'
+import { POSTS_PER_PAGE, SEARCH_PER_PAGE } from '@kanso/shared'
 import { type Context, Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { parseBody } from '../forms/body.ts'
@@ -18,6 +18,7 @@ import { feedResponse, robotsResponse, sitemapResponse } from './feeds.ts'
 import { draftValues, type FormState, formSlugsIn } from './forms.tsx'
 import { preview } from './preview.tsx'
 import { renderPage, renderPost } from './render.tsx'
+import { SearchResults } from './search.tsx'
 import { Layout } from './themes/default/layout.tsx'
 import { PostList } from './themes/default/post-list.tsx'
 
@@ -55,7 +56,7 @@ site.get('/', async (c) => {
   const jsonLd = [buildOrganization(ctx.site), buildWebSite(ctx.site)]
   const m = ctx.messages
   return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav}>
+    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
       <section class="page">
         <h1>{ctx.site.name}</h1>
         <p>{m.home.running}</p>
@@ -70,6 +71,20 @@ site.get('/', async (c) => {
 })
 
 site.post('/', (c) => handleFormPost(c, 'home'))
+
+site.get('/search', async (c) => {
+  const rawQuery = (c.req.query('q') ?? '').trim()
+  const q = rawQuery.length > 0 && rawQuery.length <= 100 ? rawQuery : ''
+  const rawPage = Number(c.req.query('page'))
+  const page = Number.isInteger(rawPage) && rawPage >= 1 ? rawPage : 1
+  const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
+  const result = q ? await c.var.kanso.search.search({ q, page, perPage: SEARCH_PER_PAGE }) : null
+  const totalPages = Math.max(1, Math.ceil((result?.total ?? 0) / SEARCH_PER_PAGE))
+  if (result && result.total > 0 && page > totalPages) return notFound(c)
+  return c.html(
+    <SearchResults ctx={ctx} q={q} page={page} totalPages={totalPages} result={result} />,
+  )
+})
 
 site.get('/:path{.+}', async (c) => {
   const rawPath = c.req.param('path')
@@ -255,7 +270,7 @@ async function renderArchive(
   ]
 
   return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav}>
+    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
       <PostList
         heading={heading}
         description={description}
@@ -275,7 +290,7 @@ async function notFound(c: Context<AppEnv>) {
   const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
   const meta = ctx.meta({ title: ctx.messages.notFound.title, path: c.req.path, noindex: true })
   return c.html(
-    <Layout meta={meta} nav={ctx.nav}>
+    <Layout meta={meta} nav={ctx.nav} search={ctx.search}>
       <section class="page">
         <h1>404</h1>
         <p>{ctx.messages.notFound.body}</p>

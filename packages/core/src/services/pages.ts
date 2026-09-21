@@ -7,7 +7,7 @@ import type {
 import { isReservedSlug } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
-import { EMPTY_DOCUMENT, renderRichText } from '../content/index.ts'
+import { EMPTY_DOCUMENT, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { media, pages, postTypes } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
@@ -57,7 +57,7 @@ export function pagesService(db: Db) {
         orderBy: [asc(pages.sortOrder), asc(pages.title), asc(pages.id)],
         limit: perPage,
         offset: (page - 1) * perPage,
-        columns: { bodyJson: false, bodyHtml: false },
+        columns: { bodyJson: false, bodyHtml: false, searchText: false },
       }),
       db.select({ value: count() }).from(pages).where(where),
     ])
@@ -65,7 +65,10 @@ export function pagesService(db: Db) {
   }
 
   async function get(id: number) {
-    const page = await db.query.pages.findFirst({ where: eq(pages.id, id) })
+    const page = await db.query.pages.findFirst({
+      where: eq(pages.id, id),
+      columns: { searchText: false },
+    })
     if (!page) throw KansoError.notFound('Page')
     return page
   }
@@ -121,6 +124,7 @@ export function pagesService(db: Db) {
           sortOrder: input.sortOrder ?? 0,
           bodyJson,
           bodyHtml: renderRichText(bodyJson, context),
+          searchText: plainText(bodyJson),
           excerpt,
           status,
           publishedAt,
@@ -202,6 +206,7 @@ export function pagesService(db: Db) {
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
       values.bodyHtml = renderRichText(input.bodyJson, context)
+      values.searchText = plainText(input.bodyJson)
     }
     if (input.excerpt !== undefined) {
       values.excerpt = input.excerpt?.trim() ? input.excerpt : null
@@ -332,6 +337,7 @@ export function pagesService(db: Db) {
     async findPublishedByPath(path: string) {
       return db.query.pages.findFirst({
         where: and(eq(pages.path, path), publishedNow()),
+        columns: { searchText: false },
       })
     },
 

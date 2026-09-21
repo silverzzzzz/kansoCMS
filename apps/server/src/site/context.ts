@@ -16,6 +16,7 @@ export interface SiteRequestContext {
   /** Post type whose archive is shown at `/` when no `home` page exists. */
   homePostTypeSlug: string | null
   messages: SiteMessages
+  search: Pick<SiteMessages['search'], 'label' | 'placeholder' | 'button'>
   /** Build PageMeta with site-level defaults applied. */
   meta: (overrides: MetaOverrides) => PageMeta
   formatDate: (date: Date) => string
@@ -51,12 +52,18 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     ...postTypes.map((type) => ({ label: type.name, href: `/${type.slug}` })),
   ]
 
+  const messages = resolveMessages(settings.locale)
   return {
     origin,
     site,
     nav,
     homePostTypeSlug: settings.homePostTypeSlug,
-    messages: resolveMessages(settings.locale),
+    messages,
+    search: {
+      label: messages.search.label,
+      placeholder: messages.search.placeholder,
+      button: messages.search.button,
+    },
     formatDate: (date) =>
       formatDate(date, { locale: settings.locale, timeZone: settings.timezone }),
     meta: ({ title, path, ...overrides }) => ({

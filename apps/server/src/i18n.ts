@@ -8,6 +8,15 @@ export type SiteMessages = {
     tagHeading: (term: string, type: string) => string
   }
   pagination: { newer: string; older: string }
+  search: {
+    title: string
+    label: string
+    placeholder: string
+    button: string
+    resultCount: (n: number) => string
+    noResults: string
+    kindPage: string
+  }
   form: {
     submit: string
     selectPlaceholder: string
@@ -21,6 +30,15 @@ export type SiteMessages = {
 }
 
 export const en: SiteMessages = {
+  search: {
+    title: 'Search',
+    label: 'Search this site',
+    placeholder: 'Search…',
+    button: 'Search',
+    resultCount: (n) => `${n} results`,
+    noResults: 'No results.',
+    kindPage: 'Page',
+  },
   notFound: { title: 'Not Found', body: 'Page not found.' },
   home: {
     running: 'kansoCMS is running.',
@@ -45,6 +63,15 @@ export const en: SiteMessages = {
 }
 
 export const ja: SiteMessages = {
+  search: {
+    title: '検索',
+    label: 'サイト内検索',
+    placeholder: '検索…',
+    button: '検索',
+    resultCount: (n) => `${n} 件`,
+    noResults: '該当する結果はありません。',
+    kindPage: 'ページ',
+  },
   notFound: {
     title: 'ページが見つかりません',
     body: 'お探しのページは見つかりませんでした。',

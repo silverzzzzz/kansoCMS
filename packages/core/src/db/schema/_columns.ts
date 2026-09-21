@@ -27,6 +27,7 @@ export const contentColumns = {
   title: text('title').notNull(),
   bodyJson: text('body_json', { mode: 'json' }).$type<RichTextDoc>(),
   bodyHtml: text('body_html').notNull().default(''),
+  searchText: text('search_text').notNull().default(''),
   excerpt: text('excerpt'),
   status: text('status', { enum: CONTENT_STATUSES }).notNull().default('draft'),
   publishedAt: integer('published_at', { mode: 'timestamp' }),

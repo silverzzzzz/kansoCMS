@@ -74,7 +74,13 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
   }
 
   const content = (
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} scripts={prepared.scripts}>
+    <Layout
+      meta={meta}
+      jsonLd={jsonLd}
+      nav={ctx.nav}
+      search={ctx.search}
+      scripts={prepared.scripts}
+    >
       {isHome ? (
         <article class="page">{raw(prepared.html)}</article>
       ) : (
@@ -135,7 +141,13 @@ export async function renderPost(
   ]
 
   const content = (
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} scripts={prepared.scripts}>
+    <Layout
+      meta={meta}
+      jsonLd={jsonLd}
+      nav={ctx.nav}
+      search={ctx.search}
+      scripts={prepared.scripts}
+    >
       <PostArticle
         post={post}
         bodyHtml={prepared.html}

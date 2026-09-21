@@ -7,7 +7,7 @@ import {
 } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, desc, eq, exists, inArray, lte, sql } from 'drizzle-orm'
-import { EMPTY_DOCUMENT, effectiveExcerpt, renderRichText } from '../content/index.ts'
+import { EMPTY_DOCUMENT, effectiveExcerpt, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import {
   categories,
@@ -59,7 +59,7 @@ export function postsService(db: Db) {
   const redirects = redirectsService(db)
   const revisions = revisionsService(db)
 
-  async function hydrate(row: typeof posts.$inferSelect) {
+  async function hydrate(row: Omit<typeof posts.$inferSelect, 'searchText'>) {
     const [categoryRows, tagRows, author, cover, ogMedia] = await Promise.all([
       db
         .select({ id: categories.id, slug: categories.slug, name: categories.name })
@@ -110,12 +110,16 @@ export function postsService(db: Db) {
   async function findPublished(postTypeId: number, slug: string) {
     const post = await db.query.posts.findFirst({
       where: and(eq(posts.postTypeId, postTypeId), eq(posts.slug, slug), postsPublishedNow()),
+      columns: { searchText: false },
     })
     return post ? hydrate(post) : null
   }
 
   async function getWithRelations(id: number) {
-    const post = await db.query.posts.findFirst({ where: eq(posts.id, id) })
+    const post = await db.query.posts.findFirst({
+      where: eq(posts.id, id),
+      columns: { searchText: false },
+    })
     if (!post) throw KansoError.notFound('Post')
     return hydrate(post)
   }
@@ -160,7 +164,7 @@ export function postsService(db: Db) {
         orderBy: [desc(posts.publishedAt), desc(posts.id)],
         limit: input.perPage,
         offset: (input.page - 1) * input.perPage,
-        columns: { bodyHtml: false },
+        columns: { bodyHtml: false, searchText: false },
       }),
       db.select({ value: count() }).from(posts).where(where),
     ])
@@ -196,7 +200,7 @@ export function postsService(db: Db) {
         orderBy: [desc(sql`coalesce(${posts.publishedAt}, ${posts.createdAt})`), desc(posts.id)],
         limit: perPage,
         offset: (page - 1) * perPage,
-        columns: { bodyJson: false, bodyHtml: false },
+        columns: { bodyJson: false, bodyHtml: false, searchText: false },
       }),
       db.select({ value: count() }).from(posts).where(where),
     ])
@@ -204,7 +208,10 @@ export function postsService(db: Db) {
   }
 
   async function get(id: number) {
-    const post = await db.query.posts.findFirst({ where: eq(posts.id, id) })
+    const post = await db.query.posts.findFirst({
+      where: eq(posts.id, id),
+      columns: { searchText: false },
+    })
     if (!post) throw KansoError.notFound('Post')
 
     const [categoryRows, tagRows] = await Promise.all([
@@ -305,6 +312,7 @@ export function postsService(db: Db) {
           authorId: context.authorId,
           bodyJson,
           bodyHtml: renderRichText(bodyJson, context),
+          searchText: plainText(bodyJson),
           excerpt,
           status,
           publishedAt,
@@ -369,6 +377,7 @@ export function postsService(db: Db) {
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
       values.bodyHtml = renderRichText(input.bodyJson, context)
+      values.searchText = plainText(input.bodyJson)
     }
     if (input.excerpt !== undefined) {
       values.excerpt = input.excerpt?.trim() ? input.excerpt : null

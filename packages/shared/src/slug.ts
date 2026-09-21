@@ -9,6 +9,7 @@ export const RESERVED_SLUGS = [
   'api',
   'media',
   'preview',
+  'search',
   'sitemap.xml',
   'robots.txt',
   'feed.xml',

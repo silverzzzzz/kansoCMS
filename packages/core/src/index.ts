@@ -12,12 +12,14 @@ import { postTypesService } from './services/post-types.ts'
 import { postsService } from './services/posts.ts'
 import { redirectsService } from './services/redirects.ts'
 import { revisionsService } from './services/revisions.ts'
+import { searchService } from './services/search.ts'
 import { settingsService } from './services/settings.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 
 export {
   effectiveExcerpt,
   extractExcerpt,
+  plainText,
   type RenderOptions,
   renderRichText,
 } from './content/index.ts'
@@ -52,6 +54,7 @@ export function createKanso(bindings: KansoBindings) {
     posts: postsService(db),
     redirects: redirectsService(db),
     revisions: revisionsService(db),
+    search: searchService(db),
     taxonomies: taxonomiesService(db),
   }
 }

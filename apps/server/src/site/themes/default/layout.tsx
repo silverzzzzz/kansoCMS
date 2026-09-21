@@ -12,6 +12,7 @@ export interface LayoutProps {
   meta: PageMeta
   jsonLd?: unknown[]
   nav: NavItem[]
+  search: { label: string; placeholder: string; button: string }
   scripts?: string[]
   children: Child
 }
@@ -20,7 +21,7 @@ export interface LayoutProps {
  * Default theme shell. Styling comes from /theme.css in apps/server/public;
  * optional integration scripts are supplied explicitly by the renderer.
  */
-export function Layout({ meta, jsonLd, nav, scripts = [], children }: LayoutProps) {
+export function Layout({ meta, jsonLd, nav, search, scripts = [], children }: LayoutProps) {
   return (
     <>
       {raw('<!DOCTYPE html>')}
@@ -42,6 +43,20 @@ export function Layout({ meta, jsonLd, nav, scripts = [], children }: LayoutProp
                 <a href={item.href}>{item.label}</a>
               ))}
             </nav>
+            {/* biome-ignore lint/a11y/useSemanticElements: Keep the GET form itself as the search landmark. */}
+            <form class="site-search" role="search" action="/search" method="get">
+              <label class="visually-hidden" for="site-search-q">
+                {search.label}
+              </label>
+              <input
+                id="site-search-q"
+                type="search"
+                name="q"
+                placeholder={search.placeholder}
+                maxlength={100}
+              />
+              <button type="submit">{search.button}</button>
+            </form>
           </header>
           <main class="site-main">{children}</main>
           <footer class="site-footer">

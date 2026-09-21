@@ -8,13 +8,14 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Admin UI with a Tiptap editor, media library (R2) and draft preview
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
 - Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
+- Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> Search (Phase 3) is not built yet.
+> Theme switching, the Astro example, `create-kanso` and admin i18n (Phase 3) are still open.
 
 ## Layout
 
@@ -103,6 +104,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/` | The page whose path is `home`; otherwise the archive of the post type set as *home* in settings; otherwise a placeholder |
 | `/company`, `/company/team` | Fixed pages, resolved by their full `path` |
 | `/old-path` | A managed 301/302 redirect when no published page or post matches the path |
+| `/search?q=…` | Published page/post search with highlighted snippets and `?q=…&page=2` pagination; `noindex` |
 | `/blog` | Post-type archive, 10 per page, `?page=2` … (`page=1` and invalid values redirect to the bare URL) |
 | `/blog/hello-world` | A post: `BlogPosting` + `BreadcrumbList` JSON-LD, `og:type=article`, `rel=alternate` to the feed |
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |
@@ -111,7 +113,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
 
-Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Every page carries `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata.
+Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. Search pages have no JSON-LD.
 
 Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Every content write through the admin API rotates a site-wide cache generation, so changes show up immediately in every data centre; requests carrying an admin session bypass the cache.
 
@@ -135,6 +137,10 @@ curl -H "x-api-key: kanso_…" "http://localhost:5173/api/v1/posts?type=blog&sta
 Upload media with `curl -b cookies.txt -H "origin: http://localhost:5173" -F file=@photo.png -F alt="Photo" http://localhost:5173/api/v1/media`.
 
 Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, renders `bodyHtml`, and derives an effective excerpt at render time when no explicit excerpt is stored. The admin UI is a plain client of this API — `hc<ApiType>` from `apps/server` gives it end-to-end types.
+
+Search with `GET /api/v1/search?q=…` (`read` scope). After applying `0004_search.sql`, run
+`POST /api/v1/search/reindex` (`write` scope) to index existing bodies: the migration initially
+indexes only their titles and stored excerpts. New and edited bodies are indexed automatically.
 
 ## Deploy
 

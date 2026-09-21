@@ -76,9 +76,10 @@ kansoCMS/
 │   │   │   ├── env.ts              # AppEnv (Bindings = worker-configuration.d.ts の Env, Variables = kanso/principal)
 │   │   │   ├── middleware/         # kanso (services 注入) / auth (session・API key・CSRF) / cache / error
 │   │   │   ├── api/                # /api/v1 (JSON): setup, auth, api-keys, pages, post-types(+categories),
-│   │   │   │                       #   posts, tags, media, redirects, settings。validate.ts (zValidator hook), principal.ts
+│   │   │   │                       #   posts, tags, media, redirects, search, settings。validate.ts (zValidator hook), principal.ts
 │   │   │   ├── site/               # 公開サイト SSR (hono/jsx)
-│   │   │   │   ├── routes.tsx      # /, /:path+ (page → type → post → category/tag → 404)、siteCache
+│   │   │   │   ├── routes.tsx      # /, /search, /:path+ (page → type → post → category/tag → 404)、siteCache
+│   │   │   │   ├── search.tsx      # 検索フォーム・結果・スニペット・q を保持するページ送り
 │   │   │   │   ├── context.ts      # loadSiteContext: settings / nav / meta() / formatDate を 1 回で用意
 │   │   │   │   ├── render.tsx      # renderPage / renderPost (meta + JSON-LD + Layout)
 │   │   │   │   ├── head.tsx        # <Head>: title/meta/OG/canonical/prev/next/feed/JSON-LD を一括出力
@@ -108,8 +109,8 @@ kansoCMS/
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, taxonomies, media, settings
-│   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt
+│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, search, taxonomies, media, settings
+│   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt / plainText
 │   │   │   ├── auth/               # PBKDF2 パスワードハッシュ
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
 │   │   │   ├── errors.ts           # KansoError (notFound / validation / forbidden / unauthorized / conflict)
@@ -118,7 +119,7 @@ kansoCMS/
 │   │   └── drizzle.config.ts
 │   │
 │   ├── shared/                     # @kanso/shared — zod スキーマ / 型 / 定数。ブラウザ安全
-│   │   └── src/                    # auth, pages, posts, revisions, redirects, taxonomies, media, settings, richtext,
+│   │   └── src/                    # auth, pages, posts, revisions, redirects, search, taxonomies, media, settings, richtext,
 │   │                               #   content, query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
 │   │
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
@@ -160,9 +161,9 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `users` | id, email (uniq), password_hash, name, role (`admin`/`editor`), created_at | 初回起動時 `/admin/setup` で作成 |
 | `sessions` | id, user_id, expires_at, created_at | Cookie は `HttpOnly; Secure; SameSite=Lax` |
 | `api_keys` | id, name, key_hash, scope (`read`/`write`), last_used_at | headless 用。`X-API-KEY` |
-| `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`) |
+| `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`) |
 | `post_types` | id, slug (uniq), name, description, has_categories, has_tags, sort_order | "ブログの種類" (`blog`, `news`, `works` …) |
-| `posts` | id, post_type_id, slug, title, body_json, body_html, excerpt, cover_media_id, author_id, status, published_at, seo_*, timestamps | uniq (`post_type_id`, `slug`) |
+| `posts` | id, post_type_id, slug, title, body_json, body_html, search_text, excerpt, cover_media_id, author_id, status, published_at, seo_*, timestamps | uniq (`post_type_id`, `slug`) |
 | `categories` | id, post_type_id, slug, name, parent_id, sort_order | 投稿タイプごとに独立。uniq (`post_type_id`, `slug`) |
 | `tags` | id, slug (uniq), name | 全タイプ共通 |
 | `post_categories` / `post_tags` | post_id, category_id / tag_id | 中間テーブル |
@@ -172,13 +173,15 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
+| `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
 
 `forms` / `form_submissions` はテーブルだけ初期マイグレーションに含まれ、Phase 2 でサービスと API を載せる。
 
 - `status`: `draft` / `published`。**予約公開** = `published` かつ `published_at` が未来。公開クエリは常に `status='published' AND published_at <= now` (`pages.publishedNow()` / `posts.postsPublishedNow()`)。
 - `seo_*`: `seo_title`, `seo_description`, `og_media_id`, `noindex`, `canonical_url`。
-- **slug 名前空間**: 最上位 URL は `pages.path` と `post_types.slug` が共有する。`core/services` で衝突を拒否する (`/blog` が投稿タイプなら同名ページは作れない)。予約語は `packages/shared/slug.ts` の `RESERVED_SLUGS` (`admin`, `api`, `media`, `preview`, `sitemap.xml`, `robots.txt`, `feed.xml` …)。
+- **slug 名前空間**: 最上位 URL は `pages.path` と `post_types.slug` が共有する。`core/services` で衝突を拒否する (`/blog` が投稿タイプなら同名ページは作れない)。予約語は `packages/shared/slug.ts` の `RESERVED_SLUGS` (`admin`, `api`, `media`, `preview`, `search`, `sitemap.xml`, `robots.txt`, `feed.xml` …)。
 - `excerpt` は明示値のみ保存する。未指定・空白の場合、公開側とフィードは本文から `effectiveExcerpt()` で描画時に生成する。管理 API は編集用に保存値 (`null` を含む) をそのまま返す。
+- `search_text` は本文保存時に `plainText(bodyJson)` で生成する (抜粋と同じ抽出、切り詰めなし)。`0004_search.sql` の既存行バックフィルはタイトル・抜粋のみで本文は空。適用後に `POST /api/v1/search/reindex` で全本文を再計算する (50 件ずつ D1 batch)。
 
 ### 本文の扱い
 
@@ -193,6 +196,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 |---|---|---|
 | `GET /` | `site` — `home` ページ → `settings.site.homePostTypeSlug` の一覧 → プレースホルダ | 公開 |
 | `POST /` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
+| `GET /search` | `site` — 公開ページ・投稿の全文検索 (`q`、10 件ごと、`page` は不正なら 1)。`noindex`、JSON-LD なし | 公開 |
 | `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301)。実体がなければ `redirects.from_path` を解決 | 公開 |
 | `POST /:path+` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
@@ -207,6 +211,8 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/pages/:id/revisions/:revisionId/restore`, `POST /api/v1/posts/:id/revisions/:revisionId/restore` | リビジョンを `update` 経由で復元 | セッション or `x-api-key` (`write`) |
 | `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302 リダイレクトの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
+| `GET /api/v1/search` | 公開ページ・投稿の全文検索 (`q`: 1〜100 文字、`page` ≥ 1、`perPage`: 1〜50、既定 10) | セッション or `x-api-key` (`read`) |
+| `POST /api/v1/search/reindex` | 全ページ・投稿の検索本文を再計算 → `{ ok: true, pages, posts }` | セッション or `x-api-key` (`write`) |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
 | `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
 
@@ -228,10 +234,10 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 ### SEO / SSR
 
-- `site/head.tsx` が 1 ヶ所で `title` / `description` / `canonical` / `rel=prev,next` / feed の `rel=alternate` / OG / `<script type="application/ld+json">` を出力する。テーマは `<Layout meta jsonLd nav>` を使うだけ。
+- `site/head.tsx` が 1 ヶ所で `title` / `description` / `canonical` / `rel=prev,next` / feed の `rel=alternate` / OG / `<script type="application/ld+json">` を出力する。テーマは `<Layout meta jsonLd nav search>` を使うだけ。`search` は `loadSiteContext()` が検索フォームの文言を用意する。
 - `site/context.ts` の `loadSiteContext()` がリクエストごとに settings / organization / ナビ (最上位ページ + 投稿タイプ) を 1 回読み、`meta()` でサイト既定値を適用した `PageMeta` を作る。
 - JSON-LD は `@kanso/seo` の pure 関数 (`buildBlogPosting(site, post)`, `buildBreadcrumb(...)` …) で生成。ユニットテスト済みで headless 利用者も使える。
-- `WebSite` を毎ページ、`Organization` は `settings.organization.name` がある場合に出力。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList`。
+- `WebSite` をコンテンツページ、`Organization` は `settings.organization.name` がある場合に出力。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList`。検索ページは JSON-LD なし。
 - `canonical` は `canonical_url` が設定されていればそれ、なければ自 URL (`SITE_URL` 基準)。プレビューでは常に自 URL + `noindex`。
 - ページネーションは `rel=prev/next` を出し、2 ページ目以降も自分自身を canonical にする。
 - `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
@@ -240,7 +246,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 ### キャッシュ
 
 - 公開 HTML は `middleware/cache.ts` の `siteCache` が Workers Cache API (`caches.default`) に `cache-control: public, s-maxage=60` で保存する。応答には `x-kanso-cache: HIT | MISS | BYPASS` を付ける。Cache API は `stale-while-revalidate` を解釈しないので使わない。
-- キャッシュキーは `origin + pathname` (+ `page` クエリのみ) + `__v=<cache generation>`。それ以外のクエリ (`utm_*` など) は同一エントリに畳む。世代は `settings` の `cache` 行にランダムトークンとして保存する。
+- キャッシュキーは `origin + pathname` (+ `page` クエリ、`/search` では `q` も保持) + `__v=<cache generation>`。それ以外のクエリ (`utm_*` など) は同一エントリに畳む。世代は `settings` の `cache` 行にランダムトークンとして保存する。
 - 対象外: `GET` 以外、`kanso_session` Cookie を持つリクエスト (管理者は常に最新を見る)、`/preview/*`、200 以外の応答。`caches` が無い環境 (workers.dev や単体テスト) では素通し。
 - リダイレクト応答は 301/302 なので Cache API には保存しない。変更は管理 API 書き込み時のキャッシュ世代更新とは独立して、次のリクエストから D1 の最新行を参照する。
 - `/api/v1` の管理ルートで書き込みが成功するたびに `bumpSiteCacheVersion` が世代を更新する。ページ・投稿・投稿タイプ・カテゴリ・タグ・フォーム・メディア・設定に加え、API キーや送信削除でも更新される (余分な 1 回の miss は許容)。キー自体が変わるため `cache.delete()` は使わず、全データセンターで次の GET が自然に miss する。
@@ -288,7 +294,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects ([tasks/phase-3.md](tasks/phase-3.md))。残: FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索 ([tasks/phase-3.md](tasks/phase-3.md))。残: テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -308,6 +314,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **通知メールの差出人と既定宛先は設定に持つ** (2026-09-15)。`settings.forms = { fromEmail, fromName, notifyTo, turnstileSiteKey }`。フォームの `notifyTo` が空なら設定の既定宛先、両方空なら保存のみ。`fromEmail` が空ならメール無効。
 - **リビジョンは更新前スナップショットを対象ごとに最新 20 件保持する** (2026-09-16)。内容が同じでも更新ごとに記録し、復元も `update` を通すため復元前の状態が履歴に残る。削除済みのメディア・カテゴリ・タグ・親ページへの参照は復元時に除外する。
 - **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
+- **全文検索は D1 FTS5 の trigram を使う** (2026-09-22)。空白区切り最大 8 語を AND 検索し、全語 3 文字以上なら MATCH + bm25 順、短い語を含む場合はエスケープした LIKE + 公開日降順。検索時に公開状態と公開日時を照合し、スニペットは HTML ではなくテキストと hit フラグで返す。公開 `/search` は `q` をキャッシュキー・ページ送りに保持する。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

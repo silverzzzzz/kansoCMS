@@ -11,6 +11,7 @@ import { postTypes } from './post-types.ts'
 import { posts } from './posts.ts'
 import { publicForms } from './public-forms.ts'
 import { redirects } from './redirects.ts'
+import { search } from './search.ts'
 import { settings } from './settings.ts'
 import { setup } from './setup.ts'
 import { tags } from './tags.ts'
@@ -31,6 +32,7 @@ const protectedApi = new Hono<AppEnv>()
   .route('/post-types', postTypes)
   .route('/posts', posts)
   .route('/redirects', redirects)
+  .route('/search', search)
   .route('/settings', settings)
   .route('/tags', tags)
 

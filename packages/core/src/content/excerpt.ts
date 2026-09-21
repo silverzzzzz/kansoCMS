@@ -30,7 +30,7 @@ function truncate(text: string, maxLength: number): string {
   return `${text.slice(0, maxLength - 1).trimEnd()}…`
 }
 
-function excerptFromDocument(doc: RichTextDoc): string {
+export function plainText(doc: RichTextDoc): string {
   return doc.content.map(textFromNode).join(' ').replace(/\s+/g, ' ').trim()
 }
 
@@ -48,7 +48,7 @@ function excerptFromHtml(html: string): string {
 }
 
 export function extractExcerpt(input: RichTextDoc | string, maxLength = 160): string {
-  const text = typeof input === 'string' ? excerptFromHtml(input) : excerptFromDocument(input)
+  const text = typeof input === 'string' ? excerptFromHtml(input) : plainText(input)
   return truncate(text, maxLength)
 }
 

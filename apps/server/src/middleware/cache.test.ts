@@ -86,6 +86,15 @@ afterEach(() => {
 })
 
 describe('siteCacheKey', () => {
+  it('keeps the query only for search and drops tracking parameters', () => {
+    expect(siteCacheKey('http://x/search?q=abc&page=2&utm=1', 'v')).toBe(
+      'http://x/search?page=2&q=abc&__v=v',
+    )
+    expect(siteCacheKey('http://x/blog?q=abc&page=2&utm=1', 'v')).toBe('http://x/blog?page=2&__v=v')
+    expect(siteCacheKey('http://x/search?q=abc', 'v')).not.toBe(
+      siteCacheKey('http://x/search?q=def', 'v'),
+    )
+  })
   it('keeps only the raw page value before the cache generation', () => {
     expect(siteCacheKey('https://example.com/blog?page=2&utm_source=x', 'abc')).toBe(
       'https://example.com/blog?page=2&__v=abc',

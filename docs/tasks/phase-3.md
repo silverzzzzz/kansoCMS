@@ -1,4 +1,4 @@
-# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E / CI / リビジョン / リダイレクト)
+# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E / CI / リビジョン / リダイレクト / 検索)
 
 目的: Phase 1–2 で先送りにした運用面の課題を順に解消する。**公開サイトの文言をサイトのロケールに追従させ、更新が即時に公開に反映され、管理画面の主要操作がブラウザ E2E と CI で守られ、誤った保存や URL 変更から運用者が復帰できる** 状態にする。
 
@@ -17,11 +17,13 @@
 | T17 | CI (GitHub Actions): push / PR で 4 ゲートと Playwright E2E を実行する | done | tooling |
 | T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | done | shared, core, server, admin |
 | T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | done | shared, core, server, admin |
+| T20 | 全文検索 (FTS5): 公開サイトの `/search` と `GET /api/v1/search` で公開済みページ・投稿を日本語/英語で検索できる | done | shared, core, server |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
 1. 上記 3 件を **T14 → T15 → T16 の順** に進める (2026-09-16)。
 2. 続けて **T17 → T18 → T19 の順** に進める (2026-09-16、「進めて」)。残りの Phase 3 項目 (FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso`、管理画面 i18n) は T19 完了後に再提案する。
+3. 残り 5 件は **T20 全文検索 (FTS5)** から着手する (2026-09-22、「すすんで」)。以降はテーマ切替 → `examples/astro-blog` → `create-kanso` → 管理画面 i18n を予定 (順番は各タスク完了時に再提案)。
 
 ---
 
@@ -273,3 +275,54 @@ Phase 3 の決定事項 (ユーザー確認済み):
 - スモーク (port 5199、API + Playwright): `/manual-x/` 登録 → 正規化されて `manual-x`、`GET /manual-x` が 302 で `https://example.com/`。重複登録は 409、自己参照は 400 (`details[0].path = 'to'`)。公開ページの slug 変更で旧 URL が 301 → 新 URL、戻すと旧 URL は 200 に戻り残るのは `new → /old` の 1 行だけ (チェーンなし)。未登録パスは 404。管理画面から追加 → `GET /ui-x` が 301、削除で行が消える。コンソールエラーなし。
 - 注意: ブリーフに「validation は 422」と誤記したため Codex が `middleware/error.ts` を 422 に変えていた。`validation → 400` が既存の契約なので revert し、テストの期待値も 400 に戻した。
 - ドキュメント: architecture.md §3 (ツリー)・§4 `redirects` 行・§5 (`/:path+` の解決順とエンドポイント表)・§6 (リダイレクトはキャッシュしない)・§8 ロードマップ (revisions / redirects を済へ)・§9 に決定を追記。README は機能一覧に 1 行、Status を「Search (Phase 3) is not built yet.」、URL 表にリダイレクト行。
+
+---
+
+## T20. 全文検索 (FTS5)
+
+状態: `done` (2026-09-22)
+
+### ゴール
+
+- 公開サイトに `/search?q=` の検索ページがあり、公開済みの固定ページ・投稿をタイトル・抜粋・本文から日本語 / 英語で検索できる。ヘッドレス用に `GET /api/v1/search` も提供する。
+- 管理画面の検索 UI と、下書きを含む検索はスコープ外 (管理画面の一覧は既存の LIKE 検索のまま)。
+
+### 現状 (調査済み)
+
+- ローカル D1 (workerd) で FTS5 の `trigram` トークナイザが使えることを確認済み: 日本語の部分一致、`snippet()`、`bm25()`、`LIKE`、大文字小文字無視。`MATCH` は 3 文字未満の語にヒットしない (0 件) が `LIKE` は動く。`CREATE TRIGGER ... BEGIN ...; END;` を含む SQL は wrangler の分割器で正しく適用できることも確認済み。
+- 本文は `body_json` (ProseMirror JSON) と `body_html` (描画済み HTML) の 2 列。[content/excerpt.ts](../../packages/core/src/content/excerpt.ts) の `textFromNode` がテキスト抽出を持つ (`extractExcerpt` は 160 文字で切る)。
+- 公開判定は `pages.ts` の `publishedNow()` / `posts.ts` の `postsPublishedNow()` (= `status = 'published' AND published_at <= now`)。
+- 公開キャッシュのキーは `origin + pathname` + `page` クエリのみ ([middleware/cache.ts](../../apps/server/src/middleware/cache.ts) の `siteCacheKey`)。`q` は畳まれるので、検索ページはそのままでは別クエリ同士でキャッシュが衝突する。
+- [site/routes.tsx](../../apps/server/src/site/routes.tsx) は `/sitemap.xml` `/robots.txt` `/` の後に `/:path{.+}` で全パスを受けるので、`/search` はその前に登録する。`RESERVED_SLUGS` に `search` は無い。
+- テーマの `Layout` は `meta` / `jsonLd` / `nav` / `scripts` を受け取る (呼び出しは `render.tsx` ×2、`routes.tsx` ×3)。文言は [i18n.ts](../../apps/server/src/i18n.ts) の `SiteMessages` (ja / en)。
+
+### 仕様 (実装前に再確認)
+
+- スキーマ: `pages` / `posts` に `search_text text NOT NULL DEFAULT ''` を追加 (`contentColumns`)。`create` / `update` で `bodyJson` を描画するのと同じ場所で `plainText(bodyJson)` を保存する (`content/excerpt.ts` に `plainText(doc)` = 切り詰めなしのテキスト抽出を追加)。
+- FTS: マイグレーション `0004_search.sql` (`pnpm db:generate --name search` で列追加を生成し、同じファイルに手書きで追記): `CREATE VIRTUAL TABLE search_index USING fts5(kind UNINDEXED, ref_id UNINDEXED, title, excerpt, body, tokenize='trigram')`、pages / posts の `AFTER INSERT` / `AFTER UPDATE OF title, excerpt, search_text` / `AFTER DELETE` トリガで同期 (update は delete + insert)、既存行のバックフィル (`body` は空。本文は reindex で入れる)。
+- core `searchService(db)`: `search({ q, page, perPage })` → `{ items, total, page, perPage }`、`items[] = { kind: 'page' | 'post', id, title, path, publishedAt, snippet: { text, hit }[] }`。公開済みのみ。語 (空白区切り) がすべて 3 文字以上なら `MATCH` (各語を `"..."` で囲み `"` は `""` にエスケープ、AND) + `bm25` 順、そうでなければ `LIKE` (各語を `title` / `excerpt` / `body` に対して、`%` `_` `\` をエスケープ) + `published_at` 降順。スニペットは JS で作る (最初にヒットした語の前後 ~60 文字、ヒット箇所を `hit: true` セグメントに。HTML は作らない)。`reindex()` は全 pages / posts の `search_text` を再計算して update (トリガが FTS を更新)。
+- shared: `searchQuerySchema` (`q`: trim, 1〜100 文字, `page` ≥ 1 既定 1, `perPage` 1〜50 既定 10)。`RESERVED_SLUGS` に `search` を追加。
+- 公開側: `GET /search` を `/:path{.+}` の前に登録。`q` が空 / 不正ならフォームだけ (200)。結果は種別 (ページ / 投稿タイプ名)・タイトルリンク・日付・スニペット (`<mark>`)・件数、ページ送り (`?q=&page=n`、`page` は 1 以上の整数以外を 1 扱いにしてリダイレクトしない)。`meta` は `noindex: true`。テーマのヘッダに検索フォーム (`role="search"`、`GET /search`) を追加 (`Layout` に `search` prop、`loadSiteContext` で文言を用意)。文言は `SiteMessages.search` (ja / en)。
+- キャッシュ: `siteCacheKey` は pathname が `/search` のとき `q` もキーに含める。
+- API: `GET /api/v1/search` (read、`searchQuerySchema`) と `POST /api/v1/search/reindex` (write) → `{ ok: true, pages, posts }`。
+- ドキュメント: architecture.md §3・§4・§5・§6・§8・§9、README (機能一覧・Status・URL 表)。
+
+### 完了条件
+
+- 共通条件。スモーク: 日本語 2 文字 (`LIKE` 経路) と 3 文字以上 (`MATCH` 経路) の検索が公開ページ・投稿にヒットし、下書きはヒットしない。`/search?q=a` と `/search?q=b` が別々にキャッシュされる。reindex 後に既存本文がヒットする。
+
+### 決定
+
+- スキーマ: `contentColumns` に `search_text text NOT NULL DEFAULT ''` を追加 (pages / posts 共通)。`create` / `update` で `bodyHtml` を描画する箇所と同じ場所で `plainText(bodyJson)` を保存する ([content/excerpt.ts](../../packages/core/src/content/excerpt.ts) の `excerptFromDocument` を `plainText` として公開。抜粋と同じ抽出で、`codeBlock` / `image` / `form` / `rawHtml` の中身は含めない)。復元は `update` 経由なので索引も戻る。
+- `search_text` は内部列: 管理 API / 公開側の行読み出し (`list` / `get` / `findPublishedByPath` / `findPublished` / `listPublished`) では `columns: { searchText: false }` で除外し、応答に本文の重複を載せない (レビュー時に追加。Codex 実装では `get` / `list` に含まれていた)。
+- FTS: [0004_search.sql](../../packages/core/migrations/0004_search.sql) = drizzle-kit 生成の `ALTER TABLE` 2 本 + 手書きの `CREATE VIRTUAL TABLE search_index USING fts5(kind UNINDEXED, ref_id UNINDEXED, title, excerpt, body, tokenize='trigram')`、pages / posts それぞれに `AFTER INSERT` / `AFTER UPDATE OF title, excerpt, search_text` (delete + insert) / `AFTER DELETE` トリガ、既存行のバックフィル (title / excerpt のみ、body は空)。トリガ同期なので投稿タイプ削除の cascade や将来のコードパスでも索引がずれない。`--> statement-breakpoint` 区切りの `BEGIN … END;` を wrangler が正しく分割することは事前検証済み。
+- 既存本文は `POST /api/v1/search/reindex` (write) で `search_text` を再計算する (50 件ずつ `db.batch`、トリガが FTS を更新、`updated_at` は触らない)。マイグレーション直後に 1 回叩く運用を README / architecture.md に明記。
+- 検索 ([services/search.ts](../../packages/core/src/services/search.ts)): 空白区切り最大 8 語を AND。全語が 3 文字以上なら `search_index MATCH` (各語を `"…"` で囲み `"` は `""`。`"` を含む入力は literal 扱いで、演算子構文は使えない) + `bm25` 順、短い語を含めばエスケープ済み `LIKE` (title / excerpt / body) + 公開日降順 (trigram は `LIKE` も索引で加速する)。公開判定は SQL 側で `status = 'published' AND published_at IS NOT NULL AND published_at <= now` を pages / posts に LEFT JOIN して適用。投稿の path は `post_types.slug || '/' || posts.slug`。件数は同じ WHERE の `count(*)`。
+- スニペットは JS の `buildSnippet(text, terms, radius = 60)` で `{ text, hit }[]` を返す (最初にヒットした語の前後 60 文字、窓内の全ヒットを大小文字無視でマージ、切り詰めは `…`)。HTML は作らず、テンプレートが `hit` を `<mark>` にするのでエスケープは hono/jsx 任せ。API もこの配列をそのまま返す。
+- shared: `searchQuerySchema` (`q` 1〜100 文字、`page` ≥ 1 既定 1、`perPage` 1〜50 既定 `SEARCH_PER_PAGE` = 10)、`RESERVED_SLUGS` に `search` を追加 (同名のページ・投稿タイプ・リダイレクト元は作れない)。
+- 公開側: `GET /search` を `/:path{.+}` の前に登録。`q` 空・空白・100 文字超はフォームのみ (200)。`page` は 1 以上の整数以外を 1 扱い (一覧と違いリダイレクトしない)、`total > 0 && page > totalPages` は 404。`noindex`、JSON-LD なし、canonical は `/search`。テンプレートは [site/search.tsx](../../apps/server/src/site/search.tsx)。ヘッダの検索フォームは `Layout` の必須 prop `search` (文言) で全ページに出す (`loadSiteContext` が `ctx.search` を用意、呼び出し 5 箇所を更新)。`<form role="search">` は Biome の `useSemanticElements` を 2 箇所で抑制 (`<search>` 要素はまだ使わない)。
+- キャッシュ: `siteCacheKey` は pathname が `/search` のときだけ `q` をキーに含める。その他のパスでは従来どおり `q` を畳む。
+- API: `GET /api/v1/search` (read) と `POST /api/v1/search/reindex` (write、`{ ok: true, pages, posts }`)。認証なしは 401 (公開側は SSR なので公開 API は不要)。
+- テスト: [services/search.test.ts](../../packages/core/src/services/search.test.ts) (語分割・MATCH 式・LIKE エスケープ・MATCH/LIKE 判定・スニペット)、[shared/search.test.ts](../../packages/shared/src/search.test.ts)、[api/search.test.ts](../../apps/server/src/api/search.test.ts)、[site/routes.test.ts](../../apps/server/src/site/routes.test.ts) の `site search` (フォームのみ・エスケープとページ送り・`page` 不正値・日本語文言)、[cache.test.ts](../../apps/server/src/middleware/cache.test.ts)。4 ゲート通過 (215 tests)。
+- スモーク (port 5199、API + Playwright): reindex → 公開ページ / 下書きページ / 公開投稿を作成。`東京` (2 文字 → LIKE) と `タワーの` (MATCH) が公開ページのみにヒットし `<mark>` 付き、`workers` はページと投稿の 2 件、`東京 workers` は AND で 1 件、未知語は「該当する結果はありません。」、`/search` はフォームのみ、`page=9` は 404。`?q=東京` と `?q=workers` の再取得はそれぞれ HIT で内容が別 (キャッシュ衝突なし)。下書きを公開すると即ヒットし、下書きに戻すと消える。API は `snippet` セグメントを返し、未認証は 401。ブラウザでヘッダのフォームから検索 → `/search?q=…` に遷移し結果表示、コンソールエラーなし。管理 API の `get` / `list` 応答に `searchText` が無いことも確認。フィクスチャは削除済み。
+- ドキュメント: architecture.md §3 (ツリー)・§4 (`search_text` 列、`search_index` 行、予約語、reindex)・§5 (`GET /search`、API 2 本)・SEO / SSR (`Layout` の `search`)・§6 (キャッシュキー)・§8 ロードマップ (FTS5 検索を済へ)・§9。README は機能一覧・Status (残り 4 件)・URL 表・API 節に reindex の手順。

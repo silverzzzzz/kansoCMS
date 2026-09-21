@@ -93,6 +93,7 @@ function testSetup(
   const form = options.form ?? testForm
   const page = options.page ?? testPage
   const createSubmission = vi.fn().mockResolvedValue({ id: 10 })
+  const search = vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, perPage: 10 })
   const findByPath = vi.fn().mockResolvedValue(options.redirect ?? null)
   const kanso: Kanso = Object.assign(Object.create(null), {
     settings: {
@@ -125,6 +126,7 @@ function testSetup(
       findBySlug: vi.fn().mockResolvedValue(undefined),
     },
     redirects: { findByPath },
+    search: { search },
     forms: {
       findBySlug: vi
         .fn()
@@ -151,7 +153,7 @@ function testSetup(
     passThroughOnException: vi.fn(),
     props: {},
   }
-  return { app, createSubmission, findByPath, env, executionCtx }
+  return { app, createSubmission, findByPath, search, env, executionCtx }
 }
 
 describe('site page metadata', () => {
@@ -379,5 +381,118 @@ describe('site redirects', () => {
 
     expect(response.status).toBe(404)
     expect(findByPath).toHaveBeenCalledWith('unknown')
+  })
+})
+
+describe('site search', () => {
+  it.each(['/search', '/search?q=%20', `/search?q=${'a'.repeat(101)}`])(
+    'renders only the search form for %s',
+    async (url) => {
+      const { app, search, env, executionCtx } = testSetup()
+      const response = await app.request(url, undefined, env, executionCtx)
+      const html = await response.text()
+      expect(response.status).toBe(200)
+      expect(html).toContain('role="search" action="/search" method="get"')
+      expect(html).toContain('name="robots" content="noindex, nofollow"')
+      expect(html).toContain('rel="canonical" href="https://example.com/search"')
+      expect(html).not.toContain('No results.')
+      expect(html).not.toContain('application/ld+json')
+      expect(search).not.toHaveBeenCalled()
+    },
+  )
+
+  it('renders links, dates, counts and escaped highlights with query-preserving pagination', async () => {
+    const { app, search, env, executionCtx } = testSetup()
+    search.mockResolvedValue({
+      total: 21,
+      page: 2,
+      perPage: 10,
+      items: [
+        {
+          kind: 'post',
+          id: 1,
+          title: 'Search <title>',
+          path: 'blog/hit',
+          typeName: 'Blog',
+          publishedAt: new Date('2026-09-15T00:00:00Z'),
+          snippet: [
+            { text: '<script>', hit: true },
+            { text: ' & body', hit: false },
+          ],
+        },
+      ],
+    })
+    const response = await app.request(
+      '/search?q=hello%20%26%20world&page=2',
+      undefined,
+      env,
+      executionCtx,
+    )
+    const html = await response.text()
+    expect(response.status).toBe(200)
+    expect(html).toContain('<a href="/blog/hit">Search &lt;title&gt;</a>')
+    expect(html).toContain('<mark>&lt;script&gt;</mark> &amp; body')
+    expect(html).toContain('21 results')
+    expect(html).toContain('Blog · ')
+    expect(html).toContain('2026')
+    expect(html).toContain('/search?q=hello%20%26%20world&amp;page=1')
+    expect(html).toContain('/search?q=hello%20%26%20world&amp;page=3')
+    expect(search).toHaveBeenCalledWith({ q: 'hello & world', page: 2, perPage: 10 })
+  })
+
+  it.each(['0', '-1', '1.5', 'bad', '1'])(
+    'uses page 1 without redirecting page=%s',
+    async (page) => {
+      const { app, search, env, executionCtx } = testSetup()
+      const response = await app.request(
+        `/search?q=hello&page=${page}`,
+        undefined,
+        env,
+        executionCtx,
+      )
+      expect(response.status).toBe(200)
+      expect(search).toHaveBeenCalledWith({ q: 'hello', page: 1, perPage: 10 })
+      expect(await response.text()).toContain('No results.')
+    },
+  )
+
+  it('renders Japanese counts and page labels', async () => {
+    const { app, search, env, executionCtx } = testSetup({ locale: 'ja' })
+    search.mockResolvedValue({
+      total: 1,
+      page: 1,
+      perPage: 10,
+      items: [
+        {
+          kind: 'page',
+          id: 1,
+          title: '東京',
+          path: 'tokyo',
+          typeName: null,
+          publishedAt: new Date('2026-09-15T00:00:00Z'),
+          snippet: [{ text: '東京', hit: true }],
+        },
+      ],
+    })
+    const response = await app.request('/search?q=東京', undefined, env, executionCtx)
+    expect(response.status).toBe(200)
+    const html = await response.text()
+    expect(html).toContain('1 件')
+    expect(html).toContain('ページ · ')
+    expect(html).toContain('<mark>東京</mark>')
+  })
+
+  it('returns 404 for pages beyond a nonempty result set', async () => {
+    const { app, search, env, executionCtx } = testSetup()
+    search.mockResolvedValue({ items: [], total: 1, page: 2, perPage: 10 })
+    const response = await app.request('/search?q=hello&page=2', undefined, env, executionCtx)
+    expect(response.status).toBe(404)
+  })
+
+  it('keeps an empty result set at 200 even on a later page', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'ja' })
+    const response = await app.request('/search?q=missing&page=2', undefined, env, executionCtx)
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('該当する結果はありません。')
   })
 })
