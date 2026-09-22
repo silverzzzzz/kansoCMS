@@ -20,6 +20,13 @@ export function usesMatch(terms: string[]): boolean {
   return terms.length > 0 && terms.every((term) => term.length >= 3)
 }
 
+/** Text a snippet is cut from: the stored excerpt followed by the body, unless the body already starts with it. */
+export function snippetSource(excerpt: string, body: string, title: string): string {
+  const lead = excerpt.trim()
+  const text = lead && !body.trimStart().startsWith(lead) ? `${lead} ${body}` : body
+  return text.trim() || title
+}
+
 export function buildSnippet(text: string, terms: string[], radius = 60): SnippetSegment[] {
   const normalized = text.replace(/\s+/g, ' ').trim()
   const escaped = terms.filter(Boolean).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
@@ -115,7 +122,7 @@ export function searchService(db: Db) {
         path: row.path,
         typeName: row.type_name ?? null,
         publishedAt: new Date(row.published_at * 1000),
-        snippet: buildSnippet(`${row.excerpt} ${row.body}`.trim() || row.title, terms),
+        snippet: buildSnippet(snippetSource(row.excerpt, row.body, row.title), terms),
       })),
       total: total?.total ?? 0,
       page,

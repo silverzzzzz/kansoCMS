@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { EMPTY_DOCUMENT, plainText } from '../content/index.ts'
-import { buildSnippet, likePattern, matchExpression, searchTerms, usesMatch } from './search.ts'
+import {
+  buildSnippet,
+  likePattern,
+  matchExpression,
+  searchTerms,
+  snippetSource,
+  usesMatch,
+} from './search.ts'
 
 describe('search helpers', () => {
   it('splits whitespace and keeps at most eight terms', () => {
@@ -36,6 +43,16 @@ describe('search helpers', () => {
       }),
     ).toBe(`${text} next block`)
     expect(plainText(EMPTY_DOCUMENT)).toBe('')
+  })
+})
+
+describe('snippetSource', () => {
+  it('prepends the excerpt unless the body already starts with it', () => {
+    expect(snippetSource('Summary.', 'Body text.', 'Title')).toBe('Summary. Body text.')
+    expect(snippetSource('About kansoCMS', 'About kansoCMS and more', 'Title')).toBe(
+      'About kansoCMS and more',
+    )
+    expect(snippetSource('', '  ', 'Title')).toBe('Title')
   })
 })
 
