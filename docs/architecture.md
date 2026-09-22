@@ -64,7 +64,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 
 ## 3. リポジトリ構成
 
-pnpm workspace の**小さなモノレポ** (1 app + 1 admin + 3 packages)。分割理由は「ビルドターゲットと JSX ランタイムが違う」「headless 利用者に型とスキーマだけ配りたい」の 2 点のみ。
+pnpm workspace の**小さなモノレポ** (1 app + 1 admin + 3 packages + 1 example)。分割理由は「ビルドターゲットと JSX ランタイムが違う」「headless 利用者に型とスキーマだけ配りたい」の 2 点のみ。
 
 ```
 kansoCMS/
@@ -125,6 +125,7 @@ kansoCMS/
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
 │       └── src/                    # jsonld.ts, meta.ts, sitemap.ts, feed.ts, xml.ts
 │
+├── examples/astro-blog/            # Astro SSG: read API キーで公開投稿・固定ページを静的生成
 ├── e2e/                            # Playwright E2E (§7)。playwright.config.ts はルート
 ├── .github/workflows/ci.yml        # GitHub Actions: gates (4 ゲート) + e2e (§7)
 ├── docs/
@@ -138,7 +139,7 @@ kansoCMS/
 └── README.md
 ```
 
-まだ無いもの (計画のみ): `examples/astro-blog`。
+上記の構成に計画のみのものは無い。
 
 ### 依存の向き
 
@@ -294,7 +295,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替 ([tasks/phase-3.md](tasks/phase-3.md))。残: `examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog` ([tasks/phase-3.md](tasks/phase-3.md))。残: `create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -316,6 +317,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
 - **全文検索は D1 FTS5 の trigram を使う** (2026-09-22)。空白区切り最大 8 語を AND 検索し、全語 3 文字以上なら MATCH + bm25 順、短い語を含む場合はエスケープした LIKE + 公開日降順。検索時に公開状態と公開日時を照合し、スニペットは HTML ではなくテキストと hit フラグで返す。公開 `/search` は `q` をキャッシュキー・ページ送りに保持する。
 - **公開テーマは同梱して設定で切り替える** (2026-09-22)。`site.theme` は default / paper (既定 default)。テーマの契約とレジストリは `site/themes/`、CSS は `public/themes/` に置き、Paper は独自レイアウトと CSS に default の記事部品を再利用する。設定保存時のキャッシュ世代更新で全ページへ即時反映し、追加方法は README の Themes を参照する。
+- **headless 利用例は Astro 5 の静的生成にする** (2026-09-22)。`examples/astro-blog` は `astro:env` のサーバ専用 API キーと素の fetch で公開投稿・固定ページを取得し、予約公開を除外する。画像は CMS の絶対 URL、フォームは注記に置換。`@kanso/*` に依存せずコピー可能とし、root dev は apps のみ、root typecheck は例も含め、例の build は API が必要なため明示実行にする。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

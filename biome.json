@@ -6,7 +6,13 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!**/worker-configuration.d.ts", "!**/migrations", "!**/routeTree.gen.ts"]
+    "includes": [
+      "**",
+      "!**/worker-configuration.d.ts",
+      "!**/migrations",
+      "!**/routeTree.gen.ts",
+      "!**/*.astro"
+    ]
   },
   "formatter": {
     "enabled": true,

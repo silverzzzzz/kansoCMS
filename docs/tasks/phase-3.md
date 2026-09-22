@@ -19,6 +19,7 @@
 | T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | done | shared, core, server, admin |
 | T20 | 全文検索 (FTS5): 公開サイトの `/search` と `GET /api/v1/search` で公開済みページ・投稿を日本語/英語で検索できる | done | shared, core, server |
 | T21 | テーマ切替: 複数テーマを `site/themes/` に同梱し、設定画面で切り替えられる (2 つ目のテーマ `paper` を追加) | done | shared, server, admin |
+| T22 | `examples/astro-blog`: API キーで `/api/v1` を読む Astro (SSG) のブログ例。ヘッドレス利用の推奨フロントエンド | done | examples, tooling, docs |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
@@ -26,6 +27,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 2. 続けて **T17 → T18 → T19 の順** に進める (2026-09-16、「進めて」)。残りの Phase 3 項目 (FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso`、管理画面 i18n) は T19 完了後に再提案する。
 3. 残り 5 件は **T20 全文検索 (FTS5)** から着手する (2026-09-22、「すすんで」)。以降はテーマ切替 → `examples/astro-blog` → `create-kanso` → 管理画面 i18n を予定 (順番は各タスク完了時に再提案)。
 4. T20 完了時点で `main` を push (2026-09-22、「pushして進んで」)。続けて **T21 テーマ切替** に着手する。
+5. T21 も push 済み (CI 緑)。続けて **T22 `examples/astro-blog`** に着手する (2026-09-22)。
 
 ---
 
@@ -373,3 +375,46 @@ Phase 3 の決定事項 (ユーザー確認済み):
 - テスト: [themes.test.ts](../../packages/shared/src/themes.test.ts)、[routes.test.ts](../../apps/server/src/site/routes.test.ts) の `site themes` (paper の shell とフォーム、未設定・未知のフォールバック、`/` `/search` `/nothing-here` の paper、タグライン)。4 ゲート通過 (228 tests)。
 - スモーク (port 5199、API + Playwright): `/themes/{base,default,paper}.css` が 200 `text/css`、`/theme.css` は 404。管理画面の select (Default / Paper) で Paper を保存 → 設定 API が `paper`、`/` `/t21-x` `/search?q=a` (200) と 404 ページが `/themes/paper.css` + `theme-paper` + `site-header--paper` で、保存直後は MISS。ブラウザの computed style もセリフ体・`rgb(250, 246, 239)`。API で default に戻すと `/themes/default.css` + system-ui + 白。`theme: 'nope'` は 400 (`Invalid option: expected one of "default"|"paper"`)。スクリーンショットで Paper の見出し・タグライン・ナビ・検索・結果のハイライトを目視確認。コンソールエラーなし、フィクスチャ削除済み。
 - ドキュメント: architecture.md §2 (CSS 行)・§3 (ツリー)・§4 (`site.theme`)・§5 (assets)・SEO / SSR (`ctx.theme`)・§8 (テーマ切替を済へ)・§9。README は機能一覧・Status (残り 3 件)・「Themes」節 (切替方法、テーマの構成、フォークでの追加手順 4 ステップ)。
+
+---
+
+## T22. `examples/astro-blog` (ヘッドレス利用例)
+
+状態: `done` (2026-09-22)
+
+### ゴール
+
+- kansoCMS を headless CMS として使う例として、`/api/v1` を API キーで読み、ビルド時に静的 HTML を生成する Astro のブログを `examples/astro-blog` に置く ([architecture.md §2](../architecture.md) の「Astro は headless 利用の推奨フロントエンドとして `examples/astro-blog` に置く」の実装)。
+- README を読めば、自分の kansoCMS に向けて `pnpm dev` / `pnpm build` できる。
+
+### 現状 (調査済み)
+
+- 認証: `x-api-key` ヘッダ (`API_KEY_HEADER`)、`read` スコープで GET が通る。キーは管理画面か `POST /api/v1/api-keys { name, scope: 'read' }` (応答 `{ item, key }`、`key` はこの 1 回だけ返る) で作る。
+- 使える読み取り API と応答: `GET /api/v1/post-types` → `{ items: [{ id, slug, name, description, … }] }`、`GET /api/v1/posts?type=<slug>&status=published&perPage=100&page=n` → `{ items (bodyJson / bodyHtml / searchText 抜き。`excerpt` は保存値で null あり)、total, page, perPage }`、`GET /api/v1/posts/:id` → `{ item }` (bodyHtml, coverMediaId, categoryIds, tagIds 込み)、`GET /api/v1/post-types/:typeId/categories`、`GET /api/v1/tags`、`GET /api/v1/media/:id` → `{ item: { url: '/media/…', alt, width, height } }` (url は相対)、`GET /api/v1/pages?status=published&perPage=100` → `{ items: [{ id, slug, path, title, … }] }`、`GET /api/v1/pages/:id` → `{ item }` (bodyHtml 込み)。`perPage` の上限は 100。
+- `status=published` は予約公開 (`publishedAt` が未来) を除外しないので、クライアント側で `publishedAt <= now` を見る必要がある。`GET /api/v1/settings` は管理者セッション専用 (API キーでは 403) なので、サイト名などは例側の設定で持つ。
+- `bodyHtml` 内の画像は `/media/...` の相対 URL、フォームは `<div data-kanso-form="slug">` のプレースホルダ (例側では描画できない)。
+- ワークスペースは `pnpm-workspace.yaml` の `apps/*` と `packages/*` のみ。root の `dev` は `pnpm -r --parallel --stream dev` なので、例を追加すると Astro の dev サーバも一緒に起動してしまう。Biome は `**` を対象にしており `.astro` は未対応。
+
+### 仕様 (実装前に再確認)
+
+- `examples/astro-blog` を pnpm ワークスペースに加える (`examples/*`)。Astro 5 の `output: 'static'`、`astro:env` で `KANSO_API_URL` (secret ではない) / `KANSO_API_KEY` (secret) / `KANSO_POST_TYPE` (既定 `blog`) / `PUBLIC_SITE_TITLE` を定義。依存は `astro` と `@astrojs/check` + `typescript` のみ。
+- ページ: `/` (投稿一覧、新しい順、抜粋・日付・カバー画像)、`/[type]/[slug]` (投稿本文、カテゴリ・タグ名)、`/[...path]` (公開済み固定ページ)、`/404`。共通レイアウトは素の CSS。予約公開・下書きはビルドから除外し、`/media/` の相対 URL は API のオリジンに書き換える。フォームのプレースホルダは注記に置き換える。
+- API クライアントは `src/lib/kanso.ts` の素の `fetch` + 最小の型 (例をコピーして使えるように `@kanso/*` に依存しない)。
+- root の `dev` は `apps/*` に限定し、root `typecheck` (`pnpm -r typecheck`) では例の `astro check` も走る。Biome が `.astro` で問題を出す場合は `**/*.astro` を除外。CI では install と typecheck のみ (ビルドは API が必要なので走らせない)。
+- ドキュメント: 例の README (API キー作成 → `.env` → `pnpm dev` / `pnpm build` → 任意の静的ホストへ)、root README (Layout と「Using the API」に一言)、architecture.md §2 / §3 / §8 / §9。
+
+### 完了条件
+
+- 共通条件 (root の 4 ゲート)。スモーク: ローカルの kansoCMS (port 5199) に `read` キーを作り、投稿タイプ `blog` の公開投稿 2 件 (1 件はカバー画像付き・カテゴリ/タグ付き)・予約公開 1 件・下書き 1 件・公開ページ 1 件を用意して `astro build` → `dist/` に `index.html`、`blog/<slug>/index.html` ×2、`<page>/index.html` があり、予約公開と下書きは無い。本文の画像 URL が絶対 URL になっている。
+
+### 決定
+
+- `examples/*` を pnpm ワークスペースに追加 (`@kanso/example-astro-blog`、private)。依存は `astro@^5.18.2` + devDeps `@astrojs/check` / `typescript` のみ、アダプタ無しの `output: 'static'`。lockfile は既存パッケージのバージョンを変えず (wrangler / workerd / vite 8 据え置き)、Astro 側は自前の vite 6 を持つ。`sharp` の postinstall は `onlyBuiltDependencies` に入れず無視 (画像最適化は使わない。`pnpm install` の警告 1 行は許容)。
+- root の `dev` は `pnpm --filter './apps/*' -r --parallel --stream dev` に限定 (Astro の dev サーバは一緒に起動しない)。root `typecheck` は `pnpm -r typecheck` 経由で例の `astro check` も走る (CI もこれで型を守る)。例の `build` は API が必要なので CI では走らせない。Biome は `**/*.astro` を除外 (`.astro` 未対応)。`.gitignore` に `.astro/` と `examples/astro-blog/.env`。
+- 環境変数は `astro:env` のスキーマで定義: `KANSO_API_URL` (server / public)、`KANSO_API_KEY` (server / **secret**、クライアントバンドルに出ない)、`KANSO_POST_TYPE` (既定 `blog`)、`PUBLIC_SITE_TITLE` (client)。`GET /api/v1/settings` は管理者セッション専用なのでサイト名は env で持つ。
+- API クライアント [src/lib/kanso.ts](../../examples/astro-blog/src/lib/kanso.ts) は素の `fetch` + 手書きの型 (`@kanso/*` 非依存でフォルダごとコピー可能)。`listAll` が `perPage=100` でページ送り、`isLive` が `status === 'published' && publishedAt <= now` で予約公開を除外 (API の `status=published` は予約を含むため)、`absolutizeMedia` が `/media/` を CMS のオリジンへ、`stripFormPlaceholders` が `data-kanso-form` を注記に、`textExcerpt` が抜粋未設定時に本文から生成。投稿は一覧 → 各 `/posts/:id` (bodyHtml、categoryIds / tagIds) → `/media/:id` (カバー) と辿る。
+- レビューで追加: `astro build` は 1 プロセスで全ページを描画し、レイアウトがページごとにナビ用の固定ページ一覧を取るため、`getSite` / `getPosts` / `getPages` をビルド中だけメモ化 (`import.meta.env.DEV` では毎回取得し、dev で新規コンテンツが即反映される)。
+- ページ: `/` (投稿一覧: 日付・抜粋・カバーのサムネイル)、`/[type]/[slug]/` (カバー・カテゴリ / タグ名・`set:html` 本文)、`/[...path]/` (公開済み固定ページ。`home` は `/home/`)、`/404`。`Base.astro` に素の CSS (ライト / ダーク)、ナビは最上位の公開ページ。CMS のテーマ・リダイレクト・フィード・SEO メタは再現しない (README の Limitations に明記)。
+- テスト: 例にユニットテストは置かない (root の `test` は変更なし、229 tests)。4 ゲート通過 (typecheck に `astro check` 0 errors を含む)。
+- スモーク (port 5199): `read` キー作成 → `blog` タイプ、カテゴリ・タグ・1×1 PNG メディア、公開投稿 2 件 (1 件はカバー + 本文画像 + カテゴリ / タグ)、予約公開 1 件、下書き 1 件、公開ページ 1 件 → `.env` を書いて `astro build` (6 pages, 1.2 s) → `dist/` は `index.html` / `404.html` / `blog/first-x/index.html` / `blog/second-x/index.html` / `astro-about-x/index.html` / 既存の `company/index.html` のみ (予約・下書きは無し)。カバーと本文画像は `http://localhost:5199/media/...` の絶対 URL、カテゴリ・タグ名あり、API キーは HTML に含まれず、一覧は新しい順でナビにページが出る。フィクスチャ・キー・`.env`・`dist/` は削除済み。
+- ドキュメント: 例の README (前提・`.env` の 4 変数・dev / build / preview・生成物・制限・デプロイ)、root README (Layout・「Using the API」・Status)、architecture.md §3 (ツリー、「計画のみ」の解消)・§8 (`examples/astro-blog` を済へ)・§9。

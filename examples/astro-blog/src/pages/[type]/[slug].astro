@@ -1,0 +1,30 @@
+---
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro'
+import Base from '../../layouts/Base.astro'
+import { getPosts } from '../../lib/kanso.ts'
+
+export const getStaticPaths = (async () => {
+  const posts = await getPosts()
+  return posts.map((post) => ({
+    params: { type: post.type, slug: post.slug },
+    props: { post },
+  }))
+}) satisfies GetStaticPaths
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>
+const { post } = Astro.props
+---
+
+<Base title={post.title}>
+  <article>
+    <h1>{post.title}</h1>
+    <time datetime={post.publishedAt}>{post.publishedAt.slice(0, 10)}</time>
+    {post.categories.length > 0 && <p class="terms">Categories: {post.categories.join(', ')}</p>}
+    {post.tags.length > 0 && <p class="terms">Tags: {post.tags.join(', ')}</p>}
+    {post.cover && (
+      <img class="cover" src={post.cover.url} alt={post.cover.alt ?? ''}
+        width={post.cover.width ?? undefined} height={post.cover.height ?? undefined} />
+    )}
+    <div class="content" set:html={post.bodyHtml} />
+  </article>
+</Base>

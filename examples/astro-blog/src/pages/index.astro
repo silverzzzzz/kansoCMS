@@ -1,0 +1,28 @@
+---
+import { PUBLIC_SITE_TITLE } from 'astro:env/client'
+import Base from '../layouts/Base.astro'
+import { getPosts } from '../lib/kanso.ts'
+
+const posts = await getPosts()
+---
+
+<Base>
+  <h1>{PUBLIC_SITE_TITLE}</h1>
+  {posts.length === 0 && <p>No published posts yet.</p>}
+  <ul class="post-list">
+    {posts.map((post) => (
+      <li>
+        <article>
+          <h2><a href={`/${post.type}/${post.slug}/`}>{post.title}</a></h2>
+          <time datetime={post.publishedAt}>{post.publishedAt.slice(0, 10)}</time>
+          {post.cover && (
+            <img class="cover thumbnail" src={post.cover.url} alt={post.cover.alt ?? ''}
+              width={post.cover.width ?? undefined} height={post.cover.height ?? undefined}
+              loading="lazy" />
+          )}
+          <p>{post.excerpt}</p>
+        </article>
+      </li>
+    ))}
+  </ul>
+</Base>

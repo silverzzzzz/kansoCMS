@@ -16,7 +16,7 @@ Design notes live in [docs/architecture.md](docs/architecture.md) and the per-ta
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> The Astro example, `create-kanso` and admin i18n (Phase 3) are still open.
+> `create-kanso` and admin i18n (Phase 3) are still open.
 
 ## Layout
 
@@ -28,6 +28,8 @@ packages/
   shared/   zod schemas & constants shared by server and admin
   core/     Drizzle schema, migrations, content pipeline and services (framework-agnostic)
   seo/      JSON-LD builders, <head> metadata, sitemap and Atom helpers (pure functions)
+examples/
+  astro-blog/  Astro SSG blog reading the headless API
 docs/       architecture, task board and decisions
 ```
 
@@ -119,6 +121,8 @@ Top-level slugs are shared between pages and post types, so a `blog` page and a 
 Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Every content write through the admin API rotates a site-wide cache generation, so changes show up immediately in every data centre; requests carrying an admin session bypass the cache.
 
 ## Using the API
+
+For a complete headless frontend, see [examples/astro-blog](examples/astro-blog): an Astro 5 static blog that reads the API with a read key at build time. Its README covers setup, local development and static hosting.
 
 Every `/api/v1` route except `health`, `setup` and `auth/login` requires either the admin session cookie or an API key in `x-api-key`. Keys are created in the admin UI (or `POST /api/v1/api-keys`) with a `read` or `write` scope; `write` is required for `POST`/`PATCH`/`PUT`/`DELETE`.
 
