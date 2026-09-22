@@ -13,8 +13,6 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { AppEnv } from '../env.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { type FormState, prepareForms } from './forms.tsx'
-import { Layout } from './themes/default/layout.tsx'
-import { PostArticle } from './themes/default/post.tsx'
 
 type Page = Awaited<ReturnType<Kanso['pages']['get']>>
 type Post = Awaited<ReturnType<Kanso['posts']['getWithRelations']>>
@@ -74,7 +72,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
   }
 
   const content = (
-    <Layout
+    <ctx.theme.Layout
       meta={meta}
       jsonLd={jsonLd}
       nav={ctx.nav}
@@ -89,7 +87,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
           {raw(prepared.html)}
         </article>
       )}
-    </Layout>
+    </ctx.theme.Layout>
   )
   return options.status === undefined ? c.html(content) : c.html(content, options.status)
 }
@@ -141,20 +139,20 @@ export async function renderPost(
   ]
 
   const content = (
-    <Layout
+    <ctx.theme.Layout
       meta={meta}
       jsonLd={jsonLd}
       nav={ctx.nav}
       search={ctx.search}
       scripts={prepared.scripts}
     >
-      <PostArticle
+      <ctx.theme.PostArticle
         post={post}
         bodyHtml={prepared.html}
         typeSlug={type.slug}
         formatDate={ctx.formatDate}
       />
-    </Layout>
+    </ctx.theme.Layout>
   )
   return options.status === undefined ? c.html(content) : c.html(content, options.status)
 }

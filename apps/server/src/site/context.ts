@@ -2,7 +2,8 @@ import type { Kanso } from '@kanso/core'
 import { buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
 import { resolveMessages, type SiteMessages } from '../i18n.ts'
 import { formatDate } from './format.ts'
-import type { NavItem } from './themes/default/layout.tsx'
+import { resolveTheme } from './themes/index.ts'
+import type { NavItem, Theme } from './themes/types.ts'
 
 /**
  * Per-request bundle of everything a public page needs beyond its own
@@ -13,6 +14,7 @@ export interface SiteRequestContext {
   origin: string
   site: SiteContext
   nav: NavItem[]
+  theme: Theme
   /** Post type whose archive is shown at `/` when no `home` page exists. */
   homePostTypeSlug: string | null
   messages: SiteMessages
@@ -58,6 +60,7 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     site,
     nav,
     homePostTypeSlug: settings.homePostTypeSlug,
+    theme: resolveTheme(settings.theme),
     messages,
     search: {
       label: messages.search.label,
@@ -72,6 +75,7 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
       canonical: new URL(path, `${origin}/`).toString(),
       locale: settings.locale,
       siteName: settings.title,
+      siteDescription: settings.description,
       ogType: 'website',
       noindex: false,
       ...overrides,

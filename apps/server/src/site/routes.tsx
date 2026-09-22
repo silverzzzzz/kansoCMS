@@ -19,8 +19,6 @@ import { draftValues, type FormState, formSlugsIn } from './forms.tsx'
 import { preview } from './preview.tsx'
 import { renderPage, renderPost } from './render.tsx'
 import { SearchResults } from './search.tsx'
-import { Layout } from './themes/default/layout.tsx'
-import { PostList } from './themes/default/post-list.tsx'
 
 type PostType = Awaited<ReturnType<AppEnv['Variables']['kanso']['postTypes']['get']>>
 type ArchiveTerm = { kind: 'category' | 'tag'; id: number; slug: string; name: string }
@@ -56,7 +54,7 @@ site.get('/', async (c) => {
   const jsonLd = [buildOrganization(ctx.site), buildWebSite(ctx.site)]
   const m = ctx.messages
   return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
+    <ctx.theme.Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
       <section class="page">
         <h1>{ctx.site.name}</h1>
         <p>{m.home.running}</p>
@@ -66,7 +64,7 @@ site.get('/', async (c) => {
           {m.home.hintAfter}
         </p>
       </section>
-    </Layout>,
+    </ctx.theme.Layout>,
   )
 })
 
@@ -270,8 +268,8 @@ async function renderArchive(
   ]
 
   return c.html(
-    <Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
-      <PostList
+    <ctx.theme.Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
+      <ctx.theme.PostList
         heading={heading}
         description={description}
         items={result.items.map((post) => ({
@@ -282,7 +280,7 @@ async function renderArchive(
         formatDate={ctx.formatDate}
         messages={ctx.messages.pagination}
       />
-    </Layout>,
+    </ctx.theme.Layout>,
   )
 }
 
@@ -290,12 +288,12 @@ async function notFound(c: Context<AppEnv>) {
   const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
   const meta = ctx.meta({ title: ctx.messages.notFound.title, path: c.req.path, noindex: true })
   return c.html(
-    <Layout meta={meta} nav={ctx.nav} search={ctx.search}>
+    <ctx.theme.Layout meta={meta} nav={ctx.nav} search={ctx.search}>
       <section class="page">
         <h1>404</h1>
         <p>{ctx.messages.notFound.body}</p>
       </section>
-    </Layout>,
+    </ctx.theme.Layout>,
     404,
   )
 }

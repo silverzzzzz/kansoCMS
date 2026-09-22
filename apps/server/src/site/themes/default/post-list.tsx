@@ -1,19 +1,4 @@
-export interface PostSummaryItem {
-  id: number
-  title: string
-  href: string
-  excerpt: string | null
-  publishedAt: Date | null
-}
-
-export interface PostListProps {
-  heading: string
-  description?: string | null
-  items: PostSummaryItem[]
-  pagination: { page: number; totalPages: number; basePath: string }
-  formatDate: (date: Date) => string
-  messages: { newer: string; older: string }
-}
+import type { PostListProps } from '../types.ts'
 
 function pageHref(basePath: string, page: number): string {
   return page === 1 ? basePath : `${basePath}?page=${page}`

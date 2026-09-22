@@ -47,7 +47,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 | Bot 対策 | honeypot + Turnstile (任意) | honeypot は常時。Turnstile はフォームごとに ON/OFF (既定 OFF)、サイトキーは設定画面・シークレットは Worker secret |
 | エディタ | Tiptap (ProseMirror JSON を正) | サーバで JSON → HTML 生成し `body_html` にキャッシュ。クライアント HTML を信用しない |
 | SEO | 自前 `packages/seo` (+ `schema-dts` 型) | JSON-LD (`WebSite` / `WebPage` / `CollectionPage` / `BlogPosting` / `BreadcrumbList` / `Organization`)、OG、sitemap、Atom feed |
-| CSS | 管理画面: Tailwind v4 / 公開テーマ: 素の CSS (CSS 変数) | テーマ作者にビルド依存を持ち込まない |
+| CSS | 管理画面: Tailwind v4 / 公開テーマ: 素の CSS (共通 base.css + テーマ別 CSS 変数) | テーマ作者にビルド依存を持ち込まない |
 | テスト / Lint | Vitest (各パッケージ `vitest run`、環境 `node`) / Biome | `pnpm test` は `pnpm -r --if-present test`。1 ツールで lint + format |
 
 ### 検討して見送ったもの
@@ -85,10 +85,10 @@ kansoCMS/
 │   │   │   │   ├── head.tsx        # <Head>: title/meta/OG/canonical/prev/next/feed/JSON-LD を一括出力
 │   │   │   │   ├── feeds.ts        # sitemap.xml / robots.txt / :type/feed.xml
 │   │   │   │   ├── preview.tsx     # /preview/:kind/:id (セッション必須, noindex, no-store)
-│   │   │   │   └── themes/default/ # layout.tsx, post-list.tsx, post.tsx (CSS は public/theme.css)
+│   │   │   │   └── themes/         # types.ts / index.ts (契約・レジストリ)、default/・paper/ (Layout / PostList / PostArticle)
 │   │   │   ├── media/              # /media/:key+ → R2 (immutable Cache-Control)
 │   │   │   └── admin.ts            # /admin/* → ASSETS の /admin/index.html を返す (SPA fallback)
-│   │   ├── public/                 # 静的ファイル (theme.css)。public/admin/ は admin ビルド出力 (gitignore)
+│   │   ├── public/                 # 静的ファイル (themes/base.css, default.css, paper.css)。public/admin/ は admin ビルド出力 (gitignore)
 │   │   ├── worker-configuration.d.ts  # `pnpm types` (wrangler types) 生成。手書き禁止
 │   │   ├── wrangler.jsonc          # DB (D1) / MEDIA (R2) / ASSETS / vars.SITE_URL
 │   │   ├── vite.config.ts          # @cloudflare/vite-plugin
@@ -170,7 +170,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
-| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
+| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
@@ -219,7 +219,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (同じ最上位 slug は作れないので一意)。実体のある公開コンテンツをリダイレクトより優先する。
 
 解決順序 (Static Assets は Worker より先に評価される):
-`assets (/admin/*.js, /theme.css …)` → `Hono: /api/v1` → `/media` → `/admin/*` (SPA fallback) → `/*` (site) → 404 (テーマの 404 ページ)。
+`assets (/admin/*.js, /themes/*.css …)` → `Hono: /api/v1` → `/media` → `/admin/*` (SPA fallback) → `/*` (site) → 404 (テーマの 404 ページ)。
 
 `wrangler.jsonc` の `assets.not_found_handling` は `"none"` にし、SPA fallback は Hono 側で行う（`single-page-application` にすると公開サイトの 404 まで admin の HTML になるため）。
 
@@ -234,7 +234,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 ### SEO / SSR
 
-- `site/head.tsx` が 1 ヶ所で `title` / `description` / `canonical` / `rel=prev,next` / feed の `rel=alternate` / OG / `<script type="application/ld+json">` を出力する。テーマは `<Layout meta jsonLd nav search>` を使うだけ。`search` は `loadSiteContext()` が検索フォームの文言を用意する。
+- `site/head.tsx` が 1 ヶ所で `title` / `description` / `canonical` / `rel=prev,next` / feed の `rel=alternate` / OG / `<script type="application/ld+json">` を出力する。`loadSiteContext()` が設定から `ctx.theme` を解決し、各描画処理はその `Layout` / `PostList` / `PostArticle` を使う (未設定・未知のテーマは default)。各テーマの `<Layout meta jsonLd nav search>` は共通の `<Head>` を使う。`search` は `loadSiteContext()` が検索フォームの文言を用意する。
 - `site/context.ts` の `loadSiteContext()` がリクエストごとに settings / organization / ナビ (最上位ページ + 投稿タイプ) を 1 回読み、`meta()` でサイト既定値を適用した `PageMeta` を作る。
 - JSON-LD は `@kanso/seo` の pure 関数 (`buildBlogPosting(site, post)`, `buildBreadcrumb(...)` …) で生成。ユニットテスト済みで headless 利用者も使える。
 - `WebSite` をコンテンツページ、`Organization` は `settings.organization.name` がある場合に出力。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList`。検索ページは JSON-LD なし。
@@ -294,7 +294,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索 ([tasks/phase-3.md](tasks/phase-3.md))。残: テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替 ([tasks/phase-3.md](tasks/phase-3.md))。残: `examples/astro-blog`、`create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -315,6 +315,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **リビジョンは更新前スナップショットを対象ごとに最新 20 件保持する** (2026-09-16)。内容が同じでも更新ごとに記録し、復元も `update` を通すため復元前の状態が履歴に残る。削除済みのメディア・カテゴリ・タグ・親ページへの参照は復元時に除外する。
 - **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
 - **全文検索は D1 FTS5 の trigram を使う** (2026-09-22)。空白区切り最大 8 語を AND 検索し、全語 3 文字以上なら MATCH + bm25 順、短い語を含む場合はエスケープした LIKE + 公開日降順。検索時に公開状態と公開日時を照合し、スニペットは HTML ではなくテキストと hit フラグで返す。公開 `/search` は `q` をキャッシュキー・ページ送りに保持する。
+- **公開テーマは同梱して設定で切り替える** (2026-09-22)。`site.theme` は default / paper (既定 default)。テーマの契約とレジストリは `site/themes/`、CSS は `public/themes/` に置き、Paper は独自レイアウトと CSS に default の記事部品を再利用する。設定保存時のキャッシュ世代更新で全ページへ即時反映し、追加方法は README の Themes を参照する。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

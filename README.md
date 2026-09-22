@@ -9,13 +9,14 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
 - Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
+- Bundled Default and Paper themes, switchable in site settings
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> Theme switching, the Astro example, `create-kanso` and admin i18n (Phase 3) are still open.
+> The Astro example, `create-kanso` and admin i18n (Phase 3) are still open.
 
 ## Layout
 
@@ -141,6 +142,30 @@ Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, render
 Search with `GET /api/v1/search?q=…` (`read` scope). After applying `0004_search.sql`, run
 `POST /api/v1/search/reindex` (`write` scope) to index existing bodies: the migration initially
 indexes only their titles and stored excerpts. New and edited bodies are indexed automatically.
+
+## Themes
+
+Choose **Default** or **Paper** under **管理画面 → 設定 → サイト → テーマ** and save.
+The change invalidates cached public pages immediately. Default uses sans-serif text and a
+left-aligned header; Paper uses serif text, a centered masthead and a warm paper background.
+Both support light and dark mode.
+
+A bundled theme exports a `Theme` with `name`, `Layout`, `PostList` and `PostArticle` from
+`apps/server/src/site/themes/<name>/index.ts`. Its stylesheet lives at
+`apps/server/public/themes/<name>.css` and imports `base.css` for shared content and forms.
+Paper intentionally reuses Default's `PostList` and `PostArticle` with its own layout and CSS.
+
+To add a theme in your fork:
+
+1. Add its name and label/description to `THEME_NAMES` and `THEMES` in
+   `packages/shared/src/themes.ts`.
+2. Create the theme directory and components using the props in `site/themes/types.ts`, then
+   register its export in `site/themes/index.ts`.
+3. Add its CSS, importing `base.css` and defining the font, color (including `--color-error`)
+   and measure variables. Link it from the layout and set the body's `theme-<name>` class.
+   Keep the shared `Head`, navigation, search form and optional scripts in the layout.
+4. Rebuild and deploy; the new theme appears in the settings selector. No plugin loader or
+   extra dependencies are needed.
 
 ## Deploy
 

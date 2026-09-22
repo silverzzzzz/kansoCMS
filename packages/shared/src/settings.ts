@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { notifyToSchema } from './forms.ts'
+import { themeNameSchema } from './themes.ts'
 
 /** Site-wide settings stored as JSON rows in the `settings` table. */
 export const siteSettingsSchema = z.object({
@@ -11,6 +12,7 @@ export const siteSettingsSchema = z.object({
   logoMediaId: z.number().int().positive().nullable().default(null),
   /** Post type shown on `/` when no `home` page exists. */
   homePostTypeSlug: z.string().nullable().default(null),
+  theme: themeNameSchema.default('default'),
 })
 export type SiteSettings = z.infer<typeof siteSettingsSchema>
 

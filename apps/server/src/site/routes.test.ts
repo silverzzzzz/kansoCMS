@@ -85,6 +85,8 @@ function testSetup(
     form?: typeof testForm
     page?: typeof testPage
     locale?: string
+    theme?: string
+    siteDescription?: string
     redirect?: { to: string; status: 301 | 302 } | null
     turnstileSiteKey?: string
     turnstileSecretKey?: string
@@ -99,11 +101,12 @@ function testSetup(
     settings: {
       site: vi.fn().mockResolvedValue({
         title: 'Test site',
-        description: '',
+        description: options.siteDescription ?? '',
         locale: options.locale ?? 'en',
         timezone: 'UTC',
         logoMediaId: null,
         homePostTypeSlug: null,
+        theme: options.theme,
       }),
       organization: vi.fn().mockResolvedValue({ name: '', url: null, logoUrl: null, sameAs: [] }),
       forms: vi.fn().mockResolvedValue({
@@ -494,5 +497,63 @@ describe('site search', () => {
     const response = await app.request('/search?q=missing&page=2', undefined, env, executionCtx)
     expect(response.status).toBe(200)
     expect(await response.text()).toContain('該当する結果はありません。')
+  })
+})
+
+describe('site themes', () => {
+  it('renders pages with the configured paper shell and shared form', async () => {
+    const { app, env, executionCtx } = testSetup({ theme: 'paper' })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('href="/themes/paper.css"')
+    expect(html).toContain('class="theme-paper"')
+    expect(html).toContain('site-header--paper')
+    expect(html).not.toContain('class="site-tagline"')
+  })
+
+  it('shows the site description, not the page excerpt, as the paper tagline', async () => {
+    const { app, env, executionCtx } = testSetup({
+      theme: 'paper',
+      siteDescription: 'Notes & <ideas>',
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(html).toContain('<p class="site-tagline">Notes &amp; &lt;ideas&gt;</p>')
+    expect(html).not.toContain('<p class="site-tagline">Write to us.</p>')
+    expect(html).toContain('role="search" action="/search"')
+    expect(html).toContain('<form method="post" action="/contact"')
+    expect(html).toContain('<footer class="site-footer"><nav class="site-nav">')
+  })
+
+  it.each([undefined, 'nope', 'constructor', '__proto__'])(
+    'falls back for theme %s',
+    async (theme) => {
+      const { app, env, executionCtx } = testSetup({ theme })
+      const response = await app.request('/contact', undefined, env, executionCtx)
+      const html = await response.text()
+
+      expect(response.status).toBe(200)
+      expect(html).toContain('href="/themes/default.css"')
+      expect(html).toContain('class="theme-default"')
+    },
+  )
+
+  it.each([
+    ['/', 200],
+    ['/search?q=a', 200],
+    ['/nothing-here', 404],
+  ])('uses paper for %s', async (path, status) => {
+    const { app, env, executionCtx } = testSetup({ theme: 'paper' })
+    const response = await app.request(path, undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(status)
+    expect(html).toContain('href="/themes/paper.css"')
+    expect(html).toContain('class="theme-paper"')
+    expect(html).toContain('site-header--paper')
+    expect(html).toContain('role="search" action="/search"')
   })
 })

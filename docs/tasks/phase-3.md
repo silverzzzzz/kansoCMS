@@ -1,4 +1,4 @@
-# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E / CI / リビジョン / リダイレクト / 検索)
+# Phase 3 タスクボード — 仕上げ (i18n / キャッシュ / E2E / CI / リビジョン / リダイレクト / 検索 / テーマ)
 
 目的: Phase 1–2 で先送りにした運用面の課題を順に解消する。**公開サイトの文言をサイトのロケールに追従させ、更新が即時に公開に反映され、管理画面の主要操作がブラウザ E2E と CI で守られ、誤った保存や URL 変更から運用者が復帰できる** 状態にする。
 
@@ -18,12 +18,14 @@
 | T18 | リビジョン: 固定ページ・投稿の保存前の状態を最大 20 件保持し、管理画面から復元できる | done | shared, core, server, admin |
 | T19 | リダイレクト: 管理画面で 301/302 を登録でき、ページのパス変更・投稿のスラッグ変更で自動作成される | done | shared, core, server, admin |
 | T20 | 全文検索 (FTS5): 公開サイトの `/search` と `GET /api/v1/search` で公開済みページ・投稿を日本語/英語で検索できる | done | shared, core, server |
+| T21 | テーマ切替: 複数テーマを `site/themes/` に同梱し、設定画面で切り替えられる (2 つ目のテーマ `paper` を追加) | done | shared, server, admin |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
 1. 上記 3 件を **T14 → T15 → T16 の順** に進める (2026-09-16)。
 2. 続けて **T17 → T18 → T19 の順** に進める (2026-09-16、「進めて」)。残りの Phase 3 項目 (FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso`、管理画面 i18n) は T19 完了後に再提案する。
 3. 残り 5 件は **T20 全文検索 (FTS5)** から着手する (2026-09-22、「すすんで」)。以降はテーマ切替 → `examples/astro-blog` → `create-kanso` → 管理画面 i18n を予定 (順番は各タスク完了時に再提案)。
+4. T20 完了時点で `main` を push (2026-09-22、「pushして進んで」)。続けて **T21 テーマ切替** に着手する。
 
 ---
 
@@ -326,3 +328,48 @@ Phase 3 の決定事項 (ユーザー確認済み):
 - テスト: [services/search.test.ts](../../packages/core/src/services/search.test.ts) (語分割・MATCH 式・LIKE エスケープ・MATCH/LIKE 判定・スニペット)、[shared/search.test.ts](../../packages/shared/src/search.test.ts)、[api/search.test.ts](../../apps/server/src/api/search.test.ts)、[site/routes.test.ts](../../apps/server/src/site/routes.test.ts) の `site search` (フォームのみ・エスケープとページ送り・`page` 不正値・日本語文言)、[cache.test.ts](../../apps/server/src/middleware/cache.test.ts)。4 ゲート通過 (215 tests)。
 - スモーク (port 5199、API + Playwright): reindex → 公開ページ / 下書きページ / 公開投稿を作成。`東京` (2 文字 → LIKE) と `タワーの` (MATCH) が公開ページのみにヒットし `<mark>` 付き、`workers` はページと投稿の 2 件、`東京 workers` は AND で 1 件、未知語は「該当する結果はありません。」、`/search` はフォームのみ、`page=9` は 404。`?q=東京` と `?q=workers` の再取得はそれぞれ HIT で内容が別 (キャッシュ衝突なし)。下書きを公開すると即ヒットし、下書きに戻すと消える。API は `snippet` セグメントを返し、未認証は 401。ブラウザでヘッダのフォームから検索 → `/search?q=…` に遷移し結果表示、コンソールエラーなし。管理 API の `get` / `list` 応答に `searchText` が無いことも確認。フィクスチャは削除済み。
 - ドキュメント: architecture.md §3 (ツリー)・§4 (`search_text` 列、`search_index` 行、予約語、reindex)・§5 (`GET /search`、API 2 本)・SEO / SSR (`Layout` の `search`)・§6 (キャッシュキー)・§8 ロードマップ (FTS5 検索を済へ)・§9。README は機能一覧・Status (残り 4 件)・URL 表・API 節に reindex の手順。
+
+---
+
+## T21. テーマ切替
+
+状態: `done` (2026-09-22)
+
+### ゴール
+
+- 公開サイトのテーマを設定画面で切り替えられる。テーマは `apps/server/src/site/themes/<name>/` に同梱する (プラグイン機構は持たない方針どおり、追加はフォークしてディレクトリを足す)。
+- 2 つ目のテーマ `paper` を同梱して切替が実際に動くことを示す。
+
+### 現状 (調査済み)
+
+- テーマは `themes/default/` の `layout.tsx` (`Layout`: `meta` / `jsonLd` / `nav` / `search` / `scripts`)、`post-list.tsx` (`PostList`)、`post.tsx` (`PostArticle`) の 3 つで、[render.tsx](../../apps/server/src/site/render.tsx)・[routes.tsx](../../apps/server/src/site/routes.tsx)・[search.tsx](../../apps/server/src/site/search.tsx) が **直接 import** している。`context.ts` も `NavItem` 型を `themes/default/layout.tsx` から import。
+- CSS は [public/theme.css](../../apps/server/public/theme.css) 1 本 (274 行: 変数・ヘッダ・ナビ・検索フォーム・`.page` / `.post*` / `.pagination` / `.kanso-form*` / `.search-results`) で、`Layout` が `<link rel="stylesheet" href="/theme.css">` を出す。`<Head>` (`head.tsx`) は meta / OG / JSON-LD のみ。
+- 設定は `siteSettingsSchema` (`title` / `description` / `locale` / `timezone` / `logoMediaId` / `homePostTypeSlug`) に `theme` が無い。設定画面 [settings/index.tsx](../../apps/admin/src/routes/_auth/settings/index.tsx) の「サイト」フォームは各項目を `useState` で持ち `api.settings.site.$put` に渡す。設定の書き込みはキャッシュ世代を更新するので、テーマ変更は即時に全ページへ反映される。
+- 404 / ホームのプレースホルダ / 検索結果の本文マークアップは `routes.tsx` / `search.tsx` にあり、`Layout` だけテーマ側。
+
+### 仕様 (実装前に再確認)
+
+- shared `themes.ts`: `THEME_NAMES = ['default', 'paper'] as const`、`ThemeName`、`themeNameSchema`、`THEMES: Record<ThemeName, { label, description }>` (管理画面の select 用)。`siteSettingsSchema.theme = themeNameSchema.default('default')`。
+- server `themes/types.ts` にテーマの契約 (`Theme { name, Layout, PostList, PostArticle }` と各 props 型 = 今の default の型を移動)、`themes/index.ts` に `themes: Record<ThemeName, Theme>` と `resolveTheme(name)` (未知は default)。`loadSiteContext` が `ctx.theme` を用意し、`render.tsx` / `routes.tsx` / `search.tsx` は `ctx.theme.Layout` 等を使う (default の直接 import をやめる)。各 `Layout` は `<body class="theme-<name>">` を出す。
+- CSS は `public/themes/base.css` (レイアウト非依存の部品: `.page` / `.post*` / `.pagination` / `.kanso-form*` / `.search-results` / `.visually-hidden`) と、テーマごとの `public/themes/<name>.css` (`@import url('./base.css')` + 変数・タイポグラフィ・ヘッダ / ナビ / 検索フォーム / フッタ) に分割。`public/theme.css` は廃止。
+- `paper` テーマ: 独自 `layout.tsx` (中央寄せのタイトル + 説明、下にナビと検索、フッタにもナビ) と `paper.css` (セリフ体・生成り色の背景・細い罫線)。`PostList` / `PostArticle` は default のものを再利用 (再利用できることを示す)。
+- 管理画面: 設定 > サイト に「テーマ」select (`THEMES` のラベル)。
+- テスト: shared (`theme` の既定と不正値)、`routes.test.ts` (設定 `theme: 'paper'` で `/themes/paper.css` と `theme-paper` が出る、未設定 / 未知は default)。
+- ドキュメント: architecture.md §3 (ツリー)・§4 (`site` 設定の項目)・§5 (assets の例)・SEO / SSR (`ctx.theme`)・§8・§9、README (機能一覧・Status・「Themes」節: 切替方法とテーマの追加手順)。`app.ts` のコメント。
+
+### 完了条件
+
+- 共通条件。スモーク: 設定画面でテーマを `paper` に変更 → 公開トップ / 投稿 / 検索 / 404 が `paper` の見た目 (`/themes/paper.css`、`theme-paper`) になり、`default` に戻すと元に戻る。キャッシュ済みページも設定保存直後の GET で切り替わる。
+
+### 決定
+
+- テーマの契約は [themes/types.ts](../../apps/server/src/site/themes/types.ts) の `Theme { name, Layout, PostList, PostArticle }` (props 型もここに移動、`hono/jsx` の `FC`)。レジストリ [themes/index.ts](../../apps/server/src/site/themes/index.ts) は `Record<ThemeName, Theme>` なので、`THEME_NAMES` に名前を足すと実装漏れが型エラーになる。`resolveTheme(name)` は `themeNameSchema.safeParse` で判定し、未設定・未知 (`constructor` / `__proto__` 含む) は default。
+- テーマ名の正本は shared の [themes.ts](../../packages/shared/src/themes.ts) (`THEME_NAMES` / `THEMES` のラベルと説明 / `themeNameSchema`)。`siteSettingsSchema.theme` は既定 `default` なので、保存済み JSON に `theme` が無くても読み出し時に補われ、マイグレーションは不要。不正値は `PUT /api/v1/settings/site` で 400。
+- 描画側は `loadSiteContext()` が `ctx.theme` を解決し、`render.tsx` / `routes.tsx` / `search.tsx` は `<ctx.theme.Layout>` 等を使う (default の直接 import は全廃)。各 `Layout` は `<body class="theme-<name>">` と自分の `<link rel="stylesheet" href="/themes/<name>.css">` を出す。`<Head>`・ナビ・検索フォーム (同じ class / id / `role="search"`)・`scripts` は全テーマ共通の約束。404 / ホームのプレースホルダ / 検索結果の本文マークアップは共有のまま (`section.page`)。
+- CSS は `public/themes/base.css` (レイアウト非依存: リセット、`.visually-hidden`、`.page`、`.post*`、`.pagination`、`.kanso-form*`、`.search-results`) + `default.css` / `paper.css` (`@import url("./base.css")` + `:root` 変数・タイポグラフィ・ヘッダ / ナビ / 検索 / フッタ)。`public/theme.css` は削除 (`/theme.css` は 404)。フォームのエラー色は `--color-error` 変数に統一 (Codex の唯一の逸脱、明暗の元の色は維持)。
+- `paper` テーマは独自 `layout.tsx` (中央寄せの見出し + タグライン、罫線で区切ったナビと検索、フッタにもナビ) と `paper.css` (セリフ体、生成り `#faf6ef` / ダーク `#1c1915`、`--measure: 38rem`) で、`PostList` / `PostArticle` は default から再利用 (部品の再利用が可能なことを示す)。
+- レビューで修正: Codex 版の paper はタグラインに `meta.description` (= そのページの抜粋) を出していた。`PageMeta` に任意項目 `siteDescription` を追加して `ctx.meta()` が設定のサイト説明を入れ、タグラインはそれを使う (テスト追加: 抜粋ではなくサイト説明が出る)。
+- 管理画面: 設定 > サイト に「テーマ」select (`THEMES` のラベル)。設定保存はキャッシュ世代を更新するので、保存直後の公開 GET が MISS になり全ページが切り替わる。
+- テスト: [themes.test.ts](../../packages/shared/src/themes.test.ts)、[routes.test.ts](../../apps/server/src/site/routes.test.ts) の `site themes` (paper の shell とフォーム、未設定・未知のフォールバック、`/` `/search` `/nothing-here` の paper、タグライン)。4 ゲート通過 (228 tests)。
+- スモーク (port 5199、API + Playwright): `/themes/{base,default,paper}.css` が 200 `text/css`、`/theme.css` は 404。管理画面の select (Default / Paper) で Paper を保存 → 設定 API が `paper`、`/` `/t21-x` `/search?q=a` (200) と 404 ページが `/themes/paper.css` + `theme-paper` + `site-header--paper` で、保存直後は MISS。ブラウザの computed style もセリフ体・`rgb(250, 246, 239)`。API で default に戻すと `/themes/default.css` + system-ui + 白。`theme: 'nope'` は 400 (`Invalid option: expected one of "default"|"paper"`)。スクリーンショットで Paper の見出し・タグライン・ナビ・検索・結果のハイライトを目視確認。コンソールエラーなし、フィクスチャ削除済み。
+- ドキュメント: architecture.md §2 (CSS 行)・§3 (ツリー)・§4 (`site.theme`)・§5 (assets)・SEO / SSR (`ctx.theme`)・§8 (テーマ切替を済へ)・§9。README は機能一覧・Status (残り 3 件)・「Themes」節 (切替方法、テーマの構成、フォークでの追加手順 4 ステップ)。

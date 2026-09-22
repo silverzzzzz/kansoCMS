@@ -5,6 +5,8 @@ export interface PageMeta {
   canonical: string
   locale: string
   siteName: string
+  /** Site-wide description (settings), for theme mastheads; `description` is the page's own. */
+  siteDescription?: string
   ogType: 'website' | 'article'
   ogImage?: string | null
   noindex: boolean

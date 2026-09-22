@@ -1,3 +1,4 @@
+import { THEME_NAMES, THEMES, type ThemeName } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -33,6 +34,7 @@ function SettingsPage() {
   const [timezone, setTimezone] = useState(initial?.site.timezone ?? 'Asia/Tokyo')
   const [logoMediaId, setLogoMediaId] = useState<number | null>(initial?.site.logoMediaId ?? null)
   const [homePostTypeSlug, setHomePostTypeSlug] = useState(initial?.site.homePostTypeSlug ?? '')
+  const [theme, setTheme] = useState<ThemeName>(initial?.site.theme ?? 'default')
   const [name, setName] = useState(initial?.organization.name ?? '')
   const [url, setUrl] = useState(initial?.organization.url ?? '')
   const [logoUrl, setLogoUrl] = useState(initial?.organization.logoUrl ?? '')
@@ -55,6 +57,7 @@ function SettingsPage() {
             timezone,
             logoMediaId,
             homePostTypeSlug: homePostTypeSlug || null,
+            theme,
           },
         }),
       ),
@@ -161,6 +164,22 @@ function SettingsPage() {
               {postTypes.data?.items.map((type) => (
                 <option key={type.id} value={type.slug}>
                   {type.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label="テーマ"
+            hint="公開サイトの見た目。テーマの追加方法は README の Themes を参照。"
+          >
+            <select
+              className={inputClass}
+              value={theme}
+              onChange={(event) => setTheme(event.target.value as ThemeName)}
+            >
+              {THEME_NAMES.map((name) => (
+                <option key={name} value={name}>
+                  {THEMES[name].label}
                 </option>
               ))}
             </select>

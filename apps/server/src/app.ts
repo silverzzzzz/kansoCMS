@@ -10,7 +10,7 @@ import { site } from './site/routes.tsx'
 
 /**
  * Route composition. Order matters: the public site is a catch-all and must
- * be mounted last. Static Assets (admin bundle, /theme.css, favicon) are
+ * be mounted last. Static Assets (admin bundle, /themes/*.css, favicon) are
  * resolved by the platform before any of this runs.
  */
 export const app = new Hono<AppEnv>()

@@ -1,0 +1,145 @@
+@import url("./base.css");
+
+/* Paper theme. Plain CSS on purpose: no build step for theme authors. */
+:root {
+  --font-sans:
+    "Iowan Old Style", "Palatino Linotype", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP",
+    Georgia, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --color-bg: #faf6ef;
+  --color-fg: #2b2420;
+  --color-muted: #786b5e;
+  --color-border: #e2d9c8;
+  --color-accent: #8a3b12;
+  --color-error: #b91c1c;
+  --measure: 38rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg: #1c1915;
+    --color-fg: #eae4d8;
+    --color-muted: #b4a793;
+    --color-border: #3a332b;
+    --color-accent: #e0a06a;
+    --color-error: #f87171;
+  }
+}
+
+html {
+  font-family: var(--font-sans);
+  line-height: 1.7;
+  color: var(--color-fg);
+  background: var(--color-bg);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  min-height: 100vh;
+  flex-direction: column;
+}
+
+a {
+  color: var(--color-accent);
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+.site-header,
+.site-main,
+.site-footer {
+  width: min(100% - 2rem, var(--measure));
+  margin-inline: auto;
+}
+
+.site-header--paper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding-block: 2.5rem 1.5rem;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.site-tagline {
+  margin: 0;
+  color: var(--color-muted);
+  font-style: italic;
+}
+
+.site-title {
+  font-size: 2.25rem;
+  line-height: 1.2;
+  font-weight: 700;
+  text-decoration: none;
+  color: inherit;
+}
+
+.site-nav {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.site-header--paper .site-nav {
+  width: 100%;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.site-nav a {
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.site-nav a:hover {
+  color: var(--color-fg);
+}
+
+.site-search {
+  display: inline-flex;
+  gap: 0.5rem;
+  max-width: 100%;
+}
+
+.site-search input,
+.site-search button {
+  font: inherit;
+  color: inherit;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.site-search input {
+  min-width: 0;
+  width: 12rem;
+}
+
+.site-search button {
+  cursor: pointer;
+}
+
+.site-main {
+  flex: 1;
+  padding-block: 2rem;
+}
+
+.site-footer {
+  text-align: center;
+  padding-block: 2rem;
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+}
+
+.site-footer .site-nav {
+  margin-bottom: 1rem;
+}

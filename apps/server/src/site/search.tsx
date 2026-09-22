@@ -1,6 +1,5 @@
 import type { Kanso } from '@kanso/core'
 import type { SiteRequestContext } from './context.ts'
-import { Layout } from './themes/default/layout.tsx'
 
 interface SearchResultsProps {
   ctx: SiteRequestContext
@@ -14,7 +13,7 @@ export function SearchResults({ ctx, q, page, totalPages, result }: SearchResult
   const m = ctx.messages.search
   const pageHref = (target: number) => `/search?q=${encodeURIComponent(q)}&page=${target}`
   return (
-    <Layout
+    <ctx.theme.Layout
       meta={ctx.meta({ title: m.title, path: '/search', noindex: true })}
       nav={ctx.nav}
       search={ctx.search}
@@ -66,6 +65,6 @@ export function SearchResults({ ctx, q, page, totalPages, result }: SearchResult
           </>
         )}
       </section>
-    </Layout>
+    </ctx.theme.Layout>
   )
 }

@@ -1,14 +1,5 @@
-import type { Kanso } from '@kanso/core'
 import { raw } from 'hono/html'
-
-type Post = Awaited<ReturnType<Kanso['posts']['getWithRelations']>>
-
-export interface PostArticleProps {
-  post: Post
-  bodyHtml: string
-  typeSlug: string
-  formatDate: (date: Date) => string
-}
+import type { PostArticleProps } from '../types.ts'
 
 export function PostArticle({ post, bodyHtml, typeSlug, formatDate }: PostArticleProps) {
   return (
