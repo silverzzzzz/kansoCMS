@@ -1,0 +1,26 @@
+{
+  "name": "create-kanso",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Create a kansoCMS site from the upstream repository.",
+  "bin": {
+    "create-kanso": "bin/create-kanso.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}

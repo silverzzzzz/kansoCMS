@@ -16,7 +16,7 @@ Design notes live in [docs/architecture.md](docs/architecture.md) and the per-ta
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
 > Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> `create-kanso` and admin i18n (Phase 3) are still open.
+> Admin i18n (Phase 3) is still open.
 
 ## Layout
 
@@ -25,6 +25,7 @@ apps/
   server/   Hono Worker: public SSR site, /api/v1, /media (R2), /admin (static SPA), /preview
   admin/    React + Vite admin UI, built into apps/server/public/admin
 packages/
+  create-kanso/  CLI for scaffolding a site from the upstream repository
   shared/   zod schemas & constants shared by server and admin
   core/     Drizzle schema, migrations, content pipeline and services (framework-agnostic)
   seo/      JSON-LD builders, <head> metadata, sitemap and Atom helpers (pure functions)
@@ -40,6 +41,10 @@ docs/       architecture, task board and decisions
 - A Cloudflare account only when you deploy — local dev runs on `workerd` with emulated D1/R2
 
 ## Local development
+
+Start a new site with `npm create kanso@latest my-site`, then `cd my-site` and follow the
+printed setup steps (requires publishing `create-kanso` first; see
+[CLI usage and offline options](packages/create-kanso/README.md)). For an existing checkout:
 
 ```sh
 pnpm install

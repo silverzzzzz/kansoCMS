@@ -20,6 +20,7 @@
 | T20 | 全文検索 (FTS5): 公開サイトの `/search` と `GET /api/v1/search` で公開済みページ・投稿を日本語/英語で検索できる | done | shared, core, server |
 | T21 | テーマ切替: 複数テーマを `site/themes/` に同梱し、設定画面で切り替えられる (2 つ目のテーマ `paper` を追加) | done | shared, server, admin |
 | T22 | `examples/astro-blog`: API キーで `/api/v1` を読む Astro (SSG) のブログ例。ヘッドレス利用の推奨フロントエンド | done | examples, tooling, docs |
+| T23 | `create-kanso`: `npm create kanso@latest my-site` で GitHub からテンプレートを取得し、新規サイトのプロジェクトを生成する CLI | done | packages, docs |
 
 Phase 3 の決定事項 (ユーザー確認済み):
 
@@ -28,6 +29,7 @@ Phase 3 の決定事項 (ユーザー確認済み):
 3. 残り 5 件は **T20 全文検索 (FTS5)** から着手する (2026-09-22、「すすんで」)。以降はテーマ切替 → `examples/astro-blog` → `create-kanso` → 管理画面 i18n を予定 (順番は各タスク完了時に再提案)。
 4. T20 完了時点で `main` を push (2026-09-22、「pushして進んで」)。続けて **T21 テーマ切替** に着手する。
 5. T21 も push 済み (CI 緑)。続けて **T22 `examples/astro-blog`** に着手する (2026-09-22)。
+6. T22 完了後、残りは `create-kanso` と管理画面 i18n の 2 件。**T23 `create-kanso`** に着手する (2026-09-24、「現状を確認して続けて」)。テンプレートは GitHub から tarball を取得する degit 方式とし、Cloudflare のリソース作成は CLI で自動実行せず手順を表示するだけにする (ユーザー確認済み)。
 
 ---
 
@@ -418,3 +420,68 @@ Phase 3 の決定事項 (ユーザー確認済み):
 - テスト: 例にユニットテストは置かない (root の `test` は変更なし、229 tests)。4 ゲート通過 (typecheck に `astro check` 0 errors を含む)。
 - スモーク (port 5199): `read` キー作成 → `blog` タイプ、カテゴリ・タグ・1×1 PNG メディア、公開投稿 2 件 (1 件はカバー + 本文画像 + カテゴリ / タグ)、予約公開 1 件、下書き 1 件、公開ページ 1 件 → `.env` を書いて `astro build` (6 pages, 1.2 s) → `dist/` は `index.html` / `404.html` / `blog/first-x/index.html` / `blog/second-x/index.html` / `astro-about-x/index.html` / 既存の `company/index.html` のみ (予約・下書きは無し)。カバーと本文画像は `http://localhost:5199/media/...` の絶対 URL、カテゴリ・タグ名あり、API キーは HTML に含まれず、一覧は新しい順でナビにページが出る。フィクスチャ・キー・`.env`・`dist/` は削除済み。
 - ドキュメント: 例の README (前提・`.env` の 4 変数・dev / build / preview・生成物・制限・デプロイ)、root README (Layout・「Using the API」・Status)、architecture.md §3 (ツリー、「計画のみ」の解消)・§8 (`examples/astro-blog` を済へ)・§9。
+---
+
+## T23. `create-kanso` (新規サイトのスキャフォールド)
+
+状態: `done` (2026-09-24)
+
+### ゴール
+
+- `npm create kanso@latest my-site` (= `pnpm create kanso my-site`) で、GitHub のこのリポジトリを取得して自分のサイト用プロジェクトを作れる。生成物は CLI が表示する手順どおりに進めればそのままデプロイできる。
+- Cloudflare のリソース (D1 / R2) 作成は CLI では行わず、次の手順として表示するだけ (ユーザー確認済み 2026-09-24)。
+
+### 現状 (調査済み)
+
+- `@kanso/*` は npm 未公開でスコープも未決 ([architecture.md §10](../architecture.md) の未決事項 1)。テンプレートは**リポジトリのコピー**にするしかない (degit 方式、ユーザー確認済み 2026-09-24)。
+- 公開リポジトリは `https://github.com/silverzzzzz/kansoCMS`。`https://codeload.github.com/silverzzzzz/kansoCMS/tar.gz/<ref>` が 200 / 約 430 KB (`main` でも `refs/heads/main` でも可)。タグはまだ無い。
+- tarball の中身 (実測): 先頭に `pax_global_header` (typeflag `g`) 1 件、以降は `kansoCMS-<ref>/…` のディレクトリ (`5`) 65 件と通常ファイル (`0`) 263 件のみ。すべて ustar ヘッダで最長パス 73 文字 (pax の path 拡張や GNU longname は出ない)。先頭 1 階層を strip すれば `node:zlib` の gunzip + 最小の tar リーダで展開でき、`tar` コマンドも外部依存も要らない。
+- デプロイ識別子があるのは 2 ファイルだけ: `apps/server/wrangler.jsonc` の `name` / `d1_databases[0].database_name` / `r2_buckets[0].bucket_name` / `vars.SITE_URL` (`database_id` はプレースホルダ `00000000-…` とコメント)、`apps/server/package.json` の `db:migrate:local` / `db:migrate` (`wrangler d1 migrations apply kanso --local|--remote`)。root `package.json` の `name` は `kanso-cms`。他の `kanso` はコード上の識別子なので触らない。
+- `pnpm-workspace.yaml` は `apps/*` / `packages/*` / `examples/*`。lockfile の importers はディレクトリ基準なので root の `name` 変更は影響しないが、ワークスペースのディレクトリを削ると生成物の CI (`pnpm install --frozen-lockfile`) が壊れる。root `tsconfig.json` は `e2e` と `playwright.config.ts` を include しているので e2e も残す必要がある。
+- リポジトリには `@types/node` がどこにも入っていない (root に入れると `packages/shared` / `seo` に漏れる)。Biome は `**` 対象で `.astro` のみ除外、formatter は space 2 / lineWidth 100 / single quote / semicolons asNeeded。
+- root の `test` は `pnpm -r --if-present test`、`typecheck` は `tsc -p tsconfig.json && pnpm -r typecheck`。各パッケージは `vitest run` + `tsc --noEmit`。
+
+### 仕様 (実装前に再確認)
+
+- 置き場所は `packages/create-kanso` (npm 名 `create-kanso`、`private: false`、`version: 0.1.0`、`bin: { "create-kanso": "bin/create-kanso.mjs" }`、`files: ["bin", "src", "README.md"]`、`engines.node: ">=22"`、runtime 依存 0、devDeps は `@types/node` と `typescript` のみ)。実際の `npm publish` は今回の範囲外。
+- 実装は JavaScript (ESM) + JSDoc 型でビルド工程を作らない。`tsconfig.json` は `allowJs` / `checkJs` / `types: ["node"]` で `src` と `bin` を対象にし、root の `pnpm typecheck` で守る。
+- CLI: `create-kanso [dir] [options]`
+  - `--site-url <url>` (既定 `https://example.com`)、`--name <worker-name>` (既定はディレクトリ名から導出)、`--d1 <name>` (既定 `<name>`)、`--r2 <name>` (既定 `<name>-media`)、`--ref <git-ref>` (既定 `main`)、`--from <path>` (ローカルの checkout か `.tar.gz` から生成。オフライン用)、`--force`、`--no-git`、`--yes`、`--help`、`--version`。
+  - TTY かつ `--yes` 無しのときだけ `node:readline/promises` で 2 問 (ディレクトリ、サイト URL) 聞く。非 TTY は `--yes` と同じ挙動。
+  - Worker 名は `^[a-z0-9][a-z0-9-]{0,62}$` で検証。ディレクトリ名から小文字化・不正文字のハイフン化で導出し、導出できなければエラー。
+  - 出力先が存在して空でなければ `--force` 無しはエラー (終了コード 1)。
+- 取得と展開: `fetch` で `https://codeload.github.com/<owner>/<repo>/tar.gz/<ref>` (owner/repo は定数) → `gunzipSync` → 自前の tar リーダ。ustar の `name` + `prefix` を連結し、typeflag `0` / ` ` (ファイル) と `5` (ディレクトリ) を処理、`g` / `x` / その他は読み飛ばす。先頭 1 階層を strip し、`..` ・絶対パス・ドライブレターを含むエントリは拒否。実行ビットは無視する。
+  - `docs/tasks/` は展開しない (kansoCMS 自身のタスクボード)。それ以外は `docs/architecture.md`・`examples/`・`e2e/`・`.github/` も含めてそのまま同梱する。
+  - `--from <dir>` では `node_modules/` `.git/` `dist/` `.wrangler/` `.astro/` `apps/server/public/admin/` `test-results/` `playwright-report/` `*.tsbuildinfo` `.dev.vars` `.dev.vars.*` (`.dev.vars.example` は除く) `.env` を除いてコピーする。
+  - ネットワーク失敗時は理由と `--from` の案内を出して終了コード 1。
+- 書き換え (対象が見つからなければ警告し、最後に「手動で直すファイル」として再掲。処理は続行する):
+  - `apps/server/wrangler.jsonc`: `name` / `database_name` / `bucket_name` / `vars.SITE_URL`。JSONC なのでコメントを壊さないよう該当キーだけを正規表現で置換し、`database_id` はプレースホルダのまま残す。
+  - `apps/server/package.json`: `db:migrate:local` / `db:migrate` の DB 名。
+  - root `package.json`: `name`。
+  - root `README.md`: 生成プロジェクト用の短い README に差し替える (プロジェクト名、次の手順、`docs/architecture.md` と上流リポジトリへのリンク)。
+- 生成後は `--no-git` でなければ `git init` のみ実行 (コミットはしない)。git が無い / 既に Git リポジトリの中なら黙ってスキップ。最後に次の手順を表示する: `cd <dir>` → `pnpm install` → `wrangler d1 create <d1>` (出力の `database_id` を `apps/server/wrangler.jsonc` に貼る) → `wrangler r2 bucket create <r2>` → `pnpm db:migrate:local` → `pnpm dev` → `/admin/setup`、本番は `SITE_URL` を実ドメインにして `pnpm db:migrate` → `pnpm deploy`。
+- テスト (`packages/create-kanso/src/*.test.js`, vitest, ネットワーク不使用): tar リーダ (メモリ上で組み立てた tar.gz の展開、`g` ヘッダ、ディレクトリ、ネストしたファイル、`..` を含むエントリの拒否、1 階層 strip)、書き換え関数 4 種 (対象が無い場合の警告を含む)、引数パース、Worker 名の導出と検証。
+- ドキュメント: `packages/create-kanso/README.md`、root README (Quick start に `npm create kanso@latest my-site`、Layout に `packages/create-kanso`、Status の残項目から create-kanso を外す)、`docs/architecture.md` §3 (ツリー) / §7 (開発・デプロイ体験) / §8 (Phase 3 の残) / §9 (決定事項)。
+
+### 完了条件
+
+- 共通条件 (root の 4 ゲート: `pnpm typecheck && pnpm check && pnpm test && pnpm build`)。
+- スモーク: (1) ネットワーク経由で `node packages/create-kanso/bin/create-kanso.mjs <tmp>/my-site --yes --site-url https://example.test` → 生成物に `docs/tasks` が無く、`wrangler.jsonc` の 4 箇所・`apps/server/package.json` の 2 箇所・root `package.json` の `name` が書き換わり、README が差し替わり、`.git` がある。(2) `--from <local tarball>` と `--from <checkout>` でも同じ結果になる。(3) 生成したプロジェクトで `pnpm install --frozen-lockfile` → `pnpm typecheck` → `pnpm build` が通る (短いパスで実施)。(4) 既存の非空ディレクトリに `--force` 無しでエラーになる。
+
+### 決定
+
+- `packages/create-kanso` を npm 名 `create-kanso@0.1.0` (public) として追加。Node.js 22+、JavaScript ESM + JSDoc、ビルド工程・runtime 依存なし。`bin/create-kanso.mjs` → `src/index.js`、引数・tar・取得/コピー・書き換えを別モジュールにした。Node の直接実行を型検査するため、このパッケージだけ `module` / `moduleResolution: NodeNext`。`@types/node` はここだけの devDependency。
+- 非対話時のディレクトリは `my-site`、URL は `https://example.com`。stdin / stdout とも TTY かつ `--yes` 無しのときだけ 2 問を表示し、指定済みの値は質問の既定値として使う。Worker 名は末尾ディレクトリ名を小文字化・不正文字と連続ハイフンの整理・端のハイフン除去で導出し、空や 63 文字超はエラー (`--name` で上書き可能)。未知オプションは usage 付きの終了コード 1。
+- 取得元は `silverzzzzz/kansoCMS`、既定 ref は `main`。`fetch` (30 秒 timeout) + `gunzipSync` + ustar の name/prefix を読み、先頭 1 階層を除く。通常ファイル (`0` / NUL) とディレクトリ (`5`) 以外はスキップ。全エントリを検証してから書き込み、`..`・絶対パス・コロン (ドライブ指定を含む)・バックスラッシュは拒否する。ネットワーク失敗には理由と `--from` の案内を表示する。
+- 上流 tarball からは `docs/tasks/` だけを除外し、workspace・lockfile・examples・e2e・CI を保持。ローカルコピーでは仕様に列挙した依存・ビルド出力・secret ファイルも除外し、`.dev.vars.example` は保持する。ローカルのシンボリックリンクはコピーせず、出力先の既存リンクは親ディレクトリも含めて拒否する。コピー元と出力先の包含関係も拒否する。
+- `--force` は既存ディレクトリへのマージ/同名ファイル上書きとし、無関係な既存ファイルは削除しない。設定は元の値に一致する行頭アンカー付き正規表現で変更し、JSONC コメントと `database_id`、その他のコード識別子を保持する。対象ファイル/パターンが無ければ警告して続行し、最後に手動修正ファイルを重複なしで再掲する。README はプロジェクト名・手順・architecture / 上流へのリンク付きで生成する。
+- Git は `rev-parse --is-inside-work-tree` で既存リポジトリを確認し、必要なときだけ `git init` (コミットなし)。Git 不在・既存リポジトリ内・`--no-git` では初期化しない。Cloudflare / Wrangler / pnpm は CLI から実行せず、リソース作成・database_id 設定・local / remote migration・dev / deploy・初期管理者作成の手順を英語の plain text で出力する。
+- lockfile は新 importer に加え、未収録だった `@types/node@22.20.4` とその依存 `undici-types@6.21.0` の package / snapshot 定義が必要だったため計 21 行追加 (「importer のみ」からの差分)。追加箇所を除いた内容が元と byte-identical で、既存バージョン・peer 解決は不変と検証した。`pnpm install --no-frozen-lockfile` と生成物の `--frozen-lockfile` が通過。
+- テスト: CLI 47 件 (引数の全オプション・既定値・名前/URL 検証、メモリ上の tar.gz・g/prefix/NUL/リンク/除外/不正パス/破損、4 種の書き換えと警告、ローカルコピー除外・非空/包含/リンク拒否、HTTP/ネットワーク失敗)。fetch は注入した応答を使い、単体テストはネットワーク不使用。root の 4 ゲート通過 (全 276 tests)。
+- 検証環境: pnpm は `npx.cmd --yes pnpm@10.32.1`、Node v24.13.1。既存 node_modules の Astro 読み取り拒否/workerd 欠落は一時 store + `node_modules/.t23-pnpm` への frozen install で復旧した。Astro check の sandbox 制約 (`Cannot read directory "../../../..": Access is denied`) は T22 と同じ一時 config/preload で dev-toolbar の prebundle のみ無効化し、root / 生成物とも 8 files・0 errors / warnings / hints。回避策はリポジトリに含めない。Biome の既存 deprecation info、sharp の既存 ignored build script、build の punycode 警告は残る。
+- スモーク: GitHub 既定取得・既存 `kanso-main.tar.gz`・現在の作業内容を含むクリーンなローカル checkout の 3 経路で生成成功。wrangler 4 箇所 / migration 2 箇所 / root name / README、database_id とコメント保持、docs/tasks 不在、examples / e2e / CI 保持、`.git` 作成とコミット 0 件を確認。既存非空ターゲットは終了コード 1・stack trace 無し。checkout からの生成物で `pnpm install --frozen-lockfile` → `pnpm typecheck` → `pnpm build` も通過 (Worker 出力 `dist/my_site/`)。Codex が消せなかった一時ディレクトリ (`%TEMP%/k23-0mV5tr`、`node_modules/.t23-pnpm`) はレビュー時に削除した。
+- 追加確認: 実際の TTY でディレクトリ / URL の 2 問に回答して生成し、非 TTY では `--yes` 無しでも質問しないことを確認。`--no-git`・`--force`・名前/D1/R2 の上書き・`--help`・`--version` も実行した。`npm pack --dry-run --json` は 12 files・bundled 0 で、bin / src / README / package.json のみ。
+- レビュー (Claude) で独立に確認したこと: 4 ゲートを再実行 (typecheck / check (info 1 件は既存の Biome deprecation) / test 276 件 / build すべて 0)。スモークは (1) ネットワーク既定経路で `%TEMP%\kcs23\my-site` を生成 → 260 ファイル (上流 263 から `docs/tasks/` の 3 件を除いた数)、`docs/` は `architecture.md` のみ、wrangler の 4 箇所・migration の 2 箇所・root `name` が書き換わり `database_id` とコメントは保持、README 差し替え、`.git` あり (コミット 0)、`examples` / `e2e` / `.github` は保持。(2) `--from .` (checkout、`--name acme-blog --no-git`) と (3) `--from <tarball>` でも同じ結果。(4) 生成済みディレクトリへの再実行は `--force` 無しで終了コード 1。(5) `--help` / `--version` / 未知オプション (usage + 終了コード 1)。(6) checkout 由来の生成物で `pnpm install --frozen-lockfile` (19 秒) → `typecheck` → `test` → `build` がすべて成功。
+- 未検証: npm 公開 (`npm create kanso@latest` の実体)、生成物からの `wrangler d1 create` / `deploy` / ローカル D1 マイグレーション、TTY プロンプト (Codex 側は確認済み)。`--ref` にスラッシュを含む値 (`refs/heads/main`) は `encodeURIComponent` で `%2F` になるが codeload は 200 を返すことを実測で確認済み。
+- `--from <checkout>` は checkout にあるものをそのままコピーするため、リポジトリ直下に残った作業用ディレクトリ (今回は Codex の `.pnpm-store` / `.wrangler-task` の空ディレクトリ) も入る。これらはリポジトリから削除した。生成前に `git status` で確認するのが安全。
+- ドキュメント: CLI README (利用方法・全オプション・生成物・除外・次の手順)、root README (quick start / Layout / Status)、architecture.md §3 / §7 / §8 / §9。レビュー後に `done` (2026-09-24)。npm publish・Cloudflare リソース作成・deploy・dev server・E2E は未実施 (コミットはレビュー後に実施)。

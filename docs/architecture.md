@@ -64,7 +64,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 
 ## 3. リポジトリ構成
 
-pnpm workspace の**小さなモノレポ** (1 app + 1 admin + 3 packages + 1 example)。分割理由は「ビルドターゲットと JSX ランタイムが違う」「headless 利用者に型とスキーマだけ配りたい」の 2 点のみ。
+pnpm workspace の**小さなモノレポ** (1 app + 1 admin + 4 packages + 1 example)。分割理由は「ビルドターゲットと JSX ランタイムが違う」「headless 利用者に型とスキーマだけ配りたい」「サイト生成 CLI を独立して配布する」の 3 点。
 
 ```
 kansoCMS/
@@ -106,6 +106,10 @@ kansoCMS/
 │       └── tsconfig.json           # jsxImportSource: "react"
 │
 ├── packages/
+│   ├── create-kanso/               # create-kanso — GitHub からサイトを生成する Node.js CLI (ESM + JSDoc、runtime 依存なし)
+│   │   ├── bin/create-kanso.mjs    # npm create kanso のエントリポイント
+│   │   └── src/                   # 引数、ustar 展開、コピー、設定の書き換え、単体テスト
+│   │
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
@@ -269,6 +273,14 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 ## 7. 開発・デプロイ体験
 
+新規サイトは `npm create kanso@latest my-site` (= `pnpm create kanso my-site`) → `cd my-site`。
+`create-kanso` の npm 公開後に利用可能 (公開作業は T23 の範囲外)。未公開時は
+`node packages/create-kanso/bin/create-kanso.mjs ../my-site --yes --from .` で試せる。
+GitHub の `main` (`--ref` で変更可能) からリポジトリ全体を取得し、`docs/tasks/` だけを除外する。
+Worker / D1 / R2 名と `SITE_URL`、migration コマンド、root 名と README を自分のサイト用に変更する。
+`--from <dir|.tar.gz>` はオフライン用。CLI は Git の初期化だけを行い、Cloudflare のリソース作成や
+依存インストールは実行しない。以下は元の checkout の名前での手順で、生成後は CLI に表示された名前を使う。
+
 ```bash
 pnpm i
 pnpm --filter @kanso/server exec wrangler d1 create kanso   # database_id を wrangler.jsonc へ
@@ -277,6 +289,7 @@ pnpm db:migrate:local                                       # wrangler d1 migrat
 pnpm dev                                                    # server :5173 (workerd) + admin :5174 (proxy)
 # → http://localhost:5174/admin/setup で初期ユーザー作成
 pnpm typecheck && pnpm check && pnpm test && pnpm build     # タスク完了時のゲート
+pnpm db:migrate                                             # 本番 D1 へ適用 (SITE_URL を実ドメインに変更後)
 pnpm deploy                                                 # admin build → server build → wrangler deploy
 ```
 
@@ -295,7 +308,7 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog` ([tasks/phase-3.md](tasks/phase-3.md))。残: `create-kanso` スキャフォールド、管理画面 i18n | v1.0 |
+| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド ([tasks/phase-3.md](tasks/phase-3.md))。残: 管理画面 i18n | v1.0 |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -303,6 +316,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 
 ## 9. 決定事項
 
+- **サイト生成は GitHub リポジトリのコピーにする** (2026-09-24)。`create-kanso` は ESM + JSDoc の Node.js CLI、runtime 依存なし。`@kanso/*` の npm 公開は前提にせず、ustar を直接展開して `docs/tasks/` 以外の workspace・CI・例を保つ。ローカル checkout / tarball も指定可能。JSONC のコメントと `database_id` を保持してデプロイ識別子だけを書き換え、Cloudflare / Wrangler は実行せず次の手順を表示する。
 - **固定ページと投稿は別テーブル** (2026-09-10)。WP 式の単一テーブルは採らない。
 - **API は常に認証必須** (2026-09-10)。公開コンテンツは SSR で見せ、headless 利用は `read` スコープの API キーを発行する。唯一の例外はフォーム送信エンドポイント (Phase 2, Turnstile で保護)。
 - **管理画面ルーターは TanStack Router** (file-based, `autoCodeSplitting`)。ルートファイルは `Route` 以外を export しない。
