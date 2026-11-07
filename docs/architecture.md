@@ -175,7 +175,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
-| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoUrl / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)。zod スキーマは `packages/shared/settings.ts` |
+| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoUrl / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
@@ -210,7 +210,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は `/` + index 可の公開ページ + 全投稿タイプ + index 可の公開投稿。feed は Atom 最新 20 件 | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable` | 公開 |
-| `GET /api/v1/health`, `/setup`, `POST /api/v1/setup`, `/auth/login` | 初期化・ログイン | 公開 |
+| `GET /api/v1/health`, `/setup`, `POST /api/v1/setup`, `/auth/login` | 初期化・ログイン。setup は `starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 |
 | `/api/v1/**` (それ以外) | 管理 API (CRUD)。`GET` は `read`、変更系は `write` | セッション or `x-api-key` |
 | `GET /api/v1/pages/:id/revisions`, `GET /api/v1/posts/:id/revisions` | 固定ページ / 投稿の更新前スナップショット一覧 (最新 20 件) | セッション or `x-api-key` (`read`) |
 | `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
@@ -218,6 +218,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302 リダイレクトの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
 | `GET /api/v1/search` | 公開ページ・投稿の全文検索 (`q`: 1〜100 文字、`page` ≥ 1、`perPage`: 1〜50、既定 10) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/search/reindex` | 全ページ・投稿の検索本文を再計算 → `{ ok: true, pages, posts }` | セッション or `x-api-key` (`write`) |
+| `GET/POST/DELETE /api/v1/starter` | サンプルサイトの状態取得・投入 (201、投入済みは 409)・削除 (`{ removed, kept }`、未投入は 404) | セッションの `admin` のみ |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
 | `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
 
@@ -256,6 +257,14 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - テーマ設定は `settings` の `theme` 行にテーマ名で名前空間を切って保存し、`loadSiteContext()` が有効テーマ分だけ検証して `ctx.themeSettings` として各 `Layout` に渡す。適用は `themes/chrome.tsx` (`AccentStyle` が `--color-accent` を 1 箇所上書き、`FooterExtras` がフッター文とSNSリンク)。
 - セクション表示のページでは本文 (`bodyHtml`) を描画しないので、本文に埋め込まれたフォームへの POST も受け付けない (404)。headless API は `sections` を生データで返すだけで、`examples/astro-blog` はセクションを描画しない。
 - 管理画面の「カスタマイズ」(`/_auth/customize`) がエディタ: カタログからの追加・並べ替え・設定フォーム自動生成 (image は メディアピッカー、posts は投稿タイプ選択)、`POST /preview/draft/page` (セッション認証、`no-store` + `noindex`) による未保存ドラフトの iframe プレビュー、pages API / `PUT /api/v1/settings/theme` での保存。
+
+### サンプルサイト (Phase 5)
+
+- 「小さな会社・店舗」向けのテンプレート (セクション構成のホームとサービス、会社概要、お問い合わせ + フォーム、お知らせ 3 件、画像 7 枚、テーマ設定、サイト説明)。内容は `apps/server/src/starter/content.ts`、画像は自作の抽象 WebP で `apps/server/public/starter/` に同梱し、`ASSETS` binding から読んでメディアに登録する。文言は日本語のみ。
+- 投入はセットアップ画面のチェックボックス (既定オン) か、設定画面の「サンプルサイト」。固定ページと投稿タイプは同じ URL 空間として、パス/スラッグが既にあるもの (フォームはスラッグ) は作らずに `skipped` で返す。投稿とカテゴリは今回作った投稿タイプにだけ入れる。テーマ設定とサイト説明は未設定のときだけ書く。
+- **D1 のクエリ数**: Workers Free は 1 呼び出しあたり 50 クエリ (`batch()` は 1)。サービスを 1 件ずつ呼ぶと約 80 になるため、core の `services/starter.ts` が集合読み出しと `db.batch()` で書く (実測: 投入 12 / 削除 21、リクエスト全体)。行の値は各サービスと共通の insert ビルダー (`pageInsertValues` など) で作る。投入はメディア行の batch の後、残り全部とマニフェストを 1 つの batch (トランザクション) で書き、batch 内の参照はスラッグのサブクエリで解く (`AUTOINCREMENT` なので ID を先に決めない)。失敗時はメディア行と R2 を消す。
+- 削除はマニフェストに載っているものだけが対象: リビジョンのある (編集した) ページ・投稿、マニフェスト外の子ページを持つページ、残る投稿がある投稿タイプとそれが使うカテゴリ、送信のあるか更新したフォーム、残るコンテンツ (サンプル以外を含む) やサイトロゴから参照される画像は残し、`kept` に理由つきで返す。テーマ設定・サイト説明は投入時の値のままなら戻す。最後にマニフェストを消す。
+- D1 は LIKE / GLOB のパターンを 50 バイトに制限するので、本文中のメディア URL 照合は `instr()` を使う。
 
 ### キャッシュ
 
@@ -317,8 +326,9 @@ pnpm deploy                                                 # admin build → se
 | 0. 足場 | done | monorepo、wrangler/vite 設定、drizzle 初期マイグレーション、`wrangler types` | `pnpm dev` で Hello World が SSR される |
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
-| 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド ([tasks/phase-3.md](tasks/phase-3.md))。残: 管理画面 i18n | v1.0 |
+| 3. 仕上げ | **done (2026-11-08)** | テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド ([tasks/phase-3.md](tasks/phase-3.md))。管理画面 i18n は見送り (当面日本語のみ、2026-11-08) | v1.0 |
 | 4. セクションエディタ | **done (2026-11-07)** | Shopify 風カスタマイズ: field DSL、`pages.sections_json`、テーマのセクションレジストリと SSR、draft プレビュー、管理画面「カスタマイズ」エディタ、テーマ設定 (accent / footer / SNS) ([tasks/phase-4.md](tasks/phase-4.md)) | 管理画面からページ構成とテーマ設定を編集でき、公開に即反映される |
+| 5. サンプルサイト | **done (2026-11-08)** | 会社・店舗向けのサンプル一式をセットアップ時 (既定オン) / 設定画面から投入、編集していない部分を一括削除。D1 クエリ上限に収まる一括書き込み ([tasks/phase-5.md](tasks/phase-5.md)) | セットアップ直後から編集できるサイトが公開され、不要なら片付けられる |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

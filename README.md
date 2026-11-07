@@ -11,13 +11,15 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
 - Bundled Default and Paper themes, switchable in site settings
 - Shopify-style customize editor: compose pages from theme sections (hero, text, latest posts, …) with a live preview, plus theme-wide settings (accent color, footer, social links) — no code, no Liquid
+- A starter site for a small business (sectioned home and services pages, about, contact form, news posts, images) installed at setup by default, and removable later without touching what you edited
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 4 complete** — blog + fixed pages, contact forms, full-text search, themes, and the
-> section-based customize editor all work from the admin UI. Admin i18n (Phase 3) is still open.
+> Status: **Phase 5 complete** — blog + fixed pages, contact forms, full-text search, themes, the
+> section-based customize editor and a removable starter site all work from the admin UI. The admin
+> UI is Japanese only for now.
 
 ## Layout
 
@@ -57,7 +59,10 @@ pnpm dev                  # server on http://localhost:5173, admin dev server on
 - `http://localhost:5173/api/v1/health` — API
 - `http://localhost:5174/admin/` — admin UI with hot reload (proxies `/api` and `/media` to :5173)
 
-On first run open `/admin/setup` to create the admin user, then log in at `/admin/login`.
+On first run open `/admin/setup` to create the admin user, then log in at `/admin/login`. Setup
+installs the starter site unless you untick **サンプルサイトを入れる**; remove it (or add it later) under
+設定 → サンプルサイト. Removal keeps pages and posts you edited, images still in use, forms with
+submissions and post types you added posts to.
 
 To see the built admin served by the Worker itself, run `pnpm build` once; it lands in `apps/server/public/admin/` and is served at `http://localhost:5173/admin/`.
 
@@ -77,7 +82,9 @@ pnpm e2e
 `pnpm e2e` builds the admin and starts the Worker on port 5199, or reuses a server already
 running there. The local D1 must have its migrations applied. If setup has not run, the test
 creates `admin@example.com` with password `password123`; otherwise that account and password must
-already exist. Test pages and forms use the `e2e-` slug prefix and are deleted after the run.
+already exist. Test pages and forms use the `e2e-` slug prefix and are deleted after the run. The
+starter-site test installs and removes the starter site, and skips itself when the database
+already has it installed.
 
 ### Form notifications (email)
 
