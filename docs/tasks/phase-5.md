@@ -13,7 +13,7 @@
 |---|---|---|---|
 | T30 | サンプル定義と同梱画像、インストーラ (マニフェスト記録・衝突時スキップ) | done | shared, core, server |
 | T31 | 管理 API (`/api/v1/starter` の状態取得・投入) とセットアップ時の投入、ASSETS からの画像読み込み | done | shared, server |
-| T32 | サンプルの削除 (編集済み・参照中・利用者が追加したものは残す) | todo | server |
+| T32 | サンプルの削除 (編集済み・参照中・利用者が追加したものは残す) + 投入・削除の一括化 (D1 クエリ上限対策) | done | shared, core, server |
 | T33 | 管理画面: セットアップのチェックボックス、設定画面の「サンプルサイト」、ダッシュボードの案内 | todo | admin |
 | T34 | E2E + ドキュメント | todo | tooling, docs |
 
@@ -29,7 +29,7 @@ Phase 5 の決定事項 (2026-11-08 ユーザー確認済み):
 ## 全体設計 (このフェーズの前提)
 
 - **サンプルは「テンプレート」として書く。** 架空の実在風企業ではなく、運用者が自分の内容に差し替える前提の中立的な文言にし、各所に「どこで編集できるか」の案内を混ぜる (Shopify Dawn の既定文言と同じ考え方)。会社名にあたる箇所はセットアップ時のサイト名 (`site.title`) を差し込む。文言は日本語のみ (サイトの `locale` に関わらない)。
-- **既存のサービス経由で作る。** インストーラは `c.var.kanso` のサービス (`media.upload` / `forms.create` / `postTypes.create` / `taxonomies.*` / `posts.create` / `pages.create` / `settings.*`) だけを呼び、DB を直接触らない。検証・`searchText`・パス計算・キャッシュ世代の更新が既存の経路をそのまま通る。
+- ~~既存のサービス経由で作る。~~ **(T32 で変更)** サービスを 1 件ずつ呼ぶと D1 クエリがサイト全体で約 80 回になり、Workers Free の上限 (1 呼び出し 50 クエリ) を超える。投入と削除は core の `starter` サービスが少数の集合読み出しと `db.batch()` (トランザクション) で行い、行の値は各サービスと共通の insert ビルダー (`pageInsertValues` など) で作る。入力の検証は引き続き API と同じ create スキーマ。
 - **既存のコンテンツを壊さない。** 固定ページ (パス)・投稿タイプ・フォーム・タグはスラッグが空いているときだけ作成し、使われていればスキップして結果に報告する。投稿とカテゴリは、このインストールで作った投稿タイプにだけ作る。テーマ設定とサイト説明は未設定のときだけ書く。
 - **何を作ったかをマニフェストに残す。** settings の新キー `starter` に作成した ID と書き込んだ設定値を記録する。削除 (T32) はマニフェストに載っているものだけを対象にし、運用者の作業 (編集済み・参照中・追加分) は残す。
 - **配置**: サンプル定義と投入・削除のロジックは `apps/server/src/starter/` (画像の読み込みに Worker の `ASSETS` が要るため server 側)。画像ファイルは `apps/server/public/starter/` (静的アセットとして同梱)。マニフェストの zod スキーマは `packages/shared`。
@@ -115,6 +115,7 @@ installStarter(kanso, {
 
 ### 決定
 
+- **注: インストーラはこの後 T32 で core の一括書き込みに作り直した (D1 クエリ上限)。以下の「サービスの conflict を捕まえてスキップ」「`finally` でマニフェスト」は T30 時点の実装の記録。**
 - 実装分担: Codex の 1 回目はプロバイダのストリーム切断で変更なし、2 回目は `starterManifestSchema` / `SETTINGS_KEYS.starter` / core の `settings.starter()`・`settings.delete(key)` まで実装したところで、Codex 側の環境で `npx.cmd` が起動できず停止。残り (サンプル定義・インストーラ・テスト) は Claude が実装した。
 - 画像: Pillow で生成した抽象画像 7 枚 (緑・砂色・テラコッタ系のグラデーションに同心円・点・波線・角丸を重ねたもの)、WebP、合計 54 KB (最大 `hero.webp` 13 KB)。生成スクリプトはコミットしていない。alt は日本語で [content.ts](../../apps/server/src/starter/content.ts) の `STARTER_IMAGES` に持ち、アップロード時にメディアの alt に入る (セクションの画像は media の alt で描画される)。
 - **衝突判定は事前の存在確認ではなく、各サービスの `create` が投げる `KansoError` (`conflict`) を捕まえてスキップする。** 固定ページのパス重複、トップレベル固定ページと投稿タイプのスラッグ衝突 (双方向)、フォームのスラッグ UNIQUE を既存の規則どおりに判定でき、下書きも含む。core に読み出しヘルパーは追加していない。conflict 以外の例外はそのまま失敗させる。
@@ -167,7 +168,7 @@ installStarter(kanso, {
 
 ## T32. サンプルの削除
 
-状態: `todo`
+状態: `done` (2026-11-08)
 
 ### ゴール
 
@@ -195,7 +196,17 @@ installStarter(kanso, {
 
 ### 決定
 
-(実装後に記入)
+- **D1 のクエリ上限への対応 (T30 のインストーラを作り直し)。** 一時的に D1 binding を数えるプロキシを挟んで実測したところ、サービス経由の投入はセットアップ込みで **87 クエリ** だった。Workers Free は 1 呼び出しあたり 50 クエリ (`batch()` は 1 と数える、[D1 limits](https://developers.cloudflare.com/d1/platform/limits/)) なので、本番の Free プランではセットアップ時の投入が途中で失敗する。サービス経由の削除も同程度になる見込みだったため、投入・削除とも core の [services/starter.ts](../../packages/core/src/services/starter.ts) に移した。作り直し後の実測は **投入 12 / 削除 21 クエリ** (認証・キャッシュ世代更新を含む 1 リクエスト全体)。計測用のプロキシはコミットしていない。
+- 行の値は各サービスの create から切り出した `pageInsertValues` / `postInsertValues` / `formInsertValues` / `postTypeInsertValues` / `categoryInsertValues` / `prepareMediaObject` を共有する (create 自身もこれを使うので、描画 HTML・検索テキスト・既定値がずれない)。ついでに `media.upload` は insert の `returning()` で行を返し、1 件あたり 1 クエリ減った。
+- 投入の流れ: マニフェスト確認 → 画像を R2 に put → media 行を 1 batch → `build(media)` で内容を作る → 衝突の読み出し (固定ページのパス / 投稿タイプ / フォーム、サイト・テーマ設定) → **残り全部 (フォーム・投稿タイプ・カテゴリ・投稿・カテゴリ紐付け・固定ページ・テーマ設定・サイト説明・マニフェスト) を 1 つの `db.batch()`** で書く。batch はトランザクションなので内容は全部入るか何も入らないかで、失敗時は media 行と R2 を消して例外を返す (T30 の「途中までをマニフェストに記録」は不要になった)。
+- ID は事前に決められない (`AUTOINCREMENT` のため `max(id)+1` は削除済み ID の再利用になり、残っている参照が別のものを指し得る)。batch 内の参照はスラッグのサブクエリで解決する: カテゴリ・投稿の `post_type_id = (select id from post_types where slug = 'news')`、カテゴリ紐付けは `insert … select`、マニフェストは `json_object(…, 'pages', json((select json_group_array(id) …)), …)` を値に入れた **素の insert** (upsert ではない) なので、同時に 2 回投入されても主キー衝突で片方がロールバックする。
+- drizzle 0.45 の D1 `batch()` は `db.run(sql)` の項目をパラメータ付きで実行できない (`preparedQuery.stmt` が無く `bind` で落ちる)。生 SQL はクエリビルダー経由 (`insert().select(sql)`、`values({ valueJson: sql\`…\` })`) にした。
+- **D1 は LIKE / GLOB のパターンを 50 バイトに制限する。** 本文中のメディア URL (`/media/2026/11/<uuid>.webp`、約 50 バイト) を `like '%…%'` で探すと失敗したので `instr(body_json, url) > 0` にした。
+- 衝突判定は純関数 `planStarterInstall` (固定ページと投稿タイプは同じ URL 空間として扱う。予約スラッグは検証エラー)。削除の参照判定も純関数 `referencedMediaIds` で、core にテストを追加 (`services/starter.test.ts` 6 件)。DB を通す部分は実 D1 で確認した (core のテストは DB を持たない)。
+- 削除の規則 (実装どおり): 投稿・固定ページは **リビジョンが 1 件でもあれば編集済み** として残す。マニフェスト外の子ページがあるページも残す。投稿タイプは削除しない投稿 (利用者の投稿や編集済みサンプル) が 1 件でもあれば残し、カテゴリは残る投稿タイプの中で残る投稿が使っていれば残す (投稿タイプごと消す場合はカテゴリも消す)。フォームは送信があるか `updatedAt > createdAt` なら残す。メディアは残るページ/投稿 (サンプル以外も含む) の OG・カバー・セクション値・本文 URL とサイトロゴから参照されていれば残す (セクションは値が候補 ID と一致する数値なら参照とみなす保守的な判定)。テーマ設定はその名前空間全体が投入時の値と同じときだけ名前空間ごと消し、サイト説明も投入時と同じときだけ空に戻す。最後にマニフェストを消すので、残したものは通常のコンテンツになり、再投入はスラッグ衝突でスキップされる。削除も 1 つの `db.batch()` で、R2 は batch 成功後に消す。
+- API: `DELETE /api/v1/starter` (admin のみ) → `{ removed: counts, kept: { kind, id, title, reason }[] }`。マニフェストなしは 404。件数の型 `StarterCounts` と `starterCounts()` は shared に移した。
+- 実地確認 (空の D1): セットアップ時の投入が最初は `db.run` の問題で失敗したが、そのとき作った media 7 件は後片付けされて 0 件だった (失敗時のロールバック確認)。修正後 `POST /api/v1/starter` 201・表示は T31 と同一。続けて、ホーム hero の見出しを編集、`news` に利用者の投稿 (カテゴリ「イベント」) を追加、お問い合わせを 1 件送信、テーマのアクセント色を変更してから `DELETE` → removed = 固定ページ 3・投稿 3・カテゴリ 1 (お知らせ)・メディア 4、kept = ホーム (edited)・お知らせ投稿タイプ (in_use)・イベント (in_use)・フォーム (has_submissions)・hero/about/service-a 画像 (in_use)。`/about` `/services` `/contact` `/news/workshop` は 404、`/` は編集した見出しと画像 3 枚のまま、`/news/my-post` は 200、アクセント色はそのまま、サイト説明は空に戻った。最初の `DELETE` は LIKE の制限で 500 になったが、batch 前の読み出しで落ちたので何も変わっていなかった。その状態 (ホーム・`news`・`contact` フォームあり) で再投入すると form / postType / page `home` がスキップされ固定ページ 3 件と画像 7 件だけが作られ、もう一度の削除で全部消えた。終了後に開発用 D1 を戻した。
+- テスト: core 68 (+6)、server 126 (install 3 件に組み替え、API に DELETE と editor 403 を追加)。4 ゲート通過。
 
 ---
 
@@ -246,6 +257,8 @@ installStarter(kanso, {
 ---
 
 ## 後続候補 (このフェーズの範囲外)
+
+- **既存の不具合 (T32 で発見)**: 管理画面の一覧検索 (`pages` / `posts` / `media` の `q`、`like '%q%'`) は D1 の LIKE パターン上限 50 バイトを超えると 500 になる (日本語でおよそ 17 文字以上。開発サーバーで 20 文字の検索が 500 を返すことを確認)。`instr()` などへの置き換えが必要。公開 `/search` は長い語でも 200 だった。
 
 - セクションカタログとテーマ設定のラベル日本語化 (管理画面が日本語固定になったため、`Hero` / `Heading` などの英語ラベルが浮いている)。
 - サンプルの種類を増やす (個人ブログ、飲食店) — 投入時にテンプレートを選ぶ UI。

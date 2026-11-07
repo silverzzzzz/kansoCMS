@@ -15,6 +15,19 @@ import { isUniqueViolation, KansoError } from '../errors.ts'
 
 export type FormContext = { turnstileAvailable: boolean }
 
+/** Column values for a new form; shared by `create` and the starter site's bulk insert. */
+export function formInsertValues(input: CreateFormInput) {
+  return {
+    slug: input.slug,
+    name: input.name,
+    fieldsJson: input.fields,
+    notifyTo: input.notifyTo ?? '',
+    successMessage: input.successMessage ?? '',
+    redirectUrl: input.redirectUrl ?? null,
+    turnstile: input.turnstile ?? false,
+  } satisfies typeof forms.$inferInsert
+}
+
 type SubmissionListInput = {
   formId: number
   page?: number
@@ -106,15 +119,7 @@ export function formsService(db: Db) {
     try {
       const [created] = await db
         .insert(forms)
-        .values({
-          slug: input.slug,
-          name: input.name,
-          fieldsJson: input.fields,
-          notifyTo: input.notifyTo ?? '',
-          successMessage: input.successMessage ?? '',
-          redirectUrl: input.redirectUrl ?? null,
-          turnstile,
-        })
+        .values({ ...formInsertValues(input), turnstile })
         .returning({ id: forms.id })
       if (!created) throw new Error('Form insert did not return a row')
       return get(created.id)

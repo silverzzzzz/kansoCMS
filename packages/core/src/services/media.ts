@@ -41,6 +41,37 @@ function sanitizeFilename(filename: string, extension: string): string {
     .join('')
 }
 
+/**
+ * Validate an upload and derive its storage key and row. Shared by `upload`
+ * and the starter site's bulk insert; the caller puts the bytes into R2.
+ */
+export function prepareMediaObject(input: UploadInput) {
+  if (input.bytes.byteLength > MEDIA_MAX_BYTES) {
+    throw KansoError.validation('File is too large')
+  }
+  if (input.bytes.byteLength === 0) throw KansoError.validation('File is empty')
+
+  const bytes = new Uint8Array(input.bytes)
+  const mime = sniffMime(bytes)
+  if (!mime) throw KansoError.validation('Unsupported file type')
+
+  const dimensions = readImageSize(bytes, mime)
+  const r2Key = mediaObjectKey(mime)
+  return {
+    r2Key,
+    mime,
+    values: {
+      r2Key,
+      filename: sanitizeFilename(input.filename, MEDIA_EXTENSIONS[mime]),
+      mime,
+      size: input.bytes.byteLength,
+      width: dimensions?.width ?? null,
+      height: dimensions?.height ?? null,
+      alt: input.alt,
+    } satisfies typeof media.$inferInsert,
+  }
+}
+
 export async function assertMediaExists(db: Db, id: number | null | undefined): Promise<void> {
   if (id === null || id === undefined) return
   const item = await db.query.media.findFirst({ where: eq(media.id, id), columns: { id: true } })
@@ -76,41 +107,17 @@ export function mediaService(db: Db, bucket: R2Bucket) {
   }
 
   async function upload(input: UploadInput) {
-    if (input.bytes.byteLength > MEDIA_MAX_BYTES) {
-      throw KansoError.validation('File is too large')
-    }
-    if (input.bytes.byteLength === 0) throw KansoError.validation('File is empty')
+    const prepared = prepareMediaObject(input)
+    await bucket.put(prepared.r2Key, input.bytes, { httpMetadata: { contentType: prepared.mime } })
 
-    const bytes = new Uint8Array(input.bytes)
-    const mime = sniffMime(bytes)
-    if (!mime) throw KansoError.validation('Unsupported file type')
-
-    const dimensions = readImageSize(bytes, mime)
-    const filename = sanitizeFilename(input.filename, MEDIA_EXTENSIONS[mime])
-    const r2Key = mediaObjectKey(mime)
-    await bucket.put(r2Key, input.bytes, { httpMetadata: { contentType: mime } })
-
-    let id: number
     try {
-      const [created] = await db
-        .insert(media)
-        .values({
-          r2Key,
-          filename,
-          mime,
-          size: input.bytes.byteLength,
-          width: dimensions?.width ?? null,
-          height: dimensions?.height ?? null,
-          alt: input.alt,
-        })
-        .returning({ id: media.id })
+      const [created] = await db.insert(media).values(prepared.values).returning()
       if (!created) throw new Error('Media insert did not return a row')
-      id = created.id
+      return withUrl(created)
     } catch (error) {
-      await bucket.delete(r2Key).catch(() => undefined)
+      await bucket.delete(prepared.r2Key).catch(() => undefined)
       throw error
     }
-    return get(id)
   }
 
   async function updateAlt(id: number, alt: string | null) {

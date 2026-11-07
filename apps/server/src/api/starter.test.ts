@@ -60,6 +60,12 @@ function testApp(
       createSession: vi.fn().mockResolvedValue({ token: 'new-session' }),
     },
     cacheVersion: { bump: vi.fn().mockResolvedValue(undefined) },
+    starter: {
+      remove: vi.fn().mockResolvedValue({
+        removed: { pages: 3, posts: 3, postTypes: 1, categories: 2, tags: 0, forms: 1, media: 5 },
+        kept: [{ kind: 'page', id: 12, title: 'ホーム', reason: 'edited' }],
+      }),
+    },
   })
   const app = new Hono<AppEnv>()
     .use('*', async (c, next) => {
@@ -130,11 +136,24 @@ describe('starter API', () => {
     expect(response.status).toBe(409)
   })
 
+  it('removes the starter site and reports what was kept', async () => {
+    const { app, env, kanso } = testApp({ role: 'admin', manifest })
+    const response = await app.request('/api/v1/starter', { method: 'DELETE' }, env)
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      removed: { pages: 3, posts: 3, postTypes: 1, categories: 2, tags: 0, forms: 1, media: 5 },
+      kept: [{ kind: 'page', id: 12, title: 'ホーム', reason: 'edited' }],
+    })
+    expect(kanso.starter.remove).toHaveBeenCalled()
+  })
+
   it('is limited to admins', async () => {
-    const { app, env } = testApp({ role: 'editor' })
+    const { app, env, kanso } = testApp({ role: 'editor' })
     expect((await app.request('/api/v1/starter', {}, env)).status).toBe(403)
     expect((await app.request('/api/v1/starter', { method: 'POST' }, env)).status).toBe(403)
+    expect((await app.request('/api/v1/starter', { method: 'DELETE' }, env)).status).toBe(403)
     expect(installStarter).not.toHaveBeenCalled()
+    expect(kanso.starter.remove).not.toHaveBeenCalled()
   })
 })
 

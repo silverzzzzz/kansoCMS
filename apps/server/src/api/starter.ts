@@ -1,10 +1,10 @@
 import type { Kanso } from '@kanso/core'
-import type { StarterManifest } from '@kanso/shared'
+import { type StarterManifest, starterCounts } from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { requireRole } from '../middleware/auth.ts'
 import { starterImageLoader } from '../starter/assets.ts'
-import { installStarter, starterCounts } from '../starter/install.ts'
+import { installStarter } from '../starter/install.ts'
 import { currentUserId } from './principal.ts'
 
 /** The starter home page, while it still exists, for the dashboard's customize link. */
@@ -35,3 +35,4 @@ export const starter = new Hono<AppEnv>()
     })
     return c.json(result, 201)
   })
+  .delete('/', async (c) => c.json(await c.var.kanso.starter.remove()))

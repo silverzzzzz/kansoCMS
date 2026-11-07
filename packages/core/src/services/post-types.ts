@@ -12,6 +12,18 @@ function throwPostTypeConflict(error: unknown): never {
   throw error
 }
 
+/** Column values for a new post type; shared by `create` and the starter site's bulk insert. */
+export function postTypeInsertValues(input: CreatePostTypeInput) {
+  return {
+    slug: input.slug,
+    name: input.name,
+    description: input.description ?? null,
+    hasCategories: input.hasCategories ?? true,
+    hasTags: input.hasTags ?? true,
+    sortOrder: input.sortOrder ?? 0,
+  } satisfies typeof postTypes.$inferInsert
+}
+
 export function postTypesService(db: Db) {
   async function list() {
     return db.query.postTypes.findMany({
@@ -49,14 +61,7 @@ export function postTypesService(db: Db) {
     try {
       const [created] = await db
         .insert(postTypes)
-        .values({
-          slug: input.slug,
-          name: input.name,
-          description: input.description ?? null,
-          hasCategories: input.hasCategories ?? true,
-          hasTags: input.hasTags ?? true,
-          sortOrder: input.sortOrder ?? 0,
-        })
+        .values(postTypeInsertValues(input))
         .returning({ id: postTypes.id })
       if (!created) throw new Error('Post type insert did not return a row')
       return get(created.id)

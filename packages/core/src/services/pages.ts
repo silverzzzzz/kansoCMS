@@ -34,6 +34,42 @@ function throwPageConflict(error: unknown): never {
   throw error
 }
 
+/**
+ * Column values for a new page at `path`. Shared by `create` and the starter
+ * site's bulk insert so both store the same rendered HTML and search text.
+ */
+export function pageInsertValues(
+  input: CreatePageInput,
+  path: string,
+  context: RenderContext,
+  now = new Date(),
+) {
+  const bodyJson = input.bodyJson ?? EMPTY_DOCUMENT
+  const sectionsJson = input.sections ?? null
+  const status = input.status ?? 'draft'
+  let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
+  if (status === 'published' && publishedAt === null) publishedAt = now
+  return {
+    title: input.title,
+    slug: input.slug,
+    path,
+    parentId: input.parentId ?? null,
+    sortOrder: input.sortOrder ?? 0,
+    bodyJson,
+    bodyHtml: renderRichText(bodyJson, context),
+    sectionsJson,
+    searchText: sectionsJson === null ? plainText(bodyJson) : sectionsPlainText(sectionsJson),
+    excerpt: input.excerpt?.trim() ? input.excerpt : null,
+    status,
+    publishedAt,
+    seoTitle: input.seoTitle ?? null,
+    seoDescription: input.seoDescription ?? null,
+    ogMediaId: input.ogMediaId ?? null,
+    noindex: input.noindex ?? false,
+    canonicalUrl: input.canonicalUrl ?? null,
+  } satisfies typeof pages.$inferInsert
+}
+
 /** Predicate for "visible to the public right now". Shared by all public reads. */
 export function publishedNow(now = new Date()) {
   return and(eq(pages.status, 'published'), lte(pages.publishedAt, now))
@@ -107,35 +143,10 @@ export function pagesService(db: Db) {
     })
     if (duplicate) throw KansoError.conflict('Page path already exists')
 
-    const bodyJson = input.bodyJson ?? EMPTY_DOCUMENT
-    const sectionsJson = input.sections ?? null
-    const status = input.status ?? 'draft'
-    let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
-    if (status === 'published' && publishedAt === null) publishedAt = new Date()
-    const excerpt = input.excerpt?.trim() ? input.excerpt : null
-
     try {
       const [created] = await db
         .insert(pages)
-        .values({
-          title: input.title,
-          slug: input.slug,
-          path,
-          parentId: input.parentId ?? null,
-          sortOrder: input.sortOrder ?? 0,
-          bodyJson,
-          bodyHtml: renderRichText(bodyJson, context),
-          sectionsJson,
-          searchText: sectionsJson === null ? plainText(bodyJson) : sectionsPlainText(sectionsJson),
-          excerpt,
-          status,
-          publishedAt,
-          seoTitle: input.seoTitle ?? null,
-          seoDescription: input.seoDescription ?? null,
-          ogMediaId: input.ogMediaId ?? null,
-          noindex: input.noindex ?? false,
-          canonicalUrl: input.canonicalUrl ?? null,
-        })
+        .values(pageInsertValues(input, path, context))
         .returning({ id: pages.id })
       if (!created) throw new Error('Page insert did not return a row')
       return get(created.id)

@@ -1,207 +1,96 @@
-import { type Kanso, KansoError } from '@kanso/core'
-import { SETTINGS_KEYS, type StarterManifest } from '@kanso/shared'
+import type { Kanso, StarterInstallPlan } from '@kanso/core'
+import type { SiteSettings, StarterManifest } from '@kanso/shared'
 import { describe, expect, it, vi } from 'vitest'
-import { installStarter } from './install.ts'
+import { STARTER_IMAGES, type StarterMedia } from './content.ts'
+import { installStarter, starterBuild } from './install.ts'
 
-type Options = {
-  existingPages?: string[]
-  existingPostTypes?: string[]
-  existingForms?: string[]
-  themeSettings?: Record<string, Record<string, unknown>>
-  description?: string
-  manifest?: StarterManifest | null
-  failOnPage?: string
+const site: SiteSettings = {
+  title: 'Example Shop',
+  description: '',
+  locale: 'ja',
+  timezone: 'Asia/Tokyo',
+  logoMediaId: null,
+  homePostTypeSlug: null,
+  theme: 'paper',
 }
 
-function testKanso(options: Options = {}) {
-  let nextId = 100
-  const created = () => ({ id: nextId++ })
-  const settings = {
-    starter: vi.fn().mockResolvedValue(options.manifest ?? null),
-    site: vi.fn().mockResolvedValue({
-      title: 'Example Shop',
-      description: options.description ?? '',
-      locale: 'ja',
-      timezone: 'Asia/Tokyo',
-      logoMediaId: null,
-      homePostTypeSlug: null,
-      theme: 'default',
-    }),
-    theme: vi.fn().mockResolvedValue(options.themeSettings ?? {}),
-    updateTheme: vi.fn().mockResolvedValue(undefined),
-    set: vi.fn().mockResolvedValue(undefined),
-  }
-  const kanso = Object.assign(Object.create(null), {
-    settings,
-    media: {
-      upload: vi.fn(async (input: { filename: string }) => ({
-        ...created(),
-        url: `/media/${input.filename}`,
-      })),
-    },
-    forms: {
-      create: vi.fn(async (input: { slug: string }) => {
-        if (options.existingForms?.includes(input.slug)) {
-          throw KansoError.conflict('Form slug already exists')
-        }
-        return created()
-      }),
-    },
-    postTypes: {
-      create: vi.fn(async (input: { slug: string }) => {
-        if (options.existingPostTypes?.includes(input.slug)) {
-          throw KansoError.conflict('Post type slug already exists')
-        }
-        return created()
-      }),
-    },
-    taxonomies: { createCategory: vi.fn(async () => created()) },
-    posts: { create: vi.fn(async () => created()) },
-    pages: {
-      create: vi.fn(async (input: { slug: string }) => {
-        if (options.failOnPage === input.slug) throw new Error('D1 is unavailable')
-        if (options.existingPages?.includes(input.slug)) {
-          throw KansoError.conflict('Page path already exists')
-        }
-        return created()
-      }),
-    },
-  }) as Kanso
-  return { kanso, settings }
+const media = Object.fromEntries(
+  STARTER_IMAGES.map((image, index) => [
+    image.name,
+    { id: index + 1, url: `/media/${image.name}` },
+  ]),
+) as StarterMedia
+
+const manifest: StarterManifest = {
+  installedAt: '2026-11-08T03:00:00.000Z',
+  pages: [1, 2, 3, 4],
+  posts: [5, 6, 7],
+  postTypes: [8],
+  categories: [9, 10],
+  tags: [],
+  forms: [11],
+  media: [1, 2, 3, 4, 5, 6, 7],
+  themeSettings: null,
+  siteDescription: null,
 }
 
-const loadImage = vi.fn(async () => new ArrayBuffer(8))
 const now = new Date('2026-11-08T03:00:00.000Z')
 
-function writtenManifest(settings: ReturnType<typeof testKanso>['settings']): StarterManifest {
-  const call = settings.set.mock.calls.find(([key]) => key === SETTINGS_KEYS.starter)
-  if (!call) throw new Error('Manifest was not written')
-  return call[2] as StarterManifest
-}
+describe('starterBuild', () => {
+  it('validates the content and targets the active theme settings', () => {
+    const build = starterBuild(site, media, now)
+    expect(build.form).toMatchObject({ slug: 'contact', turnstile: false, redirectUrl: null })
+    expect(build.postType).toMatchObject({ slug: 'news', hasTags: false })
+    expect(build.categories.map((category) => category.key)).toEqual(['info', 'event'])
+    expect(build.posts.map((post) => post.categoryKey)).toEqual(['info', 'event', 'info'])
+    expect(build.posts[0]?.input).not.toHaveProperty('postTypeId')
+    expect(build.pages.map((page) => page.slug)).toEqual(['contact', 'about', 'services', 'home'])
+    expect(build.themeSettings).toMatchObject({
+      theme: 'paper',
+      values: { accent: '#2f6f5e', sns_url_1: '' },
+    })
+    expect(build.siteDescription).toContain('Example Shop')
+  })
+})
 
 describe('installStarter', () => {
-  it('creates the whole starter site on an empty site and records it', async () => {
-    const { kanso, settings } = testKanso({ themeSettings: { paper: { footer_text: 'Paper' } } })
-    const result = await installStarter(kanso, { userId: 1, loadImage, now })
+  it('loads every bundled image and hands a validated build to the core install', async () => {
+    const install = vi.fn(async (plan: StarterInstallPlan) => {
+      plan.build(media)
+      return { manifest, skipped: [{ kind: 'page' as const, slug: 'about' }] }
+    })
+    const kanso = Object.assign(Object.create(null), {
+      settings: { site: vi.fn().mockResolvedValue(site) },
+      starter: { install },
+    }) as Kanso
+    const loadImage = vi.fn(async () => new ArrayBuffer(4))
 
+    const result = await installStarter(kanso, { userId: 3, loadImage, now })
+
+    expect(loadImage).toHaveBeenCalledTimes(STARTER_IMAGES.length)
+    const plan = install.mock.calls[0]?.[0]
+    expect(plan?.authorId).toBe(3)
+    expect(plan?.now).toBe(now)
+    expect(plan?.images.map((image) => image.name)).toEqual(
+      STARTER_IMAGES.map((image) => image.name),
+    )
+    expect(plan?.images[0]).toMatchObject({ alt: STARTER_IMAGES[0].alt })
     expect(result).toEqual({
       created: { pages: 4, posts: 3, postTypes: 1, categories: 2, tags: 0, forms: 1, media: 7 },
-      skipped: [],
+      skipped: [{ kind: 'page', slug: 'about' }],
     })
-    expect(kanso.posts.create).toHaveBeenCalledWith(
-      expect.objectContaining({ categoryIds: [expect.any(Number)], status: 'published' }),
-      { allowRawHtml: false, authorId: 1 },
-    )
-    expect(kanso.pages.create).toHaveBeenLastCalledWith(
-      expect.objectContaining({ slug: 'home', sections: expect.any(Array) }),
-      { allowRawHtml: false },
-    )
-
-    // Theme settings go into the active theme only; other namespaces are kept.
-    expect(settings.updateTheme).toHaveBeenCalledWith({
-      paper: { footer_text: 'Paper' },
-      default: expect.objectContaining({ accent: '#2f6f5e' }),
-    })
-    expect(settings.set).toHaveBeenCalledWith(
-      SETTINGS_KEYS.site,
-      expect.anything(),
-      expect.objectContaining({ description: expect.stringContaining('Example Shop') }),
-    )
-
-    const manifest = writtenManifest(settings)
-    expect(manifest.installedAt).toBe(now.toISOString())
-    expect(manifest.media).toHaveLength(7)
-    expect(manifest.pages).toHaveLength(4)
-    expect(manifest.themeSettings).toMatchObject({
-      theme: 'default',
-      values: { accent: '#2f6f5e' },
-    })
-    expect(manifest.siteDescription).toContain('Example Shop')
   })
 
-  it('skips items whose slug or path is taken, and posts of a skipped post type', async () => {
-    const { kanso, settings } = testKanso({
-      existingPages: ['about'],
-      existingPostTypes: ['news'],
-      existingForms: ['contact'],
+  it('does not reach the core install when an image is missing', async () => {
+    const install = vi.fn()
+    const kanso = Object.assign(Object.create(null), {
+      settings: { site: vi.fn().mockResolvedValue(site) },
+      starter: { install },
+    }) as Kanso
+    const loadImage = vi.fn(async () => {
+      throw new Error('Starter image hero.webp is not available (HTTP 404)')
     })
-    const result = await installStarter(kanso, { userId: null, loadImage, now })
-
-    expect(result.skipped).toEqual([
-      { kind: 'form', slug: 'contact' },
-      { kind: 'postType', slug: 'news' },
-      { kind: 'page', slug: 'about' },
-    ])
-    expect(kanso.taxonomies.createCategory).not.toHaveBeenCalled()
-    expect(kanso.posts.create).not.toHaveBeenCalled()
-    const manifest = writtenManifest(settings)
-    expect(manifest.pages).toHaveLength(3)
-    expect(manifest.forms).toEqual([])
-    expect(manifest.postTypes).toEqual([])
-    expect(manifest.posts).toEqual([])
-  })
-
-  it('leaves existing theme settings and site description alone', async () => {
-    const { kanso, settings } = testKanso({
-      themeSettings: { default: { accent: '#000000' } },
-      description: 'Our own description',
-    })
-    await installStarter(kanso, { userId: 1, loadImage, now })
-
-    expect(settings.updateTheme).not.toHaveBeenCalled()
-    expect(settings.set).not.toHaveBeenCalledWith(
-      SETTINGS_KEYS.site,
-      expect.anything(),
-      expect.anything(),
-    )
-    const manifest = writtenManifest(settings)
-    expect(manifest.themeSettings).toBeNull()
-    expect(manifest.siteDescription).toBeNull()
-  })
-
-  it('refuses to install twice', async () => {
-    const { kanso } = testKanso({
-      manifest: {
-        installedAt: now.toISOString(),
-        pages: [1],
-        posts: [],
-        postTypes: [],
-        categories: [],
-        tags: [],
-        forms: [],
-        media: [],
-        themeSettings: null,
-        siteDescription: null,
-      },
-    })
-    await expect(installStarter(kanso, { userId: 1, loadImage, now })).rejects.toMatchObject({
-      code: 'conflict',
-    })
-    expect(kanso.media.upload).not.toHaveBeenCalled()
-  })
-
-  it('records partial progress when a step fails', async () => {
-    const { kanso, settings } = testKanso({ failOnPage: 'services' })
-    await expect(installStarter(kanso, { userId: 1, loadImage, now })).rejects.toThrow(
-      'D1 is unavailable',
-    )
-
-    const manifest = writtenManifest(settings)
-    expect(manifest.media).toHaveLength(7)
-    expect(manifest.posts).toHaveLength(3)
-    // contact and about were created before services failed; home was never reached.
-    expect(manifest.pages).toHaveLength(2)
-    expect(manifest.themeSettings).toBeNull()
-  })
-
-  it('records nothing when it fails before creating anything', async () => {
-    const { kanso, settings } = testKanso()
-    const failingLoad = vi.fn(async () => {
-      throw new Error('Asset missing')
-    })
-    await expect(installStarter(kanso, { userId: 1, loadImage: failingLoad, now })).rejects.toThrow(
-      'Asset missing',
-    )
-    expect(settings.set).not.toHaveBeenCalled()
+    await expect(installStarter(kanso, { userId: 3, loadImage, now })).rejects.toThrow('hero.webp')
+    expect(install).not.toHaveBeenCalled()
   })
 })

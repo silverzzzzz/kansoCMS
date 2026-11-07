@@ -14,6 +14,7 @@ import { redirectsService } from './services/redirects.ts'
 import { revisionsService } from './services/revisions.ts'
 import { searchService } from './services/search.ts'
 import { settingsService } from './services/settings.ts'
+import { starterService } from './services/starter.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 
 export {
@@ -55,6 +56,7 @@ export function createKanso(bindings: KansoBindings) {
     redirects: redirectsService(db),
     revisions: revisionsService(db),
     search: searchService(db),
+    starter: starterService(db, bindings.media),
     taxonomies: taxonomiesService(db),
   }
 }
@@ -63,3 +65,16 @@ export type Kanso = ReturnType<typeof createKanso>
 
 export type { Db } from './db/client.ts'
 export { KansoError, type KansoErrorCode } from './errors.ts'
+export type { PostContentInput } from './services/posts.ts'
+export type {
+  StarterBuild,
+  StarterImage,
+  StarterInstallOutcome,
+  StarterInstallPlan,
+  StarterKept,
+  StarterKeptKind,
+  StarterMediaRefs,
+  StarterRemoval,
+  StarterSkipped,
+  StarterSkippedKind,
+} from './services/starter.ts'

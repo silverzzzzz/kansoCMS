@@ -48,6 +48,41 @@ function throwPostConflict(error: unknown): never {
   throw error
 }
 
+/** The parts of a post insert that do not depend on its post type or taxonomy links. */
+export type PostContentInput = Omit<CreatePostInput, 'postTypeId' | 'categoryIds' | 'tagIds'>
+
+/**
+ * Column values for a new post, minus `postTypeId`. Shared by `create` and the
+ * starter site's bulk insert so both store the same rendered HTML and search text.
+ */
+export function postInsertValues(
+  input: PostContentInput,
+  context: CreateContext,
+  now = new Date(),
+) {
+  const bodyJson = input.bodyJson ?? EMPTY_DOCUMENT
+  const status = input.status ?? 'draft'
+  let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
+  if (status === 'published' && publishedAt === null) publishedAt = now
+  return {
+    slug: input.slug,
+    title: input.title,
+    coverMediaId: input.coverMediaId ?? null,
+    authorId: context.authorId,
+    bodyJson,
+    bodyHtml: renderRichText(bodyJson, context),
+    searchText: plainText(bodyJson),
+    excerpt: input.excerpt?.trim() ? input.excerpt : null,
+    status,
+    publishedAt,
+    seoTitle: input.seoTitle ?? null,
+    seoDescription: input.seoDescription ?? null,
+    ogMediaId: input.ogMediaId ?? null,
+    noindex: input.noindex ?? false,
+    canonicalUrl: input.canonicalUrl ?? null,
+  } satisfies Omit<typeof posts.$inferInsert, 'postTypeId'>
+}
+
 /** Predicate for posts visible to the public right now. */
 export function postsPublishedNow(now = new Date()) {
   const condition = and(eq(posts.status, 'published'), lte(posts.publishedAt, now))
@@ -294,34 +329,11 @@ export function postsService(db: Db) {
     await validateAssociations(input.postTypeId, categoryIds, tagIds)
     await assertSlugAvailable(input.postTypeId, input.slug)
 
-    const bodyJson = input.bodyJson ?? EMPTY_DOCUMENT
-    const status = input.status ?? 'draft'
-    let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
-    if (status === 'published' && publishedAt === null) publishedAt = new Date()
-    const excerpt = input.excerpt?.trim() ? input.excerpt : null
-
     let postId: number
     try {
       const [created] = await db
         .insert(posts)
-        .values({
-          postTypeId: input.postTypeId,
-          slug: input.slug,
-          title: input.title,
-          coverMediaId: input.coverMediaId ?? null,
-          authorId: context.authorId,
-          bodyJson,
-          bodyHtml: renderRichText(bodyJson, context),
-          searchText: plainText(bodyJson),
-          excerpt,
-          status,
-          publishedAt,
-          seoTitle: input.seoTitle ?? null,
-          seoDescription: input.seoDescription ?? null,
-          ogMediaId: input.ogMediaId ?? null,
-          noindex: input.noindex ?? false,
-          canonicalUrl: input.canonicalUrl ?? null,
-        })
+        .values({ postTypeId: input.postTypeId, ...postInsertValues(input, context) })
         .returning({ id: posts.id })
       if (!created) throw new Error('Post insert did not return a row')
       postId = created.id

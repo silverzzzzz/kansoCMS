@@ -30,6 +30,16 @@ function throwTaxonomyConflict(error: unknown, message: string): never {
   throw error
 }
 
+/** Column values for a new category, minus `postTypeId`; shared with the starter site's bulk insert. */
+export function categoryInsertValues(input: CreateCategoryInput) {
+  return {
+    slug: input.slug,
+    name: input.name,
+    parentId: input.parentId ?? null,
+    sortOrder: input.sortOrder ?? 0,
+  } satisfies Omit<typeof categories.$inferInsert, 'postTypeId'>
+}
+
 export function taxonomiesService(db: Db) {
   async function findCategoryBySlug(postTypeId: number, slug: string) {
     return db.query.categories.findFirst({
@@ -94,13 +104,7 @@ export function taxonomiesService(db: Db) {
     try {
       const [created] = await db
         .insert(categories)
-        .values({
-          postTypeId,
-          slug: input.slug,
-          name: input.name,
-          parentId,
-          sortOrder: input.sortOrder ?? 0,
-        })
+        .values({ postTypeId, ...categoryInsertValues(input) })
         .returning({ id: categories.id })
       if (!created) throw new Error('Category insert did not return a row')
       return getCategory(postTypeId, created.id)
