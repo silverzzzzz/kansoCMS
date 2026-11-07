@@ -1,4 +1,5 @@
 import type { SearchHitKind, SearchQuery, SnippetSegment } from '@kanso/shared'
+import { sectionsPlainText } from '@kanso/shared'
 import { eq, sql } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, plainText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
@@ -132,14 +133,21 @@ export function searchService(db: Db) {
 
   async function reindex() {
     const [allPages, allPosts] = await Promise.all([
-      db.select({ id: pages.id, bodyJson: pages.bodyJson }).from(pages),
+      db
+        .select({ id: pages.id, bodyJson: pages.bodyJson, sectionsJson: pages.sectionsJson })
+        .from(pages),
       db.select({ id: posts.id, bodyJson: posts.bodyJson }).from(posts),
     ])
     const statements = [
       ...allPages.map((row) =>
         db
           .update(pages)
-          .set({ searchText: plainText(row.bodyJson ?? EMPTY_DOCUMENT) })
+          .set({
+            searchText:
+              row.sectionsJson === null
+                ? plainText(row.bodyJson ?? EMPTY_DOCUMENT)
+                : sectionsPlainText(row.sectionsJson),
+          })
           .where(eq(pages.id, row.id)),
       ),
       ...allPosts.map((row) =>

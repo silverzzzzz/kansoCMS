@@ -4,7 +4,7 @@ import type {
   PageRevisionSnapshot,
   UpdatePageInput,
 } from '@kanso/shared'
-import { isReservedSlug } from '@kanso/shared'
+import { isReservedSlug, sectionsPlainText } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
 import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, plainText, renderRichText } from '../content/index.ts'
@@ -57,7 +57,7 @@ export function pagesService(db: Db) {
         orderBy: [asc(pages.sortOrder), asc(pages.title), asc(pages.id)],
         limit: perPage,
         offset: (page - 1) * perPage,
-        columns: { bodyJson: false, bodyHtml: false, searchText: false },
+        columns: { bodyJson: false, bodyHtml: false, sectionsJson: false, searchText: false },
       }),
       db.select({ value: count() }).from(pages).where(where),
     ])
@@ -108,6 +108,7 @@ export function pagesService(db: Db) {
     if (duplicate) throw KansoError.conflict('Page path already exists')
 
     const bodyJson = input.bodyJson ?? EMPTY_DOCUMENT
+    const sectionsJson = input.sections ?? null
     const status = input.status ?? 'draft'
     let publishedAt = input.publishedAt ? new Date(input.publishedAt) : null
     if (status === 'published' && publishedAt === null) publishedAt = new Date()
@@ -124,7 +125,8 @@ export function pagesService(db: Db) {
           sortOrder: input.sortOrder ?? 0,
           bodyJson,
           bodyHtml: renderRichText(bodyJson, context),
-          searchText: plainText(bodyJson),
+          sectionsJson,
+          searchText: sectionsJson === null ? plainText(bodyJson) : sectionsPlainText(sectionsJson),
           excerpt,
           status,
           publishedAt,
@@ -150,6 +152,7 @@ export function pagesService(db: Db) {
       parentId: current.parentId,
       sortOrder: current.sortOrder,
       bodyJson: current.bodyJson ?? EMPTY_DOCUMENT,
+      sections: current.sectionsJson,
       excerpt: current.excerpt,
       status: current.status,
       publishedAt: current.publishedAt?.toISOString() ?? null,
@@ -206,7 +209,14 @@ export function pagesService(db: Db) {
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
       values.bodyHtml = renderRichText(input.bodyJson, context)
-      values.searchText = plainText(input.bodyJson)
+    }
+    if (input.sections !== undefined) values.sectionsJson = input.sections
+    if (input.bodyJson !== undefined || input.sections !== undefined) {
+      const sections = input.sections === undefined ? current.sectionsJson : input.sections
+      values.searchText =
+        sections === null
+          ? plainText(input.bodyJson ?? current.bodyJson ?? EMPTY_DOCUMENT)
+          : sectionsPlainText(sections)
     }
     if (input.excerpt !== undefined) {
       values.excerpt = input.excerpt?.trim() ? input.excerpt : null
@@ -325,6 +335,7 @@ export function pagesService(db: Db) {
       id,
       {
         ...snapshot,
+        sections: snapshot.sections ?? null,
         parentId: parent?.id ?? null,
         ogMediaId: ogMedia?.id ?? null,
       },

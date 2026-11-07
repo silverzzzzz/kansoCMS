@@ -1,3 +1,4 @@
+import type { PageSection } from '@kanso/shared'
 import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { contentColumns, seoColumns, timestamps } from './_columns.ts'
 import { media } from './media.ts'
@@ -17,6 +18,7 @@ export const pages = sqliteTable(
       onDelete: 'set null',
     }),
     sortOrder: integer('sort_order').notNull().default(0),
+    sectionsJson: text('sections_json', { mode: 'json' }).$type<PageSection[]>(),
     ...contentColumns,
     ...seoColumns,
     ogMediaId: integer('og_media_id').references(() => media.id, { onDelete: 'set null' }),

@@ -39,9 +39,14 @@ export const cacheSettingsSchema = z.object({
 })
 export type CacheSettings = z.infer<typeof cacheSettingsSchema>
 
+/** Theme-specific settings; field-level validation belongs to the theme catalog. */
+export const themeSettingsSchema = z.record(z.string(), z.record(z.string(), z.unknown()))
+export type ThemeSettings = z.infer<typeof themeSettingsSchema>
+
 export const SETTINGS_KEYS = {
   site: 'site',
   organization: 'organization',
   forms: 'forms',
   cache: 'cache',
+  theme: 'theme',
 } as const

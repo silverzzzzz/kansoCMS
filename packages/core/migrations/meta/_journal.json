@@ -36,6 +36,13 @@
       "when": 1790021175579,
       "tag": "0004_search",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794058980887,
+      "tag": "0005_sections",
+      "breakpoints": true
     }
   ]
 }

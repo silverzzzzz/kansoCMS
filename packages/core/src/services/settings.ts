@@ -3,6 +3,7 @@ import {
   organizationSettingsSchema,
   SETTINGS_KEYS,
   siteSettingsSchema,
+  themeSettingsSchema,
 } from '@kanso/shared'
 import { eq } from 'drizzle-orm'
 import type { z } from 'zod'
@@ -36,6 +37,9 @@ export function settingsService(db: Db) {
     site: () => get(SETTINGS_KEYS.site, siteSettingsSchema),
     organization: () => get(SETTINGS_KEYS.organization, organizationSettingsSchema),
     forms: () => get(SETTINGS_KEYS.forms, formsSettingsSchema),
+    theme: () => get(SETTINGS_KEYS.theme, themeSettingsSchema),
+    updateTheme: (value: z.input<typeof themeSettingsSchema>) =>
+      set(SETTINGS_KEYS.theme, themeSettingsSchema, value),
   }
 }
 
