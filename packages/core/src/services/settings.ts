@@ -3,6 +3,7 @@ import {
   organizationSettingsSchema,
   SETTINGS_KEYS,
   siteSettingsSchema,
+  starterManifestSchema,
   themeSettingsSchema,
 } from '@kanso/shared'
 import { eq } from 'drizzle-orm'
@@ -34,6 +35,13 @@ export function settingsService(db: Db) {
   return {
     get,
     set,
+    async starter() {
+      const raw = await getRaw(SETTINGS_KEYS.starter)
+      return raw === undefined ? null : starterManifestSchema.parse(raw)
+    },
+    async delete(key: string) {
+      await db.delete(settings).where(eq(settings.key, key))
+    },
     site: () => get(SETTINGS_KEYS.site, siteSettingsSchema),
     organization: () => get(SETTINGS_KEYS.organization, organizationSettingsSchema),
     forms: () => get(SETTINGS_KEYS.forms, formsSettingsSchema),

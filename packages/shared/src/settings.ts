@@ -49,4 +49,5 @@ export const SETTINGS_KEYS = {
   forms: 'forms',
   cache: 'cache',
   theme: 'theme',
+  starter: 'starter',
 } as const
