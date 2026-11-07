@@ -9,6 +9,7 @@ import { toAdminHref } from '../routing.ts'
 const navigation = [
   { to: '/', label: 'ダッシュボード', exact: true },
   { to: '/pages', label: '固定ページ' },
+  { to: '/customize', label: 'カスタマイズ' },
   { to: '/posts', label: '投稿' },
   { to: '/post-types', label: '投稿タイプ' },
   { to: '/tags', label: 'タグ' },
@@ -140,6 +141,7 @@ type NavLinkProps = {
   to:
     | '/'
     | '/pages'
+    | '/customize'
     | '/posts'
     | '/post-types'
     | '/tags'

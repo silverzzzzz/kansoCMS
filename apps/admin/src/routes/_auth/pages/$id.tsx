@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError, fieldErrors } from '../../../api/errors.ts'
@@ -60,6 +60,17 @@ function EditPage() {
   if (!item) return <p>読み込み中…</p>
   return (
     <div>
+      {item.sections !== null && (
+        <div className="mb-6">
+          <Alert tone="info">
+            このページは
+            <Link to="/customize" search={{ page: id }} className="underline">
+              カスタマイズ (セクション)
+            </Link>
+            で表示が管理されています。ここで編集した本文は、セクションをやめるまで公開ページに表示されません。
+          </Alert>
+        </div>
+      )}
       {restore.error && (
         <div className="mb-6">
           <Alert tone="error">

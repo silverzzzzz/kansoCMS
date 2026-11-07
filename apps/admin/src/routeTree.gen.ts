@@ -14,6 +14,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
 import { Route as AuthApiKeysIndexRouteImport } from './routes/_auth/api-keys/index'
+import { Route as AuthCustomizeIndexRouteImport } from './routes/_auth/customize/index'
 import { Route as AuthFormsIndexRouteImport } from './routes/_auth/forms/index'
 import { Route as AuthFormsNewRouteImport } from './routes/_auth/forms/new'
 import { Route as AuthMediaIndexRouteImport } from './routes/_auth/media/index'
@@ -55,6 +56,11 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
 const AuthApiKeysIndexRoute = AuthApiKeysIndexRouteImport.update({
   id: '/api-keys/',
   path: '/api-keys/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthCustomizeIndexRoute = AuthCustomizeIndexRouteImport.update({
+  id: '/customize/',
+  path: '/customize/',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthFormsIndexRoute = AuthFormsIndexRouteImport.update({
@@ -162,6 +168,7 @@ export interface FileRoutesByFullPath {
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
   '/api-keys/': typeof AuthApiKeysIndexRoute
+  '/customize/': typeof AuthCustomizeIndexRoute
   '/forms/': typeof AuthFormsIndexRoute
   '/media/': typeof AuthMediaIndexRoute
   '/pages/': typeof AuthPagesIndexRoute
@@ -186,6 +193,7 @@ export interface FileRoutesByTo {
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
   '/api-keys': typeof AuthApiKeysIndexRoute
+  '/customize': typeof AuthCustomizeIndexRoute
   '/forms': typeof AuthFormsIndexRoute
   '/media': typeof AuthMediaIndexRoute
   '/pages': typeof AuthPagesIndexRoute
@@ -212,6 +220,7 @@ export interface FileRoutesById {
   '/_auth/posts/$id': typeof AuthPostsIdRoute
   '/_auth/posts/new': typeof AuthPostsNewRoute
   '/_auth/api-keys/': typeof AuthApiKeysIndexRoute
+  '/_auth/customize/': typeof AuthCustomizeIndexRoute
   '/_auth/forms/': typeof AuthFormsIndexRoute
   '/_auth/media/': typeof AuthMediaIndexRoute
   '/_auth/pages/': typeof AuthPagesIndexRoute
@@ -238,6 +247,7 @@ export interface FileRouteTypes {
     | '/posts/$id'
     | '/posts/new'
     | '/api-keys/'
+    | '/customize/'
     | '/forms/'
     | '/media/'
     | '/pages/'
@@ -262,6 +272,7 @@ export interface FileRouteTypes {
     | '/posts/$id'
     | '/posts/new'
     | '/api-keys'
+    | '/customize'
     | '/forms'
     | '/media'
     | '/pages'
@@ -287,6 +298,7 @@ export interface FileRouteTypes {
     | '/_auth/posts/$id'
     | '/_auth/posts/new'
     | '/_auth/api-keys/'
+    | '/_auth/customize/'
     | '/_auth/forms/'
     | '/_auth/media/'
     | '/_auth/pages/'
@@ -341,6 +353,13 @@ declare module '@tanstack/react-router' {
       path: '/api-keys'
       fullPath: '/api-keys/'
       preLoaderRoute: typeof AuthApiKeysIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/customize/': {
+      id: '/_auth/customize/'
+      path: '/customize'
+      fullPath: '/customize/'
+      preLoaderRoute: typeof AuthCustomizeIndexRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/forms/': {
@@ -482,6 +501,7 @@ interface AuthRouteChildren {
   AuthPostsIdRoute: typeof AuthPostsIdRoute
   AuthPostsNewRoute: typeof AuthPostsNewRoute
   AuthApiKeysIndexRoute: typeof AuthApiKeysIndexRoute
+  AuthCustomizeIndexRoute: typeof AuthCustomizeIndexRoute
   AuthFormsIndexRoute: typeof AuthFormsIndexRoute
   AuthMediaIndexRoute: typeof AuthMediaIndexRoute
   AuthPagesIndexRoute: typeof AuthPagesIndexRoute
@@ -505,6 +525,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthPostsIdRoute: AuthPostsIdRoute,
   AuthPostsNewRoute: AuthPostsNewRoute,
   AuthApiKeysIndexRoute: AuthApiKeysIndexRoute,
+  AuthCustomizeIndexRoute: AuthCustomizeIndexRoute,
   AuthFormsIndexRoute: AuthFormsIndexRoute,
   AuthMediaIndexRoute: AuthMediaIndexRoute,
   AuthPagesIndexRoute: AuthPagesIndexRoute,

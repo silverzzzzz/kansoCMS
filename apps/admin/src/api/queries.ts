@@ -94,6 +94,10 @@ async function getApiKeys() {
   return unwrap(api['api-keys'].$get())
 }
 
+async function getSectionCatalog() {
+  return unwrap(api.site.sections.$get({ query: {} }))
+}
+
 export type PageItem = Awaited<ReturnType<typeof getPage>>['item']
 export type PageListItem = Awaited<ReturnType<typeof getPages>>['items'][number]
 export type PageRevisionItem = Awaited<ReturnType<typeof getPageRevisions>>['items'][number]
@@ -108,6 +112,8 @@ export type FormListItem = Awaited<ReturnType<typeof getForms>>['items'][number]
 export type FormItem = Awaited<ReturnType<typeof getForm>>['item']
 export type SubmissionListItem = Awaited<ReturnType<typeof getSubmissions>>['items'][number]
 export type SubmissionItem = Awaited<ReturnType<typeof getSubmission>>['item']
+export type SectionCatalogItem = Awaited<ReturnType<typeof getSectionCatalog>>['items'][number]
+export type SectionFieldDef = SectionCatalogItem['fields'][number]
 
 export const pagesListQuery = (params: ListParams) =>
   queryOptions({
@@ -183,6 +189,11 @@ export const mediaListQuery = (params: ListParams) =>
 export const settingsQuery = queryOptions({
   queryKey: ['settings'] as const,
   queryFn: getSettings,
+})
+
+export const sectionCatalogQuery = queryOptions({
+  queryKey: ['site', 'sections'] as const,
+  queryFn: getSectionCatalog,
 })
 
 export const formsListQuery = queryOptions({

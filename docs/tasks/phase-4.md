@@ -14,7 +14,7 @@
 | T24 | データモデル: セクション設定の field DSL (`@kanso/shared`)、`pages.sections_json`、テーマ設定の settings キー | done | shared, core |
 | T25 | セクションレジストリと公開側レンダリング: `Theme.sections`、初期セクション実装 (default / paper)、`renderPage` のセクション描画、draft プレビュー | done | server |
 | T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | done | server |
-| T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | todo | admin |
+| T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | done | admin, tooling |
 | T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | todo | shared, server, admin |
 | T29 | E2E + ドキュメント: カスタマイズの Playwright E2E、architecture.md / README 更新 | todo | tooling, docs |
 
@@ -182,7 +182,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ## T27. 管理画面「カスタマイズ」エディタ
 
-状態: `todo`
+状態: `done` (2026-11-07)
 
 ### ゴール
 
@@ -208,7 +208,14 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 決定
 
-- (実装時に追記)
+- Claude が直接実装 (Codex 利用不可のため、2026-11-07)。ブラウザ検証は T29 予定だった Playwright E2E ([e2e/customize.spec.ts](../../e2e/customize.spec.ts)) を前倒しで書いてスモーク代わりに実行した (追加 → ライブプレビュー → 並べ替え → 保存 → 公開 HTML 検証 → 本文復帰、ローカル green)。
+- ルートは [/_auth/customize](../../apps/admin/src/routes/_auth/customize/index.tsx) (サイドバー「カスタマイズ」、固定ページの次)。対象ページは `?page=<id>` (TanStack Router の search)。未指定時は `home` → 先頭ページの順でフォールバックし、固定ページが 0 件なら作成への誘導を出す。
+- レイアウト: 左ペイン (セクションリスト + 追加 select + 選択セクションの設定フォーム + 保存)、右に iframe プレビュー。並べ替えはドラッグではなく ↑/↓ ボタン (v1)。
+- 設定フォームは [SectionSettingsForm](../../apps/admin/src/components/customize/SectionSettingsForm.tsx) がカタログの fields から自動生成: text/url → input、textarea、select、checkbox、number (空は値を送らない = 既定値に落ちる)、image → 既存 `MediaField` 流用、posts → 投稿タイプ select + 表示件数。新規セクションの初期値は `defaultSettings(fields)` (field.default / 型ごとの空値)、id は `crypto.randomUUID()`。
+- プレビュー: 編集状態を 400ms debounce で `POST /preview/draft/page` に送り、返った HTML に `<base href="<origin>/">` を注入して iframe `srcDoc` へ。admin dev サーバー (5174) 用に vite proxy へ `/preview` と `/themes` を追加 (本番は同一オリジンなので不要)。プレビュー内のリンクはブロックしていない (クリックすると iframe 内で遷移するが次の再描画で戻る。v1 許容)。
+- 保存は pages API の PATCH `{ sections }`。保存済み状態との JSON 比較で dirty 管理し、dirty 中は beforeunload で確認。カタログ検証エラー (400) は details を一覧表示。「セクションをやめて本文に戻す」は ConfirmDialog → PATCH `{ sections: null }`。
+- ページ編集画面 ([pages/$id](../../apps/admin/src/routes/_auth/pages/$id.tsx)) には sections 非 null のとき info Alert (カスタマイズへのリンク + 本文が表示されない旨) を追加。本文エディタ自体は隠さない。
+- `GET /api/v1/site/sections` 用の `sectionCatalogQuery` と型 (`SectionCatalogItem` / `SectionFieldDef`) を queries.ts に追加。hc の型が通るよう _auth.tsx の NavLink 型 union に `/customize` を追加。
 
 ---
 
@@ -247,7 +254,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 仕様
 
-- E2E (`e2e/`、`e2e-` 接頭辞 + 後始末の既存流儀): ログイン → カスタマイズでテストページにセクション追加・設定・並べ替え → 保存 → 公開ページで HTML を検証 → セクション解除。
+- E2E は T27 で前倒し実装済み ([e2e/customize.spec.ts](../../e2e/customize.spec.ts))。T29 では CI での green 確認と、必要ならテーマ設定 (T28) のケース追加のみ。
 - `docs/architecture.md`: §スコープ (「ビジュアルインライン編集」のスコープ外表記を見直し)、データモデル (`pages.sections_json`、settings `theme`)、§6 レンダリング (セクション描画・draft プレビュー)、ロードマップに Phase 4 を追記。
 - `README.md`: 機能リストに「セクションエディタ (管理画面からページ構成を編集)」を追記、Status 更新。
 - `docs/tasks/phase-4.md` の決定を清書。

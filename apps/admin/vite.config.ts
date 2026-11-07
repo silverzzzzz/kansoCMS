@@ -24,6 +24,10 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': apiOrigin,
         '/media': apiOrigin,
+        // The customize editor posts section drafts to /preview and the
+        // returned HTML references /themes/*.css.
+        '/preview': apiOrigin,
+        '/themes': apiOrigin,
       },
     },
   }
