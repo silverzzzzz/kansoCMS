@@ -278,3 +278,17 @@ Shopify の対応物とこのフェーズでの置き換え:
 - `docs/architecture.md`: スコープ外の「ビジュアルインライン編集」の注記、`pages.sections_json` と settings `theme` 行、§6 に「セクション (Phase 4)」の節 (DSL / JSX なしカタログと api からの .tsx import 禁止 / prepareSections のスキップ方針 / テーマ設定 / エディタとドラフトプレビュー)、§8 ロードマップに Phase 4 (done 2026-11-07) を追記。
 - `README.md`: 機能リストにカスタマイズエディタ (sections + theme settings、「no Liquid」) を追記し、Status を Phase 4 complete に更新 (管理画面 i18n は未了のまま明記)。
 - CI green の確認は push 後 (push はユーザー判断)。
+
+---
+
+## Phase 4 レビュー (2026-11-07、Opus 5.5 への引き継ぎ時)
+
+T24–T29 のコードを読み直し、ゲート再実行・`drizzle-kit generate` によるスナップショット整合確認 (「No schema changes」) のうえ、以下を修正した。
+
+- **本文復帰後に古いセクションが未保存の下書きとして残る**: 「セクションをやめて本文に戻す」の成功時に editor state をクリアしていなかったため、`未保存の変更があります` 表示のまま「保存」でセクションが復活した。成功時に `sections` / 選択を空にする。E2E で保存ボタン無効・空表示を検証。
+- **アプリ内遷移で未保存の変更が無言で消える**: beforeunload だけでは、サイドバーやページ切替 select (`?page=` の変更で Editor が remount) を守れなかった (T27 仕様違反)。TanStack Router の `useBlocker` (`shouldBlockFn` で `confirm()`、`enableBeforeUnload`) に置き換え。E2E にダイアログを dismiss して留まるステップを追加 (Playwright は confirm を処理するまで click が完了しないので `page.once('dialog')` で処理する)。
+- **テーマ切替後に別テーマの名前空間へ保存し得る**: 設定画面のサイト保存が `['site']` (セクションカタログ) を invalidate せず、古いカタログで開いた Editor の theme-settings 下書きが、カタログ更新後に新テーマの名前空間へ保存され得た。サイト設定保存で `['site']` も invalidate し、Editor の key を `<pageId>:<theme>` にしてテーマ変更時は必ず remount する。
+- **E2E がローカル DB のテーマ設定を消す**: `PUT /settings/theme {}` でリセットしていたのを、beforeAll で取得した値を afterAll で書き戻す方式に変更。
+- **セクション表示中のページが非表示本文のフォーム送信を受け付ける**: `handleFormPost` は sections 非 null のページの本文フォームを対象外にして 404 (サーバーテストを追加し、修正前のコードで失敗することを確認)。
+- 堅牢化: プレビュー iframe に `sandbox="allow-same-origin"` (srcdoc は管理画面と同一オリジンなので script を絶対に実行させない。`/media` は CORP same-origin なので allow-same-origin は必要)。プレビュー取得は `AbortController` で古いリクエストを中断し、遅れて届いた古い応答が新しい表示を上書きしないようにした。ページ取得失敗 (存在しない `?page=`) は「読み込み中…」のまま止まらずエラーを表示する。
+- 既知の制約として記録 (未対応): headless API は `sections` を生データで返すだけで、`examples/astro-blog` はセクションを描画しない (セクション表示のページは Astro 側では本文が出る)。セクションを全部削除して保存すると、ヘッダーとフッターだけの空ページになる (プレビューと一致する WYSIWYG 挙動として許容)。

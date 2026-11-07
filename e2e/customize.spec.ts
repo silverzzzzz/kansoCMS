@@ -9,10 +9,13 @@ import {
 } from './helpers.ts'
 
 type PageResponse = { item: { id: number } }
+type ThemeSettingsResponse = { theme: Record<string, Record<string, unknown>> }
 
 test.describe('customize editor', () => {
   let apiRequest: APIRequestContext
   let apiAuthenticated = false
+  // Theme settings are site-wide, so the run must leave the developer's values untouched.
+  let originalThemeSettings: ThemeSettingsResponse['theme'] | null = null
 
   test.beforeAll(async ({ playwright }, testInfo) => {
     const baseURL = testInfo.project.use.baseURL
@@ -25,10 +28,19 @@ test.describe('customize editor', () => {
     await apiLogin(apiRequest)
     apiAuthenticated = true
     await cleanupE2E(apiRequest)
+    const themeResponse = await apiRequest.get('/api/v1/settings/theme')
+    expect(themeResponse.status(), await themeResponse.text()).toBe(200)
+    originalThemeSettings = ((await themeResponse.json()) as ThemeSettingsResponse).theme
   })
 
   test.afterAll(async () => {
     try {
+      if (apiAuthenticated && originalThemeSettings) {
+        const restore = await apiRequest.put('/api/v1/settings/theme', {
+          data: originalThemeSettings,
+        })
+        expect(restore.status(), await restore.text()).toBe(200)
+      }
       if (apiAuthenticated) await cleanupE2E(apiRequest)
     } finally {
       await apiRequest?.dispose()
@@ -76,6 +88,19 @@ test.describe('customize editor', () => {
       await page.getByLabel('Button link', { exact: true }).fill('/contact')
     })
 
+    await test.step('guard unsaved changes against in-app navigation', async () => {
+      // The click only completes once the confirm() dialog is handled, so dismiss it from a handler.
+      let promptMessage = ''
+      page.once('dialog', async (dialog) => {
+        promptMessage = dialog.message()
+        await dialog.dismiss()
+      })
+      await page.getByRole('link', { name: '固定ページ', exact: true }).click()
+      expect(promptMessage).toContain('未保存の変更があります')
+      await expect(page).toHaveURL(/\/admin\/customize/)
+      await expect(page.getByText('未保存の変更があります')).toBeVisible()
+    })
+
     await test.step('reorder, save and verify the public page', async () => {
       // Move the CTA above the hero, then back, exercising the reorder buttons.
       const rows = page.locator('li', { has: page.getByRole('button', { name: 'Call to action' }) })
@@ -105,9 +130,6 @@ test.describe('customize editor', () => {
 
       const publicResponse = await apiRequest.get(`/${pageSlug}`)
       expect(await publicResponse.text()).toContain(footerText)
-
-      const reset = await apiRequest.put('/api/v1/settings/theme', { data: {} })
-      expect(reset.status()).toBe(200)
       await page.getByRole('button', { name: 'セクション', exact: true }).click()
     })
 
@@ -117,6 +139,10 @@ test.describe('customize editor', () => {
       await expect(
         page.getByText('このページは現在リッチテキスト本文で表示されています', { exact: false }),
       ).toBeVisible()
+      // Detaching must not leave the old sections behind as an unsaved draft.
+      await expect(page.getByText('まだセクションがありません。')).toBeVisible()
+      await expect(page.getByText('未保存の変更があります')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: '保存', exact: true })).toBeDisabled()
 
       const publicResponse = await apiRequest.get(`/${pageSlug}`)
       const html = await publicResponse.text()

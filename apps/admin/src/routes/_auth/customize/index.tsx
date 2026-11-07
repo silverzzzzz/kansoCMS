@@ -1,6 +1,6 @@
 import type { PageSection } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useBlocker, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError } from '../../../api/errors.ts'
@@ -86,9 +86,18 @@ function CustomizePage() {
           </select>
         }
       />
-      {detail.data?.item && catalog.data && !themeSettings.isLoading ? (
+      {detail.error ? (
+        <div className="mt-8">
+          <Alert tone="error">
+            {detail.error instanceof ApiError
+              ? detail.error.message
+              : 'ページを読み込めませんでした'}
+          </Alert>
+        </div>
+      ) : detail.data?.item && catalog.data && !themeSettings.isLoading ? (
         <Editor
-          key={detail.data.item.id}
+          // Remount on theme change so theme-settings drafts never cross namespaces.
+          key={`${detail.data.item.id}:${catalog.data.theme}`}
           page={detail.data.item}
           catalog={catalog.data.items}
           theme={catalog.data.theme}
@@ -150,16 +159,15 @@ function Editor({
     return (type: string) => labels.get(type) ?? type
   }, [catalog])
 
-  useEffect(() => {
-    if (!dirty) return
-    const handler = (event: BeforeUnloadEvent) => {
-      event.preventDefault()
-    }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [dirty])
+  // Covers in-app navigation (sidebar, page switcher) as well as tab close / reload.
+  useBlocker({
+    shouldBlockFn: () => !window.confirm('未保存の変更があります。破棄して移動しますか?'),
+    enableBeforeUnload: dirty,
+    disabled: !dirty,
+  })
 
   useEffect(() => {
+    const controller = new AbortController()
     const timer = setTimeout(async () => {
       try {
         const response = await fetch('/preview/draft/page', {
@@ -171,15 +179,22 @@ function Editor({
             sections: JSON.parse(sectionsJson),
             ...(themeAll !== null ? { themeSettings: JSON.parse(themeJson) } : {}),
           }),
+          signal: controller.signal,
         })
         if (!response.ok) throw new Error(String(response.status))
-        setPreviewHtml(injectBase(await response.text()))
+        const html = await response.text()
+        if (controller.signal.aborted) return
+        setPreviewHtml(injectBase(html))
         setPreviewError(false)
       } catch {
-        setPreviewError(true)
+        // An aborted request was superseded by a newer draft; only real failures surface.
+        if (!controller.signal.aborted) setPreviewError(true)
       }
     }, 400)
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [sectionsJson, themeJson, themeAll, page.title])
 
   const save = useMutation({
@@ -187,7 +202,11 @@ function Editor({
       unwrap(
         api.pages[':id'].$patch({ param: { id: String(page.id) }, json: { sections: value } }),
       ),
-    onSuccess: async (data) => {
+    onSuccess: async (data, value) => {
+      if (value === null) {
+        setSections([])
+        setSelectedId(null)
+      }
       setSavedJson(JSON.stringify(data.item.sections ?? []))
       setDetachOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['pages'] })
@@ -466,9 +485,11 @@ function Editor({
               <Alert tone="error">プレビューを取得できませんでした。</Alert>
             </div>
           )}
+          {/* No allow-scripts: the srcdoc frame shares the admin origin, so it must never run script. */}
           <iframe
             title="プレビュー"
             className="h-[70vh] min-h-96 w-full border border-neutral-300 bg-white"
+            sandbox="allow-same-origin"
             srcDoc={previewHtml}
           />
         </div>

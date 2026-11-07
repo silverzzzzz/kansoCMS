@@ -88,7 +88,7 @@ describe('sections page rendering', () => {
     sortOrder: 0,
     title: 'Landing',
     bodyJson: null,
-    bodyHtml: '<p>Hidden body.</p>',
+    bodyHtml: '<p>Hidden body.</p><div data-kanso-form="contact-form"></div>',
     sectionsJson: [
       heroSection,
       {
@@ -136,6 +136,7 @@ describe('sections page rendering', () => {
       redirects: { findByPath: vi.fn().mockResolvedValue(null) },
       media: { find: vi.fn().mockResolvedValue(null) },
       posts: { listPublished: vi.fn() },
+      forms: { findBySlug: vi.fn() },
     })
     const app = new Hono<AppEnv>()
       .use('*', async (c, next) => {
@@ -145,8 +146,23 @@ describe('sections page rendering', () => {
       .onError(onError)
       .route('/', site)
     const env = { SITE_URL: 'https://example.com', caches: undefined } as unknown as Bindings
-    return { app, env }
+    return { app, env, kanso }
   }
+
+  it('rejects submissions to a form left in the hidden rich text body', async () => {
+    const { app, env, kanso } = testApp()
+    const res = await app.request(
+      '/landing',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: '_form=contact-form&name=Alice',
+      },
+      env,
+    )
+    expect(res.status).toBe(404)
+    expect(kanso.forms.findBySlug).not.toHaveBeenCalled()
+  })
 
   it('applies theme settings to the layout chrome', async () => {
     const { app, env } = testApp({

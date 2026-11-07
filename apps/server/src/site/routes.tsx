@@ -186,7 +186,13 @@ async function handleFormPost(c: Context<AppEnv>, path: string) {
 
   const raw = await parseBody(c.req.raw)
   const slug = typeof raw._form === 'string' ? raw._form : ''
-  const bodyHtml = resolved.kind === 'page' ? resolved.page.bodyHtml : resolved.post.bodyHtml
+  // A page rendered from sections hides its rich text body, forms included.
+  const bodyHtml =
+    resolved.kind === 'page'
+      ? resolved.page.sectionsJson
+        ? ''
+        : resolved.page.bodyHtml
+      : resolved.post.bodyHtml
   if (!formSlugsIn(bodyHtml).includes(slug)) return notFound(c)
 
   const form = await c.var.kanso.forms.findBySlug(slug)

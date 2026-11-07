@@ -63,7 +63,11 @@ function SettingsPage() {
       ),
     onSuccess: async () => {
       setSiteSaved(true)
-      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['settings'] }),
+        // The section catalog depends on the active theme.
+        queryClient.invalidateQueries({ queryKey: ['site'] }),
+      ])
     },
   })
   const saveOrganization = useMutation({

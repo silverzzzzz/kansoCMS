@@ -254,6 +254,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - カタログの正本 (label / description / fields) は JSX を含まない `site/themes/sections-meta.ts`。管理 API (`GET /api/v1/site/sections`) と pages API の入力検証はここだけを import する。**`api/` 配下から `.tsx` を import しない** こと (hc の型経由で admin の TS プログラムに JSX が混入し typecheck が壊れる)。
 - `pages.sections_json` 非 null のページは、`site/sections.tsx` の `prepareSections()` が検証と image / posts データ解決を済ませてから `<SectionsBody>` で描画する。未知 type・不正 settings のセクションは warn してスキップし、ページは 500 にしない (テーマ切替直後も安全)。`search_text` は文字列設定値の連結 (`sectionsPlainText`)。
 - テーマ設定は `settings` の `theme` 行にテーマ名で名前空間を切って保存し、`loadSiteContext()` が有効テーマ分だけ検証して `ctx.themeSettings` として各 `Layout` に渡す。適用は `themes/chrome.tsx` (`AccentStyle` が `--color-accent` を 1 箇所上書き、`FooterExtras` がフッター文とSNSリンク)。
+- セクション表示のページでは本文 (`bodyHtml`) を描画しないので、本文に埋め込まれたフォームへの POST も受け付けない (404)。headless API は `sections` を生データで返すだけで、`examples/astro-blog` はセクションを描画しない。
 - 管理画面の「カスタマイズ」(`/_auth/customize`) がエディタ: カタログからの追加・並べ替え・設定フォーム自動生成 (image は メディアピッカー、posts は投稿タイプ選択)、`POST /preview/draft/page` (セッション認証、`no-store` + `noindex`) による未保存ドラフトの iframe プレビュー、pages API / `PUT /api/v1/settings/theme` での保存。
 
 ### キャッシュ
