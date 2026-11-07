@@ -12,7 +12,7 @@
 | # | タスク | 状態 | 範囲 |
 |---|---|---|---|
 | T24 | データモデル: セクション設定の field DSL (`@kanso/shared`)、`pages.sections_json`、テーマ設定の settings キー | done | shared, core |
-| T25 | セクションレジストリと公開側レンダリング: `Theme.sections`、初期セクション実装 (default / paper)、`renderPage` のセクション描画、draft プレビュー | todo | server |
+| T25 | セクションレジストリと公開側レンダリング: `Theme.sections`、初期セクション実装 (default / paper)、`renderPage` のセクション描画、draft プレビュー | done | server |
 | T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | todo | shared, server |
 | T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | todo | admin |
 | T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | todo | shared, server, admin |
@@ -98,7 +98,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ## T25. セクションレジストリと公開側レンダリング + draft プレビュー
 
-状態: `todo`
+状態: `done` (2026-11-07)
 
 ### ゴール
 
@@ -129,7 +129,16 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 決定
 
-- (実装時に追記)
+- Codex が使用上限で利用不可のため T25 は Claude が直接実装した (2026-11-07)。
+- `Theme.sections: Record<string, SectionDefinition>` を追加 ([themes/types.ts](../../apps/server/src/site/themes/types.ts))。`SectionDefinition = { label, description?, fields, Component }`、`SectionProps = { values, data, formatDate }`。image / posts フィールドの値はレンダリング前に `data: { images, posts }` (フィールド名キー) へ解決し、コンポーネント内では await しない。
+- 初期 5 セクション ([themes/sections.tsx](../../apps/server/src/site/themes/sections.tsx)) は両テーマ共通の `standardSections`: `hero` / `richtext` / `post_list` / `image_with_text` / `cta`。type 名は field DSL と同じ `[a-z][a-z0-9_]*`。見出しレベルは hero が h1、他は h2 固定 (複数 hero を置けば h1 が複数になるのは v1 では許容)。
+- `richtext` セクションはプレーンテキストのみ (空行で段落、単一改行は `<br>`)。HTML・フォーム埋め込みは不可 (フォームは従来の Tiptap 本文ページで)。
+- 検証と解決は [site/sections.tsx](../../apps/server/src/site/sections.tsx) の `prepareSections(kanso, theme, sections)`: 未知 type と `sectionValuesSchemaFor` の検証失敗は console.warn してスキップ (ページは 500 にならない)。`posts` フィールドは `postTypes.findBySlug` → `posts.listPublished` (page 1, perPage = limit)、`image` は `media.find` (欠損は null)。
+- `renderPage` は `page.sectionsJson` 非 null のとき `prepareForms` を通さず `<SectionsBody>` (`.page-sections`) を描画。ページ title の自動 h1 は出さない (見出しは hero 等のセクションが担う)。meta / JSON-LD / OG は従来どおり。
+- draft プレビューは `POST /preview/draft/page` (セッション認証のみ、body = `{ title?, sections }`)。保存せずに完全な HTML を返し、`no-store` + `noindex`。CSRF は既存 `authenticate` の sec-fetch-site / Origin 検査に乗る。
+- セクションの CSS は `base.css` に `.section-*` / `.page-sections` を追加 (テーマの CSS 変数を参照するので両テーマで配色が追従)。
+- サーバーの vitest include は `*.test.ts` のみなので、テストは JSX を使わない [sections.test.ts](../../apps/server/src/site/sections.test.ts) (prepareSections 単体 + site ルーター経由の HTML アサーション 4 件)。
+- スモーク (`:5199`): hero (日本語・段落分割・ボタン) / post_list (投稿作成して項目描画・アーカイブへのリンク) / cta / 未知 type スキップを公開ページで確認。paper テーマでも描画を確認。draft プレビューは認証時 200 (noindex / no-store)、未認証 401。スモークのページ・投稿・投稿タイプは削除済み。
 
 ---
 

@@ -13,6 +13,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { AppEnv } from '../env.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { type FormState, prepareForms } from './forms.tsx'
+import { prepareSections, SectionsBody } from './sections.tsx'
 
 type Page = Awaited<ReturnType<Kanso['pages']['get']>>
 type Post = Awaited<ReturnType<Kanso['posts']['getWithRelations']>>
@@ -30,7 +31,12 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
   const ctx = options.ctx ?? (await loadSiteContext(c.var.kanso, c.env.SITE_URL))
   const isHome = page.path === 'home'
   const ownPath = isHome ? '/' : `/${page.path}`
-  const prepared = await prepareForms(c, page.bodyHtml, ownPath, options.form, ctx.messages.form)
+  const sections = page.sectionsJson
+    ? await prepareSections(c.var.kanso, ctx.theme, page.sectionsJson)
+    : null
+  const prepared = sections
+    ? { html: '', scripts: [] as string[] }
+    : await prepareForms(c, page.bodyHtml, ownPath, options.form, ctx.messages.form)
   const ogMedia = page.ogMediaId ? await c.var.kanso.media.find(page.ogMediaId) : null
   const canonical =
     options.preview || !page.canonicalUrl ? absoluteUrl(ctx.origin, ownPath) : page.canonicalUrl
@@ -79,7 +85,9 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
       search={ctx.search}
       scripts={prepared.scripts}
     >
-      {isHome ? (
+      {sections ? (
+        <SectionsBody sections={sections} formatDate={ctx.formatDate} />
+      ) : isHome ? (
         <article class="page">{raw(prepared.html)}</article>
       ) : (
         <article class="page">

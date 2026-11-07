@@ -1,6 +1,6 @@
 import type { Kanso } from '@kanso/core'
 import type { PageMeta } from '@kanso/seo'
-import type { ThemeName } from '@kanso/shared'
+import type { SectionField, SectionValues, ThemeName } from '@kanso/shared'
 import type { Child, FC } from 'hono/jsx'
 
 export interface NavItem {
@@ -43,9 +43,42 @@ export interface PostArticleProps {
   formatDate: (date: Date) => string
 }
 
+export interface SectionImageData {
+  url: string
+  alt: string | null
+}
+
+export interface SectionPostsData {
+  typeSlug: string
+  typeName: string
+  items: PostSummaryItem[]
+}
+
+/** Values of `image` / `posts` fields resolved to render-ready data, keyed by field name. */
+export interface SectionResolvedData {
+  images: Record<string, SectionImageData | null>
+  posts: Record<string, SectionPostsData | null>
+}
+
+export interface SectionProps {
+  /** Settings validated against the section's fields; missing keys hold field defaults. */
+  values: SectionValues
+  data: SectionResolvedData
+  formatDate: (date: Date) => string
+}
+
+export interface SectionDefinition {
+  label: string
+  description?: string
+  fields: SectionField[]
+  Component: FC<SectionProps>
+}
+
 export interface Theme {
   name: ThemeName
   Layout: FC<LayoutProps>
   PostList: FC<PostListProps>
   PostArticle: FC<PostArticleProps>
+  /** Sections the theme offers to the customize editor, keyed by section type. */
+  sections: Record<string, SectionDefinition>
 }

@@ -141,3 +141,71 @@
   border: 1px solid var(--color-border);
   padding: 1rem;
 }
+
+/* Sections (customize editor) */
+
+.page-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.section > :first-child {
+  margin-block-start: 0;
+}
+
+.section > :last-child {
+  margin-block-end: 0;
+}
+
+.section-button {
+  display: inline-block;
+  border: 1px solid var(--color-fg);
+  background: var(--color-fg);
+  color: var(--color-bg);
+  padding: 0.5rem 1.25rem;
+  text-decoration: none;
+}
+
+.section-hero {
+  text-align: center;
+}
+
+.section-hero-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-block-end: 1.5rem;
+}
+
+.section-image-with-text {
+  display: grid;
+  gap: 1.5rem;
+  align-items: center;
+}
+
+@media (min-width: 40rem) {
+  .section-image-with-text {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .section-image-with-text.is-reverse .section-image {
+    order: 2;
+  }
+}
+
+.section-image {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.section-cta {
+  text-align: center;
+  border: 1px solid var(--color-border);
+  padding: 2rem 1.5rem;
+}
+
+.section-post-list-more a {
+  color: var(--color-accent);
+}
