@@ -12,7 +12,7 @@
 | # | タスク | 状態 | 範囲 |
 |---|---|---|---|
 | T30 | サンプル定義と同梱画像、インストーラ (マニフェスト記録・衝突時スキップ) | done | shared, core, server |
-| T31 | 管理 API (`/api/v1/starter` の状態取得・投入) とセットアップ時の投入、ASSETS からの画像読み込み | todo | shared, server |
+| T31 | 管理 API (`/api/v1/starter` の状態取得・投入) とセットアップ時の投入、ASSETS からの画像読み込み | done | shared, server |
 | T32 | サンプルの削除 (編集済み・参照中・利用者が追加したものは残す) | todo | server |
 | T33 | 管理画面: セットアップのチェックボックス、設定画面の「サンプルサイト」、ダッシュボードの案内 | todo | admin |
 | T34 | E2E + ドキュメント | todo | tooling, docs |
@@ -130,7 +130,7 @@ installStarter(kanso, {
 
 ## T31. 管理 API とセットアップ時の投入
 
-状態: `todo`
+状態: `done` (2026-11-08)
 
 ### ゴール
 
@@ -154,7 +154,14 @@ installStarter(kanso, {
 
 ### 決定
 
-(実装後に記入)
+- Codex は T30 で 2 回続けて環境要因 (ストリーム切断、`npx.cmd` 起動失敗) で止まったため、T31 は Claude が直接実装した。
+- API は [api/starter.ts](../../apps/server/src/api/starter.ts) (`requireRole('admin')`、セッションの admin のみ。API キーは 403)。`GET` の `homePageId` はマニフェストのページを `pages.get` で引いてパス `home` のものを返す (削除済みは無視)。`POST` は `installStarter` の結果を 201 で返し、投入済みは `KansoError.conflict` → 409。
+- 画像は [starter/assets.ts](../../apps/server/src/starter/assets.ts) で `env.ASSETS.fetch('<origin>/starter/<name>')` から読む。`@cloudflare/vite-plugin` の dev サーバーでも `public/` を返すことを実地で確認した (代替手段は不要)。**`Request` ではなく URL 文字列を渡す**: このファイルは `api/` 経由で admin の型検査に入り、DOM の `Request` 型が Workers の `Fetcher.fetch` の引数型と合わず admin の typecheck が落ちたため。
+- セットアップ: `setupSchema.starter` (任意、API の既定は投入しない)。ユーザー作成 → サイト名保存 → 投入の順 (サイト名が文中に入る)。投入の例外は `console.error` に出してセットアップは 200 で完了し、レスポンスは `{ user, starter: { installed, error } | null }` (`null` は投入を求めなかったとき)。セッション Cookie は失敗時も発行。`createUser` には `starter` / `siteTitle` を渡さないよう、必要なフィールドだけを渡す形に変えた。
+- **セットアップにキャッシュ世代の更新を追加した。** `/api/v1/setup` は `protectedApi` の外にあり `bumpSiteCacheVersion` を通っていなかったため、セットアップ前に `/` を開いていると、サンプル投入後も最大 60 秒「kansoCMS is running」のキャッシュが返り得た (サイト名の変更も同様)。setup の POST にだけミドルウェアを付けた。
+- テスト: `api/starter.test.ts` 8 件 (未投入/投入済みの GET と homePageId、POST 201・409・editor は 403、setup で投入・サイト名保存が先・キャッシュ世代更新、投入失敗でもセットアップ成功、省略時は投入しない。`installStarter` は `vi.mock` で差し替え)、`starter/assets.test.ts` 2 件。4 ゲート通過 (server 128)。
+- 実地確認 (開発用 D1 を退避して空の D1 にマイグレーション、`vite dev --port 5199`): セットアップ前に `/` (「kansoCMS」見出し) を開いてキャッシュさせた後、`POST /api/v1/setup { siteTitle: 'ことのは工房', starter: true }` → `starter.installed=true`、直後の `/` がサンプルのホームに切り替わる (キャッシュ世代更新の確認)。`/`、`/about`、`/services`、`/contact`、`/news`、`/news/{website-launch,workshop,how-to-edit}`、`/news/category/event` が 200。`<title>` はサイト名のみ、meta description はサンプル説明、ナビは 会社概要 → サービス → お問い合わせ → お知らせ、`--color-accent:#2f6f5e`、フッターに案内文 + `© 2026 ことのは工房`。ホームは hero → image-with-text ×2 → post-list (新しい順に 3 件) → cta、画像 3 枚とも `/media/...` が 200 `image/webp`、alt は日本語。会社概要に画像と「（サンプル）」付きの会社情報、サービスは hero → ×2 → cta。お問い合わせのフォームに 4 項目 (ご用件の選択肢 3 つ) が出て、送信すると完了メッセージ、フォーム一覧の送信数 1。`/search?q=ワークショップ` がワークショップの記事にヒット。2 回目の `POST /api/v1/starter` は 409。終了後に開発用 D1 を元に戻した。
+- 注意 (検証手順): Git Bash の curl に日本語をコマンドライン引数で渡すと cp932 で送られ、サイト名が化けた。UTF-8 のファイルを `--data-binary @file` で送る。
 
 ---
 

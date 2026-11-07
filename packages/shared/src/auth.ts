@@ -8,6 +8,8 @@ export const setupSchema = z.object({
   password: passwordSchema,
   name: z.string().trim().min(1).max(100),
   siteTitle: z.string().trim().min(1).max(120).optional(),
+  /** Install the starter site right after creating the first admin. */
+  starter: z.boolean().optional(),
 })
 
 export const loginSchema = z.object({

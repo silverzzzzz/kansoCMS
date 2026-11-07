@@ -15,6 +15,7 @@ import { search } from './search.ts'
 import { settings } from './settings.ts'
 import { setup } from './setup.ts'
 import { siteInfo } from './site.ts'
+import { starter } from './starter.ts'
 import { tags } from './tags.ts'
 
 /**
@@ -36,6 +37,7 @@ const protectedApi = new Hono<AppEnv>()
   .route('/search', search)
   .route('/settings', settings)
   .route('/site', siteInfo)
+  .route('/starter', starter)
   .route('/tags', tags)
 
 export const api = new Hono<AppEnv>()
