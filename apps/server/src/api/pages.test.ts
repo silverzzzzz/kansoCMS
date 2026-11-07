@@ -93,3 +93,76 @@ describe('pages revision API', () => {
     })
   })
 })
+
+describe('pages sections input', () => {
+  function sectionsSetup() {
+    const create = vi
+      .fn()
+      .mockImplementation((input: { sections?: unknown }) =>
+        Promise.resolve({ ...page, id: 8, sectionsJson: input.sections ?? null }),
+      )
+    const update = vi.fn().mockResolvedValue({ ...page, sectionsJson: null })
+    const kanso: Kanso = Object.assign(Object.create(null), {
+      pages: { create, update },
+      settings: { site: vi.fn().mockResolvedValue({ theme: 'default' }) },
+    })
+    const app = new Hono<AppEnv>()
+      .use('*', async (c, next) => {
+        c.set('kanso', kanso)
+        c.set('principal', {
+          kind: 'session',
+          token: 'test-token',
+          user: { id: 7, email: 'editor@example.com', name: 'Editor', role: 'editor' },
+        })
+        await next()
+      })
+      .onError(onError)
+      .route('/api/v1/pages', pages)
+    return { app, create, update }
+  }
+
+  function post(app: Hono<AppEnv>, body: unknown) {
+    return app.request(
+      '/api/v1/pages',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      },
+      {} as Bindings,
+    )
+  }
+
+  it('saves sections valid for the active theme and exposes them as `sections`', async () => {
+    const { app, create } = sectionsSetup()
+    const sections = [{ id: 'hero1', type: 'hero', settings: { heading: 'Hi' } }]
+    const response = await post(app, { title: 'Landing', slug: 'landing', sections })
+
+    expect(response.status).toBe(201)
+    expect(create).toHaveBeenCalledWith(expect.objectContaining({ sections }), expect.anything())
+    const body = (await response.json()) as { item: Record<string, unknown> }
+    expect(body.item.sections).toEqual(sections)
+    expect('sectionsJson' in body.item).toBe(false)
+  })
+
+  it('rejects unknown section types and invalid settings with field paths', async () => {
+    const { app, create } = sectionsSetup()
+    const response = await post(app, {
+      title: 'Landing',
+      slug: 'landing',
+      sections: [
+        { id: 'a', type: 'no_such_type', settings: {} },
+        { id: 'b', type: 'hero', settings: { heading: 42 } },
+      ],
+    })
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as {
+      error: { details: { path: string; message: string }[] }
+    }
+    const paths = body.error.details.map((detail) => detail.path)
+    expect(paths).toContain('sections.0.type')
+    expect(paths.some((path) => path.startsWith('sections.1.settings.heading'))).toBe(true)
+    expect(create).not.toHaveBeenCalled()
+  })
+})

@@ -4,6 +4,7 @@ import {
   organizationSettingsSchema,
   SETTINGS_KEYS,
   siteSettingsSchema,
+  themeSettingsSchema,
 } from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
@@ -53,4 +54,16 @@ export const settings = new Hono<AppEnv>()
       c.req.valid('json'),
     )
     return c.json({ forms })
+  })
+  .get('/theme', async (c) => {
+    return c.json({ theme: await c.var.kanso.settings.theme() })
+  })
+  /**
+   * Theme settings, namespaced by theme name so switching themes keeps the
+   * other theme's values. Field-level validation against the theme's declared
+   * settings fields arrives with T28.
+   */
+  .put('/theme', zValidator('json', themeSettingsSchema, validationHook), async (c) => {
+    const theme = await c.var.kanso.settings.updateTheme(c.req.valid('json'))
+    return c.json({ theme })
   })

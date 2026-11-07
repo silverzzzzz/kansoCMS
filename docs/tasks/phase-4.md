@@ -13,7 +13,7 @@
 |---|---|---|---|
 | T24 | データモデル: セクション設定の field DSL (`@kanso/shared`)、`pages.sections_json`、テーマ設定の settings キー | done | shared, core |
 | T25 | セクションレジストリと公開側レンダリング: `Theme.sections`、初期セクション実装 (default / paper)、`renderPage` のセクション描画、draft プレビュー | done | server |
-| T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | todo | shared, server |
+| T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | done | server |
 | T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | todo | admin |
 | T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | todo | shared, server, admin |
 | T29 | E2E + ドキュメント: カスタマイズの Playwright E2E、architecture.md / README 更新 | todo | tooling, docs |
@@ -144,7 +144,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ## T26. 管理 API (セクションカタログ / pages の sections / テーマ設定)
 
-状態: `todo`
+状態: `done` (2026-11-07)
 
 ### ゴール
 
@@ -164,11 +164,19 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 完了条件
 
-- 共通条件。カタログ取得・sections 付きページの作成/更新/取得・不正 settings の 422 が API テストで通る。
+- 共通条件。カタログ取得・sections 付きページの作成/更新/取得・不正 settings の 400 が API テストで通る。
 
 ### 決定
 
-- (実装時に追記)
+- Claude が直接実装 (Codex 利用不可のため、2026-11-07)。
+- バリデーションエラーの HTTP ステータスはこのリポジトリの規約どおり **400** (`KansoError.validation` → 400。仕様に書いた 422 は誤りだったので修正)。
+- カタログの正本は [themes/sections-meta.ts](../../apps/server/src/site/themes/sections-meta.ts) に分離した: `SectionMeta { label, description?, fields }`、`standardSectionsMeta`、`sectionsMetaByTheme`、`invalidSectionDetails(catalog, sections)`。**API 層 (hc 経由で admin の TS プログラムに入る) から JSX を import すると admin の typecheck が react/jsx-runtime で壊れる** ため、コンポーネントを含む `Theme.sections` (themes/sections.tsx が meta を spread して構築) とデータだけの meta を分けている。今後も api/ 配下から .tsx を import しないこと。
+- `GET /api/v1/site/sections` ([api/site.ts](../../apps/server/src/api/site.ts)、認証必須): `{ theme, items: [{ type, label, description, fields }] }`。`?theme=` で他テーマ、未知のテーマ名は 404。
+- pages API: create / PATCH の `sections` は有効テーマのカタログで検証し、エラーは `details[].path = sections.<idx>.type | sections.<idx>.settings.<field>` の 400。レスポンスは `toPageItem` で `sectionsJson` → `sections` に整形 (create / get / patch / restore。一覧はもともと列を返さない)。settings の値は送られたまま保存 (default の正規化は描画側 / エディタ側で行う)。
+- `GET/PUT /api/v1/settings/theme` を他の settings キーと同じパターンで追加 (admin ロール)。PUT は現状 `themeSettingsSchema` (record) の形だけ検証し、フィールド単位の検証は `Theme.settingsFields` が入る T28 で締める。
+- キャッシュ世代は既存の `bumpSiteCacheVersion` (protectedApi の書き込み全部に適用) に乗るので追加実装なし。
+- テスト: [api/site.test.ts](../../apps/server/src/api/site.test.ts) (カタログ・`?theme=`・404)、[api/pages.test.ts](../../apps/server/src/api/pages.test.ts) に sections の保存/整形と 400 詳細のケースを追加。
+- スモーク (`:5199`): カタログ取得 (5 種)、未知テーマ 404、未認証 401、不正 type の create が 400 + details、正常 create のレスポンスが `sections` のみ (`sectionsJson` 非露出)、`PUT/GET /settings/theme` ラウンドトリップ。スモークデータは削除・リセット済み。
 
 ---
 

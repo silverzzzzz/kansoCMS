@@ -1,4 +1,4 @@
-import { sectionFieldListSchema } from '@kanso/shared'
+import { standardSectionsMeta } from './sections-meta.ts'
 import type { SectionDefinition, SectionProps } from './types.ts'
 
 /**
@@ -137,55 +137,9 @@ function Cta({ values }: SectionProps) {
 }
 
 export const standardSections: Record<string, SectionDefinition> = {
-  hero: {
-    label: 'Hero',
-    description: 'Large heading with optional image, text and button',
-    fields: sectionFieldListSchema.parse([
-      { type: 'text', name: 'heading', label: 'Heading', maxLength: 200 },
-      { type: 'textarea', name: 'text', label: 'Text', maxLength: 2000 },
-      { type: 'image', name: 'image', label: 'Image' },
-      { type: 'text', name: 'button_label', label: 'Button label', maxLength: 60 },
-      { type: 'url', name: 'button_url', label: 'Button link' },
-    ]),
-    Component: Hero,
-  },
-  richtext: {
-    label: 'Text',
-    description: 'Heading and plain text paragraphs',
-    fields: sectionFieldListSchema.parse([
-      { type: 'text', name: 'heading', label: 'Heading', maxLength: 200 },
-      { type: 'textarea', name: 'body', label: 'Body', maxLength: 10000 },
-    ]),
-    Component: RichText,
-  },
-  post_list: {
-    label: 'Latest posts',
-    description: 'Most recent published posts of a post type',
-    fields: sectionFieldListSchema.parse([
-      { type: 'text', name: 'heading', label: 'Heading', maxLength: 200 },
-      { type: 'posts', name: 'source', label: 'Posts' },
-    ]),
-    Component: PostListSection,
-  },
-  image_with_text: {
-    label: 'Image with text',
-    description: 'Image beside a heading and text',
-    fields: sectionFieldListSchema.parse([
-      { type: 'image', name: 'image', label: 'Image' },
-      { type: 'text', name: 'heading', label: 'Heading', maxLength: 200 },
-      { type: 'textarea', name: 'body', label: 'Body', maxLength: 4000 },
-      { type: 'checkbox', name: 'reverse', label: 'Image on the right' },
-    ]),
-    Component: ImageWithText,
-  },
-  cta: {
-    label: 'Call to action',
-    description: 'Heading with a button',
-    fields: sectionFieldListSchema.parse([
-      { type: 'text', name: 'heading', label: 'Heading', maxLength: 200 },
-      { type: 'text', name: 'button_label', label: 'Button label', maxLength: 60 },
-      { type: 'url', name: 'button_url', label: 'Button link' },
-    ]),
-    Component: Cta,
-  },
+  hero: { ...standardSectionsMeta.hero, Component: Hero },
+  richtext: { ...standardSectionsMeta.richtext, Component: RichText },
+  post_list: { ...standardSectionsMeta.post_list, Component: PostListSection },
+  image_with_text: { ...standardSectionsMeta.image_with_text, Component: ImageWithText },
+  cta: { ...standardSectionsMeta.cta, Component: Cta },
 }
