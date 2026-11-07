@@ -16,7 +16,7 @@
 | T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | done | server |
 | T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | done | admin, tooling |
 | T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | done | shared, server, admin |
-| T29 | E2E + ドキュメント: カスタマイズの Playwright E2E、architecture.md / README 更新 | todo | tooling, docs |
+| T29 | E2E + ドキュメント: カスタマイズの Playwright E2E、architecture.md / README 更新 | done | tooling, docs |
 
 ## 全体設計 (このフェーズの前提)
 
@@ -255,7 +255,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ## T29. E2E + ドキュメント
 
-状態: `todo`
+状態: `done` (2026-11-07)
 
 ### ゴール
 
@@ -274,4 +274,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 決定
 
-- (実装時に追記)
+- E2E 本体は T27/T28 で前倒し実装済み ([e2e/customize.spec.ts](../../e2e/customize.spec.ts): セクション追加 → ライブプレビュー → 並べ替え → 保存 → 公開 HTML 検証 → テーマ設定の編集と公開反映 → 本文復帰)。T29 では `pnpm e2e` フルスイート (customize + forms) をローカルで実行し 2/2 green を確認。T28 コミットに biome 未整形の spec が混入していたのを本タスクで整形。
+- `docs/architecture.md`: スコープ外の「ビジュアルインライン編集」の注記、`pages.sections_json` と settings `theme` 行、§6 に「セクション (Phase 4)」の節 (DSL / JSX なしカタログと api からの .tsx import 禁止 / prepareSections のスキップ方針 / テーマ設定 / エディタとドラフトプレビュー)、§8 ロードマップに Phase 4 (done 2026-11-07) を追記。
+- `README.md`: 機能リストにカスタマイズエディタ (sections + theme settings、「no Liquid」) を追記し、Status を Phase 4 complete に更新 (管理画面 i18n は未了のまま明記)。
+- CI green の確認は push 後 (push はユーザー判断)。

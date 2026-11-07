@@ -10,13 +10,14 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
 - Bundled Default and Paper themes, switchable in site settings
+- Shopify-style customize editor: compose pages from theme sections (hero, text, latest posts, …) with a live preview, plus theme-wide settings (accent color, footer, social links) — no code, no Liquid
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 2 complete** — blog + fixed pages, contact forms (builder, embedded `<form>`, email notifications) work from the admin UI.
-> Admin i18n (Phase 3) is still open.
+> Status: **Phase 4 complete** — blog + fixed pages, contact forms, full-text search, themes, and the
+> section-based customize editor all work from the admin UI. Admin i18n (Phase 3) is still open.
 
 ## Layout
 

@@ -99,7 +99,9 @@ test.describe('customize editor', () => {
       await page.getByLabel('Footer text', { exact: true }).fill(footerText)
       await page.getByRole('button', { name: 'テーマ設定を保存', exact: true }).click()
       // Saving clears the dirty state, which disables the save button again.
-      await expect(page.getByRole('button', { name: 'テーマ設定を保存', exact: true })).toBeDisabled()
+      await expect(
+        page.getByRole('button', { name: 'テーマ設定を保存', exact: true }),
+      ).toBeDisabled()
 
       const publicResponse = await apiRequest.get(`/${pageSlug}`)
       expect(await publicResponse.text()).toContain(footerText)

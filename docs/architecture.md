@@ -26,7 +26,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 
 ### 明示的なスコープ外 (v1)
 
-マルチサイト、コンテンツ多言語化、プラグインサンドボックス、任意コンテンツタイプ (カスタムフィールド全般)、DB ポータビリティ (D1 以外)、WordPress インポート、ビジュアルインライン編集。
+マルチサイト、コンテンツ多言語化、プラグインサンドボックス、任意コンテンツタイプ (カスタムフィールド全般)、DB ポータビリティ (D1 以外)、WordPress インポート、ビジュアルインライン編集 (Phase 4 のセクションエディタはページ構成の編集であり、公開ページ上での直接編集ではない)。
 
 ## 2. 技術選定
 
@@ -166,7 +166,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `users` | id, email (uniq), password_hash, name, role (`admin`/`editor`), created_at | 初回起動時 `/admin/setup` で作成 |
 | `sessions` | id, user_id, expires_at, created_at | Cookie は `HttpOnly; Secure; SameSite=Lax` |
 | `api_keys` | id, name, key_hash, scope (`read`/`write`), last_used_at | headless 用。`X-API-KEY` |
-| `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`) |
+| `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, sections_json, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`)。`sections_json` 非 null のページは本文の代わりにセクション列を描画 (Phase 4) |
 | `post_types` | id, slug (uniq), name, description, has_categories, has_tags, sort_order | "ブログの種類" (`blog`, `news`, `works` …) |
 | `posts` | id, post_type_id, slug, title, body_json, body_html, search_text, excerpt, cover_media_id, author_id, status, published_at, seo_*, timestamps | uniq (`post_type_id`, `slug`) |
 | `categories` | id, post_type_id, slug, name, parent_id, sort_order | 投稿タイプごとに独立。uniq (`post_type_id`, `slug`) |
@@ -175,7 +175,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
-| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper) と `organization` (name / url / logoUrl / sameAs)。zod スキーマは `packages/shared/settings.ts` |
+| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoUrl / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)。zod スキーマは `packages/shared/settings.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
@@ -248,6 +248,14 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
 - `apps/server/src/i18n.ts` は `SiteMessages` と `en` / `ja` カタログを定義し、`resolveMessages(locale)` が BCP 47 の primary subtag を見て `ja`、それ以外や不正値を `en` に解決する。`loadSiteContext()` は `messages` を付加し、テーマコンポーネントには必要な slice だけを渡す (`PostList` は pagination、`KansoForm` は form)。検証文言は `submissionSchemaFor(fields, messages)` へ流れ、HTML フォームと公開 JSON API の `details[].message` が同じローカライズ文言を共有する一方、`KansoError.message` は英語のまま維持する。
 
+### セクション (Phase 4)
+
+- テーマが `Theme.sections` (hero / richtext / post_list / image_with_text / cta。両同梱テーマ共通) と `Theme.settingsFields` を宣言する。設定フィールドは `packages/shared/src/sections.ts` の field DSL (text / textarea / url / select / checkbox / number / color / image / posts) で表現し、値の検証スキーマは `sectionValuesSchemaFor(fields)` が動的に組み立てる (フォームビルダーの `submissionSchemaFor` と同型)。
+- カタログの正本 (label / description / fields) は JSX を含まない `site/themes/sections-meta.ts`。管理 API (`GET /api/v1/site/sections`) と pages API の入力検証はここだけを import する。**`api/` 配下から `.tsx` を import しない** こと (hc の型経由で admin の TS プログラムに JSX が混入し typecheck が壊れる)。
+- `pages.sections_json` 非 null のページは、`site/sections.tsx` の `prepareSections()` が検証と image / posts データ解決を済ませてから `<SectionsBody>` で描画する。未知 type・不正 settings のセクションは warn してスキップし、ページは 500 にしない (テーマ切替直後も安全)。`search_text` は文字列設定値の連結 (`sectionsPlainText`)。
+- テーマ設定は `settings` の `theme` 行にテーマ名で名前空間を切って保存し、`loadSiteContext()` が有効テーマ分だけ検証して `ctx.themeSettings` として各 `Layout` に渡す。適用は `themes/chrome.tsx` (`AccentStyle` が `--color-accent` を 1 箇所上書き、`FooterExtras` がフッター文とSNSリンク)。
+- 管理画面の「カスタマイズ」(`/_auth/customize`) がエディタ: カタログからの追加・並べ替え・設定フォーム自動生成 (image は メディアピッカー、posts は投稿タイプ選択)、`POST /preview/draft/page` (セッション認証、`no-store` + `noindex`) による未保存ドラフトの iframe プレビュー、pages API / `PUT /api/v1/settings/theme` での保存。
+
 ### キャッシュ
 
 - 公開 HTML は `middleware/cache.ts` の `siteCache` が Workers Cache API (`caches.default`) に `cache-control: public, s-maxage=60` で保存する。応答には `x-kanso-cache: HIT | MISS | BYPASS` を付ける。Cache API は `stale-while-revalidate` を解釈しないので使わない。
@@ -309,6 +317,7 @@ pnpm deploy                                                 # admin build → se
 | 1. コア | **done (2026-09-13)** | auth/setup、API キー、pages、post_types、posts、taxonomies、media (R2)、管理画面 CRUD、Tiptap、SSR + default テーマ、`@kanso/seo` (JSON-LD/sitemap/feed)、プレビュー、キャッシュ purge | ブログ + 固定ページのサイトが公開できる ([tasks/phase-1.md](tasks/phase-1.md)) |
 | 2. フォーム | **done (2026-09-15)** | フォームビルダー、公開送信 API (honeypot + 任意 Turnstile)、submissions 閲覧/CSV、Email Service 通知、本文の `form` ブロックノード + 公開側 `<form>` (非 JS 送信) | お問い合わせが管理画面設定のみで動く ([tasks/phase-2.md](tasks/phase-2.md)) |
 | 3. 仕上げ | in-progress | 済: テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド ([tasks/phase-3.md](tasks/phase-3.md))。残: 管理画面 i18n | v1.0 |
+| 4. セクションエディタ | **done (2026-11-07)** | Shopify 風カスタマイズ: field DSL、`pages.sections_json`、テーマのセクションレジストリと SSR、draft プレビュー、管理画面「カスタマイズ」エディタ、テーマ設定 (accent / footer / SNS) ([tasks/phase-4.md](tasks/phase-4.md)) | 管理画面からページ構成とテーマ設定を編集でき、公開に即反映される |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
