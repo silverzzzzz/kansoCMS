@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { api } from '../../api/client.ts'
+import { starterQuery } from '../../api/queries.ts'
 import { unwrap } from '../../api/request.ts'
 
 const featureLinks = [
@@ -24,6 +25,7 @@ function DashboardPage() {
     queryKey: ['health'],
     queryFn: () => unwrap(api.health.$get()),
   })
+  const starter = useQuery({ ...starterQuery, enabled: user.role === 'admin' })
 
   return (
     <div>
@@ -41,6 +43,40 @@ function DashboardPage() {
         <p role="alert" className="mt-6 border-l-2 border-red-600 pl-3 text-sm text-red-700">
           サイト情報を取得できませんでした。
         </p>
+      )}
+
+      {starter.data?.installed && (
+        <section className="mt-8 border border-neutral-200 bg-white p-5">
+          <h2 className="font-semibold text-neutral-950">サンプルサイトが入っています</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
+            トップページや会社概要、お知らせのサンプルを、あなたのサイトの内容に書き換えていきましょう。不要になったら「設定」の「サンプルサイト」から削除できます。
+          </p>
+          <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-sm font-medium">
+            <a
+              href="/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 hover:decoration-neutral-950"
+            >
+              サイトを見る
+            </a>
+            {starter.data.homePageId !== null && (
+              <Link
+                to="/customize"
+                search={{ page: starter.data.homePageId }}
+                className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 hover:decoration-neutral-950"
+              >
+                トップページをカスタマイズ
+              </Link>
+            )}
+            <Link
+              to="/settings"
+              className="text-neutral-950 underline decoration-neutral-300 underline-offset-4 hover:decoration-neutral-950"
+            >
+              サンプルの管理
+            </Link>
+          </div>
+        </section>
       )}
 
       <div className="mt-8 grid gap-px overflow-hidden border border-neutral-200 bg-neutral-200 sm:grid-cols-2">

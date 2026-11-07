@@ -8,6 +8,7 @@ import { postTypesQuery, settingsQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
+import { StarterSection } from '../../../components/starter/StarterSection.tsx'
 import { Alert, Button, Field, inputClass } from '../../../components/ui.tsx'
 
 export const Route = createFileRoute('/_auth/settings/')({
@@ -23,10 +24,32 @@ export const Route = createFileRoute('/_auth/settings/')({
 
 function SettingsPage() {
   const { user } = Route.useRouteContext()
-  const enabled = user.role === 'admin'
+  // Installing or removing the starter site rewrites settings (the site
+  // description), so the forms remount and re-seed from fresh data.
+  const [formsKey, setFormsKey] = useState(0)
+
+  if (user.role !== 'admin')
+    return (
+      <div>
+        <PageHeading title="設定" />
+        <div className="mt-6">
+          <Alert tone="error">権限がありません</Alert>
+        </div>
+      </div>
+    )
+  return (
+    <div>
+      <PageHeading title="設定" description="サイト情報と公開者情報を管理します。" />
+      <SettingsForms key={formsKey} />
+      <StarterSection onChanged={() => setFormsKey((key) => key + 1)} />
+    </div>
+  )
+}
+
+function SettingsForms() {
   const queryClient = useQueryClient()
-  const settings = useQuery({ ...settingsQuery, enabled })
-  const postTypes = useQuery({ ...postTypesQuery, enabled })
+  const settings = useQuery(settingsQuery)
+  const postTypes = useQuery(postTypesQuery)
   const initial = settings.data
   const [title, setTitle] = useState(initial?.site.title ?? 'kansoCMS')
   const [description, setDescription] = useState(initial?.site.description ?? '')
@@ -106,18 +129,8 @@ function SettingsPage() {
     },
   })
 
-  if (!enabled)
-    return (
-      <div>
-        <PageHeading title="設定" />
-        <div className="mt-6">
-          <Alert tone="error">権限がありません</Alert>
-        </div>
-      </div>
-    )
   return (
-    <div>
-      <PageHeading title="設定" description="サイト情報と公開者情報を管理します。" />
+    <>
       <form
         className="mt-8 space-y-5 border border-neutral-200 bg-white p-5"
         onSubmit={(event) => {
@@ -322,6 +335,6 @@ function SettingsPage() {
           </Button>
         </div>
       </form>
-    </div>
+    </>
   )
 }

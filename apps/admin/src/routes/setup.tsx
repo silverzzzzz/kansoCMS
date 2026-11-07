@@ -12,6 +12,7 @@ type SetupInput = {
   name: string
   email: string
   password: string
+  starter: boolean
 }
 
 export const Route = createFileRoute('/setup')({
@@ -26,11 +27,17 @@ function SetupPage() {
   const navigate = useNavigate({ from: '/setup' })
   const { queryClient } = Route.useRouteContext()
   const [clientError, setClientError] = useState<string | null>(null)
+  // Setup still succeeds when the starter site fails; say so before moving on.
+  const [starterError, setStarterError] = useState<string | null>(null)
   const setup = useMutation({
     mutationFn: (input: SetupInput) => unwrap(api.setup.$post({ json: input })),
     onSuccess: async (data) => {
       queryClient.setQueryData(meQueryOptions.queryKey, data.user)
       queryClient.setQueryData(setupStatusQueryOptions.queryKey, { needed: false })
+      if (data.starter && !data.starter.installed) {
+        setStarterError(data.starter.error ?? '原因不明のエラー')
+        return
+      }
       await navigate({ to: '/' })
     },
   })
@@ -53,10 +60,33 @@ function SetupPage() {
       name: String(form.get('name') ?? '').trim(),
       email: String(form.get('email') ?? '').trim(),
       password,
+      starter: form.get('starter') === 'on',
     })
   }
 
   const serverError = setup.error instanceof ApiError ? setup.error.message : null
+
+  if (starterError !== null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-5 py-12 text-neutral-950">
+        <section className="w-full max-w-md border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
+          <p className="text-sm font-medium text-neutral-500">kansoCMS</p>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight">セットアップが完了しました</h1>
+          <p role="alert" className="mt-4 border-l-2 border-red-600 pl-3 text-sm text-red-700">
+            サンプルサイトは作成できませんでした ({starterError}
+            )。管理画面の「設定」→「サンプルサイト」からもう一度お試しください。
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate({ to: '/' })}
+            className="mt-8 w-full bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2"
+          >
+            管理画面へ進む
+          </button>
+        </section>
+      </main>
+    )
+  }
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-5 py-12 text-neutral-950">
@@ -89,6 +119,16 @@ function SetupPage() {
             maxLength={256}
             required
           />
+
+          <label className="flex items-start gap-3 border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-800">
+            <input type="checkbox" name="starter" defaultChecked className="mt-1 size-4" />
+            <span>
+              <span className="font-medium">サンプルサイトを入れる</span>
+              <span className="mt-1 block text-xs leading-5 text-neutral-600">
+                会社・店舗向けのトップページ、会社概要、お問い合わせフォーム、お知らせを作成します。あとから設定画面で削除できます。
+              </span>
+            </span>
+          </label>
 
           {(clientError || serverError) && (
             <p role="alert" className="border-l-2 border-red-600 pl-3 text-sm text-red-700">

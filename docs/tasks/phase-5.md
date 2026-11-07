@@ -14,8 +14,8 @@
 | T30 | サンプル定義と同梱画像、インストーラ (マニフェスト記録・衝突時スキップ) | done | shared, core, server |
 | T31 | 管理 API (`/api/v1/starter` の状態取得・投入) とセットアップ時の投入、ASSETS からの画像読み込み | done | shared, server |
 | T32 | サンプルの削除 (編集済み・参照中・利用者が追加したものは残す) + 投入・削除の一括化 (D1 クエリ上限対策) | done | shared, core, server |
-| T33 | 管理画面: セットアップのチェックボックス、設定画面の「サンプルサイト」、ダッシュボードの案内 | todo | admin |
-| T34 | E2E + ドキュメント | todo | tooling, docs |
+| T33 | 管理画面: セットアップのチェックボックス、設定画面の「サンプルサイト」、ダッシュボードの案内 | done | admin |
+| T34 | E2E + ドキュメント | done | tooling, docs |
 
 Phase 5 の決定事項 (2026-11-08 ユーザー確認済み):
 
@@ -200,7 +200,7 @@ installStarter(kanso, {
 - 行の値は各サービスの create から切り出した `pageInsertValues` / `postInsertValues` / `formInsertValues` / `postTypeInsertValues` / `categoryInsertValues` / `prepareMediaObject` を共有する (create 自身もこれを使うので、描画 HTML・検索テキスト・既定値がずれない)。ついでに `media.upload` は insert の `returning()` で行を返し、1 件あたり 1 クエリ減った。
 - 投入の流れ: マニフェスト確認 → 画像を R2 に put → media 行を 1 batch → `build(media)` で内容を作る → 衝突の読み出し (固定ページのパス / 投稿タイプ / フォーム、サイト・テーマ設定) → **残り全部 (フォーム・投稿タイプ・カテゴリ・投稿・カテゴリ紐付け・固定ページ・テーマ設定・サイト説明・マニフェスト) を 1 つの `db.batch()`** で書く。batch はトランザクションなので内容は全部入るか何も入らないかで、失敗時は media 行と R2 を消して例外を返す (T30 の「途中までをマニフェストに記録」は不要になった)。
 - ID は事前に決められない (`AUTOINCREMENT` のため `max(id)+1` は削除済み ID の再利用になり、残っている参照が別のものを指し得る)。batch 内の参照はスラッグのサブクエリで解決する: カテゴリ・投稿の `post_type_id = (select id from post_types where slug = 'news')`、カテゴリ紐付けは `insert … select`、マニフェストは `json_object(…, 'pages', json((select json_group_array(id) …)), …)` を値に入れた **素の insert** (upsert ではない) なので、同時に 2 回投入されても主キー衝突で片方がロールバックする。
-- drizzle 0.45 の D1 `batch()` は `db.run(sql)` の項目をパラメータ付きで実行できない (`preparedQuery.stmt` が無く `bind` で落ちる)。生 SQL はクエリビルダー経由 (`insert().select(sql)`、`values({ valueJson: sql\`…\` })`) にした。
+- drizzle 0.45 の D1 `batch()` は `db.run(sql)` の項目をパラメータ付きで実行できない (`preparedQuery.stmt` が無く `bind` で落ちる)。生 SQL はクエリビルダー経由 (`insert().select(sql)`、``values({ valueJson: sql`…` })``) にした。
 - **D1 は LIKE / GLOB のパターンを 50 バイトに制限する。** 本文中のメディア URL (`/media/2026/11/<uuid>.webp`、約 50 バイト) を `like '%…%'` で探すと失敗したので `instr(body_json, url) > 0` にした。
 - 衝突判定は純関数 `planStarterInstall` (固定ページと投稿タイプは同じ URL 空間として扱う。予約スラッグは検証エラー)。削除の参照判定も純関数 `referencedMediaIds` で、core にテストを追加 (`services/starter.test.ts` 6 件)。DB を通す部分は実 D1 で確認した (core のテストは DB を持たない)。
 - 削除の規則 (実装どおり): 投稿・固定ページは **リビジョンが 1 件でもあれば編集済み** として残す。マニフェスト外の子ページがあるページも残す。投稿タイプは削除しない投稿 (利用者の投稿や編集済みサンプル) が 1 件でもあれば残し、カテゴリは残る投稿タイプの中で残る投稿が使っていれば残す (投稿タイプごと消す場合はカテゴリも消す)。フォームは送信があるか `updatedAt > createdAt` なら残す。メディアは残るページ/投稿 (サンプル以外も含む) の OG・カバー・セクション値・本文 URL とサイトロゴから参照されていれば残す (セクションは値が候補 ID と一致する数値なら参照とみなす保守的な判定)。テーマ設定はその名前空間全体が投入時の値と同じときだけ名前空間ごと消し、サイト説明も投入時と同じときだけ空に戻す。最後にマニフェストを消すので、残したものは通常のコンテンツになり、再投入はスラッグ衝突でスキップされる。削除も 1 つの `db.batch()` で、R2 は batch 成功後に消す。
@@ -212,7 +212,7 @@ installStarter(kanso, {
 
 ## T33. 管理画面
 
-状態: `todo`
+状態: `done` (2026-11-08)
 
 ### ゴール
 
@@ -232,13 +232,17 @@ installStarter(kanso, {
 
 ### 決定
 
-(実装後に記入)
+- 設定画面: [StarterSection](../../apps/admin/src/components/starter/StarterSection.tsx) を最下部に追加。未投入なら説明 +「サンプルサイトを入れる」、投入済みなら作成日時・件数 +「サンプルを削除」(`ConfirmDialog`)。結果は直近の操作のものだけを出し (`last` state)、`skipped` は「固定ページ `about`」のように、`kept` は「固定ページ「ホーム」(編集済み)」のように日本語で一覧表示する。件数は「固定ページ 4・投稿 3・…」(0 件の種類は省く)。
+- **投入・削除の後は全クエリを invalidate し、設定フォームを remount する。** 設定画面の各フォームは初回描画時の設定値で state を作るため、投入でサイト説明が書き換わった後に「サイト設定を保存」を押すと古い値 (空) で上書きしてしまう。`SettingsPage` を外側 (権限チェック + `formsKey`) と内側 `SettingsForms` に分け、`StarterSection` の `onChanged` で key を進めて新しい値で作り直す。
+- セットアップ画面: チェックボックス「サンプルサイトを入れる」(既定オン、説明つき)。レスポンスの `starter.installed === false` なら遷移せずに「セットアップが完了しました」+ エラー内容 +「設定 → サンプルサイトからもう一度」の画面を出し、「管理画面へ進む」でダッシュボードへ (ダッシュボードに検索パラメータを足さずに済む)。
+- ダッシュボード: admin のときだけ `starterQuery` を取り、投入済みなら「サンプルサイトが入っています」カード (「サイトを見る」は新しいタブで `/`、`homePageId` があれば「トップページをカスタマイズ」→ `/customize?page=<id>`、「サンプルの管理」→ 設定)。
+- 確認: 空の D1 で一時的な Playwright spec (確認後に削除) を流し、セットアップ画面のチェックボックスが既定でオン → セットアップ → ダッシュボードにカード → 「トップページをカスタマイズ」でプレビューにサイト名の見出し → 設定画面に作成日時と件数 → 削除 → 「サンプルを削除しました (固定ページ 4・投稿 3・投稿タイプ 1・カテゴリ 2・フォーム 1・画像 7)」、サイト説明の入力欄が空に作り直されることを確認。スクリーンショットで見た目も確認した。設定画面の一連の流れは T34 の E2E でも検証している。
 
 ---
 
 ## T34. E2E + ドキュメント
 
-状態: `todo`
+状態: `done` (2026-11-08)
 
 ### 仕様
 
@@ -252,7 +256,10 @@ installStarter(kanso, {
 
 ### 決定
 
-(実装後に記入)
+- [e2e/starter.spec.ts](../../e2e/starter.spec.ts): ログイン → 設定画面で投入 (`POST /api/v1/starter` の応答を `waitForResponse` で受けて `created` / `skipped` を取る) → `skipped` に入っていないものだけ公開側を検証 (ホームのセクションと CTA、会社概要の「（サンプル）」、お問い合わせのフォーム、`/news` の記事) → ダッシュボードのカード → ホームを作れていれば「トップページをカスタマイズ」でプレビューに CTA 見出し → 設定画面から削除 → 状態が未投入、作った固定ページ (ホーム以外) と `/news/how-to-edit` が 404、カードが消える。
+- 開発者の DB を壊さない: 開始時に投入済みなら `test.skip`。テストが投入したまま途中で落ちた場合は `afterAll` で削除して元に戻す。既存のページなどでスキップされた項目は検証対象から外す。E2E の `ensureAdmin` は `starter` を送らないので、customize / forms のテストにはサンプルが入らない。CI は毎回空の D1 なので常に全ステップが走る。
+- 実行: 空の D1 で `playwright test` 3/3 (9.5 秒)、開発用 D1 (既存のページ・フォームあり) に戻して `pnpm e2e` 3/3 (16.2 秒)。終了後にポート 5199 のリスナーなし。
+- ドキュメント: architecture.md の §4 settings に `starter`、§5 に `GET/POST/DELETE /api/v1/starter` と setup の `starter`、§6 に「サンプルサイト (Phase 5)」(衝突時スキップ・D1 クエリ上限と一括書き込み・削除で残す条件・LIKE 50 バイト)、§8 で Phase 3 を done (管理画面 i18n は見送り)、Phase 5 行を追加。README は機能一覧・Status・初回セットアップの説明・E2E の注記、`create-kanso` が生成する README のセットアップ手順にも一言。
 
 ---
 
