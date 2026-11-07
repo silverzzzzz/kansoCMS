@@ -72,6 +72,27 @@ export const sectionsMetaByTheme: Record<ThemeName, Record<string, SectionMeta>>
   paper: standardSectionsMeta,
 }
 
+/** Theme-wide settings (Shopify's settings_schema counterpart), same field DSL. */
+export const standardThemeSettingsFields: SectionField[] = sectionFieldListSchema.parse([
+  {
+    type: 'color',
+    name: 'accent',
+    label: 'Accent color',
+    help: 'Links and highlights. Leave empty for the theme default.',
+  },
+  { type: 'text', name: 'footer_text', label: 'Footer text', maxLength: 200 },
+  { type: 'url', name: 'sns_url_1', label: 'Social link 1' },
+  { type: 'url', name: 'sns_url_2', label: 'Social link 2' },
+  { type: 'url', name: 'sns_url_3', label: 'Social link 3' },
+  { type: 'url', name: 'sns_url_4', label: 'Social link 4' },
+  { type: 'url', name: 'sns_url_5', label: 'Social link 5' },
+])
+
+export const themeSettingsFieldsByTheme: Record<ThemeName, SectionField[]> = {
+  default: standardThemeSettingsFields,
+  paper: standardThemeSettingsFields,
+}
+
 /**
  * Validation details for section input saved through the management API,
  * checked against a theme's catalog. Empty when everything is valid.

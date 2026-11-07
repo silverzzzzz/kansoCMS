@@ -54,7 +54,13 @@ site.get('/', async (c) => {
   const jsonLd = [buildOrganization(ctx.site), buildWebSite(ctx.site)]
   const m = ctx.messages
   return c.html(
-    <ctx.theme.Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
+    <ctx.theme.Layout
+      meta={meta}
+      jsonLd={jsonLd}
+      nav={ctx.nav}
+      search={ctx.search}
+      themeSettings={ctx.themeSettings}
+    >
       <section class="page">
         <h1>{ctx.site.name}</h1>
         <p>{m.home.running}</p>
@@ -268,7 +274,13 @@ async function renderArchive(
   ]
 
   return c.html(
-    <ctx.theme.Layout meta={meta} jsonLd={jsonLd} nav={ctx.nav} search={ctx.search}>
+    <ctx.theme.Layout
+      meta={meta}
+      jsonLd={jsonLd}
+      nav={ctx.nav}
+      search={ctx.search}
+      themeSettings={ctx.themeSettings}
+    >
       <ctx.theme.PostList
         heading={heading}
         description={description}
@@ -288,7 +300,12 @@ async function notFound(c: Context<AppEnv>) {
   const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
   const meta = ctx.meta({ title: ctx.messages.notFound.title, path: c.req.path, noindex: true })
   return c.html(
-    <ctx.theme.Layout meta={meta} nav={ctx.nav} search={ctx.search}>
+    <ctx.theme.Layout
+      meta={meta}
+      nav={ctx.nav}
+      search={ctx.search}
+      themeSettings={ctx.themeSettings}
+    >
       <section class="page">
         <h1>404</h1>
         <p>{ctx.messages.notFound.body}</p>

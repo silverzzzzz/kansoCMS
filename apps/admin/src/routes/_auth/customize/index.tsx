@@ -9,7 +9,9 @@ import {
   pageQuery,
   pagesListQuery,
   type SectionCatalogItem,
+  type SectionFieldDef,
   sectionCatalogQuery,
+  themeSettingsQuery,
 } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
@@ -41,6 +43,7 @@ function CustomizePage() {
   const navigate = useNavigate({ from: Route.fullPath })
   const pages = useQuery(pagesListQuery({ perPage: '100' }))
   const catalog = useQuery(sectionCatalogQuery)
+  const themeSettings = useQuery({ ...themeSettingsQuery, retry: false })
   const items = pages.data?.items ?? []
   const pageId =
     search.page ?? items.find((page) => page.path === 'home')?.id ?? items[0]?.id ?? null
@@ -83,12 +86,14 @@ function CustomizePage() {
           </select>
         }
       />
-      {detail.data?.item && catalog.data ? (
+      {detail.data?.item && catalog.data && !themeSettings.isLoading ? (
         <Editor
           key={detail.data.item.id}
           page={detail.data.item}
           catalog={catalog.data.items}
           theme={catalog.data.theme}
+          settingsFields={catalog.data.settings}
+          themeAll={themeSettings.data?.theme ?? null}
         />
       ) : (
         <p className="mt-8">読み込み中…</p>
@@ -109,10 +114,15 @@ function Editor({
   page,
   catalog,
   theme,
+  settingsFields,
+  themeAll,
 }: {
   page: PageItem
   catalog: SectionCatalogItem[]
   theme: string
+  settingsFields: SectionFieldDef[]
+  /** All themes' stored settings, or null when the account cannot read them. */
+  themeAll: Record<string, Record<string, unknown>> | null
 }) {
   const queryClient = useQueryClient()
   const [sections, setSections] = useState<PageSection[]>(page.sections ?? [])
@@ -122,10 +132,15 @@ function Editor({
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewError, setPreviewError] = useState(false)
   const [detachOpen, setDetachOpen] = useState(false)
+  const [tab, setTab] = useState<'sections' | 'theme'>('sections')
+  const [themeDraft, setThemeDraft] = useState<Record<string, unknown>>(themeAll?.[theme] ?? {})
+  const [savedThemeJson, setSavedThemeJson] = useState(JSON.stringify(themeAll?.[theme] ?? {}))
 
   const sectionsJson = JSON.stringify(sections)
+  const themeJson = JSON.stringify(themeDraft)
   const sectionsMode = page.sections !== null
-  const dirty = sectionsJson !== savedJson
+  const themeDirty = themeAll !== null && themeJson !== savedThemeJson
+  const dirty = sectionsJson !== savedJson || themeDirty
   const selected = sections.find((section) => section.id === selectedId) ?? null
   const selectedCatalog = selected
     ? (catalog.find((item) => item.type === selected.type) ?? null)
@@ -151,7 +166,11 @@ function Editor({
           method: 'POST',
           credentials: 'same-origin',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ title: page.title, sections: JSON.parse(sectionsJson) }),
+          body: JSON.stringify({
+            title: page.title,
+            sections: JSON.parse(sectionsJson),
+            ...(themeAll !== null ? { themeSettings: JSON.parse(themeJson) } : {}),
+          }),
         })
         if (!response.ok) throw new Error(String(response.status))
         setPreviewHtml(injectBase(await response.text()))
@@ -161,7 +180,7 @@ function Editor({
       }
     }, 400)
     return () => clearTimeout(timer)
-  }, [sectionsJson, page.title])
+  }, [sectionsJson, themeJson, themeAll, page.title])
 
   const save = useMutation({
     mutationFn: (value: PageSection[] | null) =>
@@ -174,7 +193,29 @@ function Editor({
       await queryClient.invalidateQueries({ queryKey: ['pages'] })
     },
   })
+  const saveTheme = useMutation({
+    mutationFn: () =>
+      unwrap(
+        api.settings.theme.$put({
+          json: { ...(themeAll ?? {}), [theme]: JSON.parse(themeJson) },
+        }),
+      ),
+    onSuccess: async (data) => {
+      setSavedThemeJson(JSON.stringify(data.theme[theme] ?? {}))
+      await queryClient.invalidateQueries({ queryKey: ['settings', 'theme'] })
+    },
+  })
   const saveError = save.error instanceof ApiError ? save.error : null
+  const saveThemeError = saveTheme.error instanceof ApiError ? saveTheme.error : null
+
+  function updateThemeDraft(name: string, value: unknown) {
+    setThemeDraft((current) => {
+      const next = { ...current }
+      if (value === undefined) delete next[name]
+      else next[name] = value
+      return next
+    })
+  }
 
   function move(id: string, delta: -1 | 1) {
     setSections((current) => {
@@ -234,128 +275,187 @@ function Editor({
       )}
       <div className="flex flex-col gap-6 lg:flex-row">
         <div className="w-full shrink-0 space-y-6 lg:w-96">
-          <div className="border border-neutral-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-neutral-800">セクション</h2>
-            {sections.length === 0 && (
-              <p className="mt-3 text-sm text-neutral-500">まだセクションがありません。</p>
-            )}
-            <ul className="mt-3 space-y-1">
-              {sections.map((section, index) => (
-                <li key={section.id} className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(section.id)}
-                    className={`min-w-0 flex-1 truncate border px-3 py-2 text-left text-sm ${
-                      section.id === selectedId
-                        ? 'border-neutral-950 bg-neutral-950 text-white'
-                        : 'border-neutral-200 bg-white hover:border-neutral-400'
-                    }`}
-                  >
-                    {labelFor(section.type)}
-                  </button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="small"
-                    aria-label="上へ移動"
-                    disabled={index === 0}
-                    onClick={() => move(section.id, -1)}
-                  >
-                    ↑
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="small"
-                    aria-label="下へ移動"
-                    disabled={index === sections.length - 1}
-                    onClick={() => move(section.id, 1)}
-                  >
-                    ↓
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="small"
-                    aria-label="削除"
-                    onClick={() => {
-                      setSections((current) => current.filter((s) => s.id !== section.id))
-                      if (selectedId === section.id) setSelectedId(null)
-                    }}
-                  >
-                    ×
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-4 flex items-end gap-2">
-              <label className="min-w-0 flex-1 text-sm font-medium text-neutral-800">
-                追加するセクション
-                <select
-                  className={inputClass}
-                  value={addType}
-                  onChange={(event) => setAddType(event.target.value)}
+          {themeAll !== null && (
+            <div className="flex border border-neutral-200 bg-white p-1">
+              {(
+                [
+                  ['sections', 'セクション'],
+                  ['theme', 'テーマ設定'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTab(value)}
+                  className={`flex-1 px-3 py-2 text-sm font-medium ${
+                    tab === value ? 'bg-neutral-950 text-white' : 'text-neutral-600'
+                  }`}
                 >
-                  {catalog.map((item) => (
-                    <option key={item.type} value={item.type}>
-                      {item.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={sections.length >= 30}
-                onClick={() => {
-                  const item = catalog.find((entry) => entry.type === addType)
-                  if (!item) return
-                  const section = newSection(item)
-                  setSections((current) => [...current, section])
-                  setSelectedId(section.id)
-                }}
-              >
-                追加
-              </Button>
-            </div>
-          </div>
-
-          {selected && selectedCatalog && (
-            <div className="border border-neutral-200 bg-white p-4">
-              <h2 className="text-sm font-semibold text-neutral-800">
-                {selectedCatalog.label} の設定
-              </h2>
-              {selectedCatalog.description && (
-                <p className="mt-1 text-xs text-neutral-500">{selectedCatalog.description}</p>
-              )}
-              <div className="mt-4">
-                <SectionSettingsForm
-                  fields={selectedCatalog.fields}
-                  values={selected.settings}
-                  onChange={updateSelected}
-                />
-              </div>
+                  {label}
+                </button>
+              ))}
             </div>
           )}
+          {tab === 'theme' && themeAll !== null && (
+            <>
+              <div className="border border-neutral-200 bg-white p-4">
+                <h2 className="text-sm font-semibold text-neutral-800">テーマ設定 ({theme})</h2>
+                <p className="mt-1 text-xs text-neutral-500">
+                  サイト全体に適用されます。テーマを切り替えても他テーマの設定は保持されます。
+                </p>
+                <div className="mt-4">
+                  <SectionSettingsForm
+                    fields={settingsFields}
+                    values={themeDraft}
+                    onChange={updateThemeDraft}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  disabled={!themeDirty || saveTheme.isPending}
+                  onClick={() => saveTheme.mutate()}
+                >
+                  {saveTheme.isPending ? '保存中…' : 'テーマ設定を保存'}
+                </Button>
+                {themeDirty ? (
+                  <span className="text-sm text-neutral-500">未保存の変更があります</span>
+                ) : (
+                  saveTheme.isSuccess && (
+                    <span className="text-sm text-green-700">保存しました</span>
+                  )
+                )}
+              </div>
+              {saveThemeError && (
+                <Alert tone="error">保存できませんでした: {saveThemeError.message}</Alert>
+              )}
+            </>
+          )}
+          <div className={tab === 'sections' ? 'space-y-6' : 'hidden'}>
+            <div className="border border-neutral-200 bg-white p-4">
+              <h2 className="text-sm font-semibold text-neutral-800">セクション</h2>
+              {sections.length === 0 && (
+                <p className="mt-3 text-sm text-neutral-500">まだセクションがありません。</p>
+              )}
+              <ul className="mt-3 space-y-1">
+                {sections.map((section, index) => (
+                  <li key={section.id} className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(section.id)}
+                      className={`min-w-0 flex-1 truncate border px-3 py-2 text-left text-sm ${
+                        section.id === selectedId
+                          ? 'border-neutral-950 bg-neutral-950 text-white'
+                          : 'border-neutral-200 bg-white hover:border-neutral-400'
+                      }`}
+                    >
+                      {labelFor(section.type)}
+                    </button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      aria-label="上へ移動"
+                      disabled={index === 0}
+                      onClick={() => move(section.id, -1)}
+                    >
+                      ↑
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      aria-label="下へ移動"
+                      disabled={index === sections.length - 1}
+                      onClick={() => move(section.id, 1)}
+                    >
+                      ↓
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      aria-label="削除"
+                      onClick={() => {
+                        setSections((current) => current.filter((s) => s.id !== section.id))
+                        if (selectedId === section.id) setSelectedId(null)
+                      }}
+                    >
+                      ×
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-4 flex items-end gap-2">
+                <label className="min-w-0 flex-1 text-sm font-medium text-neutral-800">
+                  追加するセクション
+                  <select
+                    className={inputClass}
+                    value={addType}
+                    onChange={(event) => setAddType(event.target.value)}
+                  >
+                    {catalog.map((item) => (
+                      <option key={item.type} value={item.type}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={sections.length >= 30}
+                  onClick={() => {
+                    const item = catalog.find((entry) => entry.type === addType)
+                    if (!item) return
+                    const section = newSection(item)
+                    setSections((current) => [...current, section])
+                    setSelectedId(section.id)
+                  }}
+                >
+                  追加
+                </Button>
+              </div>
+            </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <Button
-              type="button"
-              disabled={!dirty || save.isPending}
-              onClick={() => save.mutate(JSON.parse(sectionsJson))}
-            >
-              {save.isPending ? '保存中…' : '保存'}
-            </Button>
-            {dirty ? (
-              <span className="text-sm text-neutral-500">未保存の変更があります</span>
-            ) : (
-              save.isSuccess && <span className="text-sm text-green-700">保存しました</span>
+            {selected && selectedCatalog && (
+              <div className="border border-neutral-200 bg-white p-4">
+                <h2 className="text-sm font-semibold text-neutral-800">
+                  {selectedCatalog.label} の設定
+                </h2>
+                {selectedCatalog.description && (
+                  <p className="mt-1 text-xs text-neutral-500">{selectedCatalog.description}</p>
+                )}
+                <div className="mt-4">
+                  <SectionSettingsForm
+                    fields={selectedCatalog.fields}
+                    values={selected.settings}
+                    onChange={updateSelected}
+                  />
+                </div>
+              </div>
             )}
-            {sectionsMode && (
-              <Button type="button" variant="secondary" onClick={() => setDetachOpen(true)}>
-                セクションをやめて本文に戻す
+
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                disabled={sectionsJson === savedJson || save.isPending}
+                onClick={() => save.mutate(JSON.parse(sectionsJson))}
+              >
+                {save.isPending ? '保存中…' : '保存'}
               </Button>
-            )}
+              {sectionsJson !== savedJson ? (
+                <span className="text-sm text-neutral-500">未保存の変更があります</span>
+              ) : (
+                save.isSuccess && <span className="text-sm text-green-700">保存しました</span>
+              )}
+              {sectionsMode && (
+                <Button type="button" variant="secondary" onClick={() => setDetachOpen(true)}>
+                  セクションをやめて本文に戻す
+                </Button>
+              )}
+            </div>
           </div>
           <p className="text-xs text-neutral-500">テーマ: {theme}</p>
         </div>

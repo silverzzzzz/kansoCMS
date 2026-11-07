@@ -1,15 +1,19 @@
 import { zValidator } from '@hono/zod-validator'
+import { KansoError } from '@kanso/core'
 import {
   formsSettingsSchema,
   organizationSettingsSchema,
   SETTINGS_KEYS,
+  sectionValuesSchemaFor,
   siteSettingsSchema,
+  themeNameSchema,
   themeSettingsSchema,
 } from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { requireRole } from '../middleware/auth.ts'
 import { secret } from '../secrets.ts'
+import { themeSettingsFieldsByTheme } from '../site/themes/sections-meta.ts'
 import { validationHook } from './validate.ts'
 
 export const settings = new Hono<AppEnv>()
@@ -60,10 +64,30 @@ export const settings = new Hono<AppEnv>()
   })
   /**
    * Theme settings, namespaced by theme name so switching themes keeps the
-   * other theme's values. Field-level validation against the theme's declared
-   * settings fields arrives with T28.
+   * other theme's values. Each namespace is validated against that theme's
+   * declared settings fields; unknown theme names are rejected.
    */
   .put('/theme', zValidator('json', themeSettingsSchema, validationHook), async (c) => {
-    const theme = await c.var.kanso.settings.updateTheme(c.req.valid('json'))
+    const input = c.req.valid('json')
+    const details: { path: string; message: string }[] = []
+    for (const [name, values] of Object.entries(input)) {
+      const parsedName = themeNameSchema.safeParse(name)
+      if (!parsedName.success) {
+        details.push({ path: name, message: `Unknown theme "${name}"` })
+        continue
+      }
+      const schema = sectionValuesSchemaFor(themeSettingsFieldsByTheme[parsedName.data])
+      const parsed = schema.safeParse(values)
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          details.push({
+            path: [name, ...issue.path.map(String)].join('.'),
+            message: issue.message,
+          })
+        }
+      }
+    }
+    if (details.length > 0) throw KansoError.validation('Invalid theme settings', details)
+    const theme = await c.var.kanso.settings.updateTheme(input)
     return c.json({ theme })
   })

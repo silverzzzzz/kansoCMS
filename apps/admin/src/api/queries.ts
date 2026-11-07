@@ -98,6 +98,10 @@ async function getSectionCatalog() {
   return unwrap(api.site.sections.$get({ query: {} }))
 }
 
+async function getThemeSettings() {
+  return unwrap(api.settings.theme.$get())
+}
+
 export type PageItem = Awaited<ReturnType<typeof getPage>>['item']
 export type PageListItem = Awaited<ReturnType<typeof getPages>>['items'][number]
 export type PageRevisionItem = Awaited<ReturnType<typeof getPageRevisions>>['items'][number]
@@ -194,6 +198,11 @@ export const settingsQuery = queryOptions({
 export const sectionCatalogQuery = queryOptions({
   queryKey: ['site', 'sections'] as const,
   queryFn: getSectionCatalog,
+})
+
+export const themeSettingsQuery = queryOptions({
+  queryKey: ['settings', 'theme'] as const,
+  queryFn: getThemeSettings,
 })
 
 export const formsListQuery = queryOptions({

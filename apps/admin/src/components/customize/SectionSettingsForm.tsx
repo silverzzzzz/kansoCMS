@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { postTypesQuery, type SectionFieldDef } from '../../api/queries.ts'
 import { MediaField } from '../media/MediaField.tsx'
-import { Field, inputClass } from '../ui.tsx'
+import { Button, Field, inputClass } from '../ui.tsx'
 
 export type SectionSettings = Record<string, unknown>
 
@@ -133,6 +133,33 @@ export function SectionSettingsForm({
                 />
               </Field>
             )
+          case 'color': {
+            const value = asString(values[field.name])
+            return (
+              <Field key={field.name} label={field.label} hint={field.help ?? undefined}>
+                <span className="mt-2 flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={/^#[0-9a-fA-F]{6}$/.test(value) ? value : '#888888'}
+                    onChange={(event) => onChange(field.name, event.target.value)}
+                  />
+                  <span className="text-xs font-normal text-neutral-500">
+                    {value || 'テーマ既定'}
+                  </span>
+                  {value !== '' && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="small"
+                      onClick={() => onChange(field.name, '')}
+                    >
+                      クリア
+                    </Button>
+                  )}
+                </span>
+              </Field>
+            )
+          }
           case 'image': {
             const value = values[field.name]
             return (

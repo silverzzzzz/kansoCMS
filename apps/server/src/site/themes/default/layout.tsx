@@ -1,12 +1,21 @@
 import { raw } from 'hono/html'
 import { Head } from '../../head.tsx'
+import { AccentStyle, FooterExtras } from '../chrome.tsx'
 import type { LayoutProps } from '../types.ts'
 
 /**
  * Default theme shell. Styling comes from /themes/default.css in apps/server/public;
  * optional integration scripts are supplied explicitly by the renderer.
  */
-export function Layout({ meta, jsonLd, nav, search, scripts = [], children }: LayoutProps) {
+export function Layout({
+  meta,
+  jsonLd,
+  nav,
+  search,
+  scripts = [],
+  themeSettings,
+  children,
+}: LayoutProps) {
   return (
     <>
       {raw('<!DOCTYPE html>')}
@@ -14,6 +23,7 @@ export function Layout({ meta, jsonLd, nav, search, scripts = [], children }: La
         <head>
           <Head meta={meta} jsonLd={jsonLd} />
           <link rel="stylesheet" href="/themes/default.css" />
+          <AccentStyle settings={themeSettings} />
           {scripts.map((src) => (
             <script src={src} async defer></script>
           ))}
@@ -45,6 +55,7 @@ export function Layout({ meta, jsonLd, nav, search, scripts = [], children }: La
           </header>
           <main class="site-main">{children}</main>
           <footer class="site-footer">
+            <FooterExtras settings={themeSettings} />
             <small>
               © {new Date().getFullYear()} {meta.siteName}
             </small>

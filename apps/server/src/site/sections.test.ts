@@ -109,7 +109,7 @@ describe('sections page rendering', () => {
     updatedAt: new Date('2026-11-01T00:00:00Z'),
   }
 
-  function testApp() {
+  function testApp(themeSettingsRow: Record<string, Record<string, unknown>> = {}) {
     const kanso: Kanso = Object.assign(Object.create(null), {
       settings: {
         site: vi.fn().mockResolvedValue({
@@ -122,6 +122,7 @@ describe('sections page rendering', () => {
           theme: 'default',
         }),
         organization: vi.fn().mockResolvedValue({ name: '', url: null, logoUrl: null, sameAs: [] }),
+        theme: vi.fn().mockResolvedValue(themeSettingsRow),
       },
       pages: {
         listPublishedTopLevel: vi.fn().mockResolvedValue([]),
@@ -146,6 +147,29 @@ describe('sections page rendering', () => {
     const env = { SITE_URL: 'https://example.com', caches: undefined } as unknown as Bindings
     return { app, env }
   }
+
+  it('applies theme settings to the layout chrome', async () => {
+    const { app, env } = testApp({
+      default: {
+        accent: '#ff0000',
+        footer_text: 'Custom footer line',
+        sns_url_1: 'https://social.example.com/kanso',
+      },
+    })
+    const res = await app.request('/landing', {}, env)
+    const html = await res.text()
+    expect(html).toContain(':root{--color-accent:#ff0000}')
+    expect(html).toContain('Custom footer line')
+    expect(html).toContain('href="https://social.example.com/kanso"')
+    expect(html).toContain('social.example.com')
+  })
+
+  it('ignores invalid stored theme settings', async () => {
+    const { app, env } = testApp({ default: { accent: 'javascript:alert(1)' } })
+    const res = await app.request('/landing', {}, env)
+    const html = await res.text()
+    expect(html).not.toContain('--color-accent:javascript')
+  })
 
   it('renders sections instead of the rich text body', async () => {
     const { app, env } = testApp()

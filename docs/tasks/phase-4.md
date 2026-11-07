@@ -15,7 +15,7 @@
 | T25 | セクションレジストリと公開側レンダリング: `Theme.sections`、初期セクション実装 (default / paper)、`renderPage` のセクション描画、draft プレビュー | done | server |
 | T26 | 管理 API: セクションカタログ取得、pages API の sections 読み書き + 動的検証、テーマ設定 API | done | server |
 | T27 | 管理画面「カスタマイズ」エディタ: セクション一覧 (追加/削除/並べ替え)、設定フォーム自動生成、iframe プレビュー、保存 | done | admin, tooling |
-| T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | todo | shared, server, admin |
+| T28 | テーマ設定 (グローバル): ヘッダー/フッター等のテーマ単位設定を公開側に適用し、エディタから編集できる | done | shared, server, admin |
 | T29 | E2E + ドキュメント: カスタマイズの Playwright E2E、architecture.md / README 更新 | todo | tooling, docs |
 
 ## 全体設計 (このフェーズの前提)
@@ -221,7 +221,7 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ## T28. テーマ設定 (グローバル設定の公開側適用と編集 UI)
 
-状態: `todo`
+状態: `done` (2026-11-07)
 
 ### ゴール
 
@@ -240,7 +240,16 @@ Shopify の対応物とこのフェーズでの置き換え:
 
 ### 決定
 
-- (実装時に追記)
+- Claude が直接実装 (Codex 利用不可のため、2026-11-07)。ブラウザ検証は E2E にテーマ設定ステップを追加して実施 (タブ切替 → Footer text 入力 → 保存 → 公開 HTML に反映 → リセット)。
+- shared の field DSL に `color` 型を追加 (値は `''` = テーマ既定、または `#rrggbb`)。
+- テーマ設定フィールドの正本も JSX なしの [sections-meta.ts](../../apps/server/src/site/themes/sections-meta.ts): `standardThemeSettingsFields` (accent (color) / footer_text (text 200) / sns_url_1..5 (url)) と `themeSettingsFieldsByTheme`。SNS は repeatable フィールドを DSL に足さず URL フィールド 5 本で表現 (v1 の割り切り)。`Theme.settingsFields` に載る。
+- `loadSiteContext()` が `settings.theme()` から有効テーマの名前空間を `sectionValuesSchemaFor(settingsFields)` で safeParse し、失敗・未設定は既定値に落として `ctx.themeSettings` に載せる。各 Layout 呼び出し (render / routes / search / preview) が `themeSettings` prop で渡す。
+- 公開側の適用は [themes/chrome.tsx](../../apps/server/src/site/themes/chrome.tsx) の共有部品: `AccentStyle` (`<style>:root{--color-accent:…}</style>` を 1 箇所だけ注入。描画直前にも hex を再検証して CSS インジェクションを防ぐ。ライト/ダーク両方が同じ accent になるのは v1 許容) と `FooterExtras` (SNS リンク (ラベルはホスト名) + フッターテキスト)。両テーマの footer に組み込み。
+- `PUT /api/v1/settings/theme` は名前空間ごとに検証: 未知のテーマ名と不正なフィールド値は 400 (`details[].path = <theme>.<field>`)。保存は record 全体の置き換えなので、エディタは既存の他テーマ名前空間をスプレッドして送る。
+- `GET /api/v1/site/sections` のレスポンスに `settings` (テーマ設定フィールド定義) を追加。
+- `POST /preview/draft/page` が `themeSettings?` を受け、検証が通れば保存値の代わりに使う (テーマ設定タブの未保存ドラフトもプレビューに反映)。
+- 管理画面: カスタマイズ画面の左ペインに「セクション / テーマ設定」タブ。テーマ設定は同じ `SectionSettingsForm` で自動生成 (color は `<input type="color">` + クリアでテーマ既定へ)。設定の読み書きは admin ロールのみなので、`GET /settings/theme` が失敗する編集者にはタブ自体を出さない。保存は専用ボタン (ページの保存と独立)、beforeunload は両方の dirty を見る。
+- テスト: shared の color ケースは既存テストの枠組みで担保、server は [sections.test.ts](../../apps/server/src/site/sections.test.ts) に accent/フッター/SNS の描画 + 不正値無視、[api/settings.test.ts](../../apps/server/src/api/settings.test.ts) に PUT の検証 (400 details / 正常保存)。既存ハーネスに `settings.theme` モックを追加。
 
 ---
 

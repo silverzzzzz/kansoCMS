@@ -1,5 +1,6 @@
 import type { Kanso } from '@kanso/core'
 import { buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
+import { type SectionValues, sectionValuesSchemaFor } from '@kanso/shared'
 import { resolveMessages, type SiteMessages } from '../i18n.ts'
 import { formatDate } from './format.ts'
 import { resolveTheme } from './themes/index.ts'
@@ -17,6 +18,8 @@ export interface SiteRequestContext {
   theme: Theme
   /** Post type whose archive is shown at `/` when no `home` page exists. */
   homePostTypeSlug: string | null
+  /** Theme-wide settings for the active theme, validated with defaults applied. */
+  themeSettings: SectionValues
   messages: SiteMessages
   search: Pick<SiteMessages['search'], 'label' | 'placeholder' | 'button'>
   /** Build PageMeta with site-level defaults applied. */
@@ -32,9 +35,10 @@ export type MetaOverrides = Omit<Partial<PageMeta>, 'title'> & {
 }
 
 export async function loadSiteContext(kanso: Kanso, origin: string): Promise<SiteRequestContext> {
-  const [settings, organization, topPages, postTypes] = await Promise.all([
+  const [settings, organization, allThemeSettings, topPages, postTypes] = await Promise.all([
     kanso.settings.site(),
     kanso.settings.organization(),
+    kanso.settings.theme(),
     kanso.pages.listPublishedTopLevel(),
     kanso.postTypes.list(),
   ])
@@ -55,12 +59,19 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
   ]
 
   const messages = resolveMessages(settings.locale)
+  const theme = resolveTheme(settings.theme)
+  const themeValuesSchema = sectionValuesSchemaFor(theme.settingsFields)
+  const storedThemeSettings = themeValuesSchema.safeParse(allThemeSettings[theme.name] ?? {})
+  const themeSettings = storedThemeSettings.success
+    ? storedThemeSettings.data
+    : themeValuesSchema.parse({})
   return {
     origin,
     site,
     nav,
     homePostTypeSlug: settings.homePostTypeSlug,
-    theme: resolveTheme(settings.theme),
+    theme,
+    themeSettings,
     messages,
     search: {
       label: messages.search.label,

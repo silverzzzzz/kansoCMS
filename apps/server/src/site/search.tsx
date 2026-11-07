@@ -17,6 +17,7 @@ export function SearchResults({ ctx, q, page, totalPages, result }: SearchResult
       meta={ctx.meta({ title: m.title, path: '/search', noindex: true })}
       nav={ctx.nav}
       search={ctx.search}
+      themeSettings={ctx.themeSettings}
     >
       <section class="page search-results">
         <h1>{m.title}</h1>

@@ -93,10 +93,28 @@ test.describe('customize editor', () => {
       expect(html).toContain(ctaLabel)
     })
 
+    await test.step('edit theme settings and see them on the public site', async () => {
+      const footerText = `E2E footer ${suffix}`
+      await page.getByRole('button', { name: 'テーマ設定', exact: true }).click()
+      await page.getByLabel('Footer text', { exact: true }).fill(footerText)
+      await page.getByRole('button', { name: 'テーマ設定を保存', exact: true }).click()
+      // Saving clears the dirty state, which disables the save button again.
+      await expect(page.getByRole('button', { name: 'テーマ設定を保存', exact: true })).toBeDisabled()
+
+      const publicResponse = await apiRequest.get(`/${pageSlug}`)
+      expect(await publicResponse.text()).toContain(footerText)
+
+      const reset = await apiRequest.put('/api/v1/settings/theme', { data: {} })
+      expect(reset.status()).toBe(200)
+      await page.getByRole('button', { name: 'セクション', exact: true }).click()
+    })
+
     await test.step('detach sections to return to the rich text body', async () => {
       await page.getByRole('button', { name: 'セクションをやめて本文に戻す' }).click()
       await page.getByRole('dialog').getByRole('button', { name: '本文に戻す' }).click()
-      await expect(page.getByText('このページは現在リッチテキスト本文で表示されています', { exact: false })).toBeVisible()
+      await expect(
+        page.getByText('このページは現在リッチテキスト本文で表示されています', { exact: false }),
+      ).toBeVisible()
 
       const publicResponse = await apiRequest.get(`/${pageSlug}`)
       const html = await publicResponse.text()

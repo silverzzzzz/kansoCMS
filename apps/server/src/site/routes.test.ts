@@ -109,6 +109,7 @@ function testSetup(
         theme: options.theme,
       }),
       organization: vi.fn().mockResolvedValue({ name: '', url: null, logoUrl: null, sameAs: [] }),
+      theme: vi.fn().mockResolvedValue({}),
       forms: vi.fn().mockResolvedValue({
         fromEmail: '',
         fromName: '',

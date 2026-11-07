@@ -1,12 +1,21 @@
 import { raw } from 'hono/html'
 import { Head } from '../../head.tsx'
+import { AccentStyle, FooterExtras } from '../chrome.tsx'
 import type { LayoutProps } from '../types.ts'
 
 /**
  * Paper theme shell. Styling comes from /themes/paper.css in apps/server/public;
  * optional integration scripts are supplied explicitly by the renderer.
  */
-export function PaperLayout({ meta, jsonLd, nav, search, scripts = [], children }: LayoutProps) {
+export function PaperLayout({
+  meta,
+  jsonLd,
+  nav,
+  search,
+  scripts = [],
+  themeSettings,
+  children,
+}: LayoutProps) {
   return (
     <>
       {raw('<!DOCTYPE html>')}
@@ -14,6 +23,7 @@ export function PaperLayout({ meta, jsonLd, nav, search, scripts = [], children 
         <head>
           <Head meta={meta} jsonLd={jsonLd} />
           <link rel="stylesheet" href="/themes/paper.css" />
+          <AccentStyle settings={themeSettings} />
           {scripts.map((src) => (
             <script src={src} async defer></script>
           ))}
@@ -51,6 +61,7 @@ export function PaperLayout({ meta, jsonLd, nav, search, scripts = [], children 
                 <a href={item.href}>{item.label}</a>
               ))}
             </nav>
+            <FooterExtras settings={themeSettings} />
             <small>
               © {new Date().getFullYear()} {meta.siteName}
             </small>

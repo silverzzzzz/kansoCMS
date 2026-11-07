@@ -14,6 +14,8 @@ export interface LayoutProps {
   nav: NavItem[]
   search: { label: string; placeholder: string; button: string }
   scripts?: string[]
+  /** Theme-wide settings validated against the theme's settingsFields. */
+  themeSettings?: SectionValues
   children: Child
 }
 
@@ -81,4 +83,6 @@ export interface Theme {
   PostArticle: FC<PostArticleProps>
   /** Sections the theme offers to the customize editor, keyed by section type. */
   sections: Record<string, SectionDefinition>
+  /** Theme-wide settings fields, edited in the customize editor. */
+  settingsFields: SectionField[]
 }

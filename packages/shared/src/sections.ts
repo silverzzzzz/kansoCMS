@@ -9,6 +9,7 @@ export const SECTION_FIELD_TYPES = [
   'select',
   'checkbox',
   'number',
+  'color',
   'image',
   'posts',
 ] as const
@@ -22,6 +23,8 @@ const baseFieldShape = {
 }
 
 const urlValueSchema = z.union([z.literal(''), redirectUrlSchema])
+/** Empty string means "use the theme default". */
+const colorValueSchema = z.union([z.literal(''), z.string().regex(/^#[0-9a-fA-F]{6}$/)])
 const imageValueSchema = z.number().int().positive().nullable()
 const postsValueSchema = z.object({
   postTypeSlug: slugSchema.nullable().default(null),
@@ -134,6 +137,7 @@ export const sectionFieldSchema = z.discriminatedUnion('type', [
         ctx.addIssue({ code: 'custom', message: 'Constraints must allow a finite empty value' })
       }
     }),
+  z.object({ type: z.literal('color'), ...baseFieldShape, default: colorValueSchema.optional() }),
   z.object({ type: z.literal('image'), ...baseFieldShape, default: imageValueSchema.optional() }),
   z.object({ type: z.literal('posts'), ...baseFieldShape, default: postsValueSchema.optional() }),
 ])
@@ -180,6 +184,9 @@ export function sectionValuesSchemaFor(
         break
       case 'number':
         shape[field.name] = numberValueSchema(field).default(field.default ?? emptyNumber(field))
+        break
+      case 'color':
+        shape[field.name] = colorValueSchema.default(field.default ?? '')
         break
       case 'image':
         shape[field.name] = imageValueSchema.default(field.default ?? null)

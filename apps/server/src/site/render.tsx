@@ -84,6 +84,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
       nav={ctx.nav}
       search={ctx.search}
       scripts={prepared.scripts}
+      themeSettings={ctx.themeSettings}
     >
       {sections ? (
         <SectionsBody sections={sections} formatDate={ctx.formatDate} />
@@ -153,6 +154,7 @@ export async function renderPost(
       nav={ctx.nav}
       search={ctx.search}
       scripts={prepared.scripts}
+      themeSettings={ctx.themeSettings}
     >
       <ctx.theme.PostArticle
         post={post}

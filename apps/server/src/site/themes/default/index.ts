@@ -1,4 +1,5 @@
 import { standardSections } from '../sections.tsx'
+import { standardThemeSettingsFields } from '../sections-meta.ts'
 import type { Theme } from '../types.ts'
 import { Layout } from './layout.tsx'
 import { PostArticle } from './post.tsx'
@@ -10,4 +11,5 @@ export const defaultTheme: Theme = {
   PostList,
   PostArticle,
   sections: standardSections,
+  settingsFields: standardThemeSettingsFields,
 }
