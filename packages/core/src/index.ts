@@ -8,6 +8,7 @@ import { cacheVersionService } from './services/cache-version.ts'
 import { formsService } from './services/forms.ts'
 import { mediaService } from './services/media.ts'
 import { pagesService } from './services/pages.ts'
+import { passkeyService } from './services/passkeys.ts'
 import { postTypesService } from './services/post-types.ts'
 import { postsService } from './services/posts.ts'
 import { redirectsService } from './services/redirects.ts'
@@ -51,6 +52,7 @@ export function createKanso(bindings: KansoBindings) {
     media: mediaService(db, bindings.media),
     settings: settingsService(db),
     pages: pagesService(db),
+    passkeys: passkeyService(db),
     postTypes: postTypesService(db),
     posts: postsService(db),
     redirects: redirectsService(db),
@@ -65,6 +67,7 @@ export type Kanso = ReturnType<typeof createKanso>
 
 export type { Db } from './db/client.ts'
 export { KansoError, type KansoErrorCode } from './errors.ts'
+export type { PasskeyService, RelyingParty } from './services/passkeys.ts'
 export type { PostContentInput } from './services/posts.ts'
 export type {
   StarterBuild,

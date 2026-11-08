@@ -11,8 +11,10 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/_auth'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PasskeyLinkRouteImport } from './routes/passkey-link'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as AuthAccountIndexRouteImport } from './routes/_auth/account/index'
 import { Route as AuthApiKeysIndexRouteImport } from './routes/_auth/api-keys/index'
 import { Route as AuthCustomizeIndexRouteImport } from './routes/_auth/customize/index'
 import { Route as AuthFormsIndexRouteImport } from './routes/_auth/forms/index'
@@ -43,6 +45,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PasskeyLinkRoute = PasskeyLinkRouteImport.update({
+  id: '/passkey-link',
+  path: '/passkey-link',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SetupRoute = SetupRouteImport.update({
   id: '/setup',
   path: '/setup',
@@ -51,6 +58,11 @@ const SetupRoute = SetupRouteImport.update({
 const AuthIndexRoute = AuthIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthAccountIndexRoute = AuthAccountIndexRouteImport.update({
+  id: '/account/',
+  path: '/account/',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthApiKeysIndexRoute = AuthApiKeysIndexRouteImport.update({
@@ -159,6 +171,7 @@ const AuthFormsIdSubmissionsSidRoute =
 export interface FileRoutesByFullPath {
   '/': typeof AuthIndexRoute
   '/login': typeof LoginRoute
+  '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
   '/forms/new': typeof AuthFormsNewRoute
   '/pages/$id': typeof AuthPagesIdRoute
@@ -167,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/post-types/new': typeof AuthPostTypesNewRoute
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
+  '/account/': typeof AuthAccountIndexRoute
   '/api-keys/': typeof AuthApiKeysIndexRoute
   '/customize/': typeof AuthCustomizeIndexRoute
   '/forms/': typeof AuthFormsIndexRoute
@@ -183,6 +197,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
   '/': typeof AuthIndexRoute
   '/forms/new': typeof AuthFormsNewRoute
@@ -192,6 +207,7 @@ export interface FileRoutesByTo {
   '/post-types/new': typeof AuthPostTypesNewRoute
   '/posts/$id': typeof AuthPostsIdRoute
   '/posts/new': typeof AuthPostsNewRoute
+  '/account': typeof AuthAccountIndexRoute
   '/api-keys': typeof AuthApiKeysIndexRoute
   '/customize': typeof AuthCustomizeIndexRoute
   '/forms': typeof AuthFormsIndexRoute
@@ -210,6 +226,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_auth': typeof AuthRouteWithChildren
   '/login': typeof LoginRoute
+  '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
   '/_auth/': typeof AuthIndexRoute
   '/_auth/forms/new': typeof AuthFormsNewRoute
@@ -219,6 +236,7 @@ export interface FileRoutesById {
   '/_auth/post-types/new': typeof AuthPostTypesNewRoute
   '/_auth/posts/$id': typeof AuthPostsIdRoute
   '/_auth/posts/new': typeof AuthPostsNewRoute
+  '/_auth/account/': typeof AuthAccountIndexRoute
   '/_auth/api-keys/': typeof AuthApiKeysIndexRoute
   '/_auth/customize/': typeof AuthCustomizeIndexRoute
   '/_auth/forms/': typeof AuthFormsIndexRoute
@@ -238,6 +256,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/passkey-link'
     | '/setup'
     | '/forms/new'
     | '/pages/$id'
@@ -246,6 +265,7 @@ export interface FileRouteTypes {
     | '/post-types/new'
     | '/posts/$id'
     | '/posts/new'
+    | '/account/'
     | '/api-keys/'
     | '/customize/'
     | '/forms/'
@@ -262,6 +282,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/passkey-link'
     | '/setup'
     | '/'
     | '/forms/new'
@@ -271,6 +292,7 @@ export interface FileRouteTypes {
     | '/post-types/new'
     | '/posts/$id'
     | '/posts/new'
+    | '/account'
     | '/api-keys'
     | '/customize'
     | '/forms'
@@ -288,6 +310,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_auth'
     | '/login'
+    | '/passkey-link'
     | '/setup'
     | '/_auth/'
     | '/_auth/forms/new'
@@ -297,6 +320,7 @@ export interface FileRouteTypes {
     | '/_auth/post-types/new'
     | '/_auth/posts/$id'
     | '/_auth/posts/new'
+    | '/_auth/account/'
     | '/_auth/api-keys/'
     | '/_auth/customize/'
     | '/_auth/forms/'
@@ -315,6 +339,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   LoginRoute: typeof LoginRoute
+  PasskeyLinkRoute: typeof PasskeyLinkRoute
   SetupRoute: typeof SetupRoute
 }
 
@@ -334,6 +359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/passkey-link': {
+      id: '/passkey-link'
+      path: '/passkey-link'
+      fullPath: '/passkey-link'
+      preLoaderRoute: typeof PasskeyLinkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/setup': {
       id: '/setup'
       path: '/setup'
@@ -346,6 +378,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AuthIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/account/': {
+      id: '/_auth/account/'
+      path: '/account'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AuthAccountIndexRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/api-keys/': {
@@ -500,6 +539,7 @@ interface AuthRouteChildren {
   AuthPostTypesNewRoute: typeof AuthPostTypesNewRoute
   AuthPostsIdRoute: typeof AuthPostsIdRoute
   AuthPostsNewRoute: typeof AuthPostsNewRoute
+  AuthAccountIndexRoute: typeof AuthAccountIndexRoute
   AuthApiKeysIndexRoute: typeof AuthApiKeysIndexRoute
   AuthCustomizeIndexRoute: typeof AuthCustomizeIndexRoute
   AuthFormsIndexRoute: typeof AuthFormsIndexRoute
@@ -524,6 +564,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthPostTypesNewRoute: AuthPostTypesNewRoute,
   AuthPostsIdRoute: AuthPostsIdRoute,
   AuthPostsNewRoute: AuthPostsNewRoute,
+  AuthAccountIndexRoute: AuthAccountIndexRoute,
   AuthApiKeysIndexRoute: AuthApiKeysIndexRoute,
   AuthCustomizeIndexRoute: AuthCustomizeIndexRoute,
   AuthFormsIndexRoute: AuthFormsIndexRoute,
@@ -544,6 +585,7 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   LoginRoute: LoginRoute,
+  PasskeyLinkRoute: PasskeyLinkRoute,
   SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport

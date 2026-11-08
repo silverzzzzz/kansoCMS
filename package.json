@@ -20,7 +20,8 @@
     "types": "pnpm --filter @kanso/server types",
     "db:generate": "pnpm --filter @kanso/core db:generate",
     "db:migrate:local": "pnpm --filter @kanso/server db:migrate:local",
-    "db:migrate": "pnpm --filter @kanso/server db:migrate"
+    "db:migrate": "pnpm --filter @kanso/server db:migrate",
+    "passkey:link": "pnpm --filter @kanso/server passkey:link"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.13",

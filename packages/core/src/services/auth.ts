@@ -5,26 +5,19 @@ import {
   type UserRole,
 } from '@kanso/shared'
 import { count, eq } from 'drizzle-orm'
-import { generateToken, hashPassword, sha256Hex, verifyPassword } from '../auth/password.ts'
+import { generateToken, sha256Hex } from '../auth/encoding.ts'
 import type { Db } from '../db/client.ts'
 import { apiKeys, sessions, users } from '../db/schema/index.ts'
 
 const API_KEY_PREFIX = 'kanso_'
 const API_KEY_TOUCH_INTERVAL_MS = 5 * 60 * 1000
 
-type CreateUserInput = {
-  email: string
-  password: string
-  name: string
-  role: UserRole
-}
-
 type CreateApiKeyInput = {
   name: string
   scope: ApiKeyScope
 }
 
-function toPublicUser(user: {
+export function toPublicUser(user: {
   id: number
   email: string
   name: string
@@ -37,21 +30,6 @@ export function authService(db: Db) {
   async function countUsers(): Promise<number> {
     const [row] = await db.select({ value: count() }).from(users)
     return row?.value ?? 0
-  }
-
-  async function createUser(input: CreateUserInput): Promise<PublicUser> {
-    const [user] = await db
-      .insert(users)
-      .values({
-        email: input.email.trim().toLowerCase(),
-        passwordHash: await hashPassword(input.password),
-        name: input.name,
-        role: input.role,
-      })
-      .returning({ id: users.id, email: users.email, name: users.name, role: users.role })
-
-    if (!user) throw new Error('User insert did not return a row')
-    return toPublicUser(user)
   }
 
   async function findUserByEmail(email: string): Promise<PublicUser | null> {
@@ -68,15 +46,6 @@ export function authService(db: Db) {
       columns: { id: true, email: true, name: true, role: true },
     })
     return user ? toPublicUser(user) : null
-  }
-
-  async function verifyCredentials(email: string, password: string): Promise<PublicUser | null> {
-    const user = await db.query.users.findFirst({
-      where: eq(users.email, email.trim().toLowerCase()),
-      columns: { id: true, email: true, passwordHash: true, name: true, role: true },
-    })
-    if (!user || !(await verifyPassword(password, user.passwordHash))) return null
-    return toPublicUser(user)
   }
 
   async function createSession(userId: number) {
@@ -163,10 +132,8 @@ export function authService(db: Db) {
 
   return {
     countUsers,
-    createUser,
     findUserByEmail,
     getUserById,
-    verifyCredentials,
     createSession,
     getSessionUser,
     deleteSession,

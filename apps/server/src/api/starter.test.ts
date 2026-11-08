@@ -6,7 +6,6 @@ import type { AppEnv, Bindings } from '../env.ts'
 import type { Principal } from '../middleware/auth.ts'
 import { onError } from '../middleware/error.ts'
 import { installStarter } from '../starter/install.ts'
-import { setup } from './setup.ts'
 import { starter } from './starter.ts'
 
 vi.mock('../starter/install.ts', async (importOriginal) => ({
@@ -38,9 +37,7 @@ function sessionFor(role: 'admin' | 'editor'): Principal {
   return { kind: 'session', token: 'test-token', user: { ...adminUser, role } } as Principal
 }
 
-function testApp(
-  options: { role?: 'admin' | 'editor'; manifest?: StarterManifest | null; users?: number } = {},
-) {
+function testApp(options: { role?: 'admin' | 'editor'; manifest?: StarterManifest | null } = {}) {
   const kanso: Kanso = Object.assign(Object.create(null), {
     settings: {
       starter: vi.fn().mockResolvedValue(options.manifest ?? null),
@@ -53,11 +50,6 @@ function testApp(
           ? Promise.resolve({ id: 12, path: 'home' })
           : Promise.resolve({ id, path: `page-${id}` }),
       ),
-    },
-    auth: {
-      countUsers: vi.fn().mockResolvedValue(options.users ?? 0),
-      createUser: vi.fn().mockResolvedValue(adminUser),
-      createSession: vi.fn().mockResolvedValue({ token: 'new-session' }),
     },
     cacheVersion: { bump: vi.fn().mockResolvedValue(undefined) },
     starter: {
@@ -75,21 +67,10 @@ function testApp(
     })
     .onError(onError)
     .route('/api/v1/starter', starter)
-    .route('/api/v1/setup', setup)
   const assets = vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3])))
   const env = { ASSETS: { fetch: assets } } as unknown as Bindings
   return { app, env, kanso }
 }
-
-function postJson(body: unknown): RequestInit {
-  return {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  }
-}
-
-const setupInput = { email: 'admin@example.com', password: 'password123', name: 'Admin' }
 
 beforeEach(() => {
   vi.mocked(installStarter).mockReset()
@@ -154,57 +135,5 @@ describe('starter API', () => {
     expect((await app.request('/api/v1/starter', { method: 'DELETE' }, env)).status).toBe(403)
     expect(installStarter).not.toHaveBeenCalled()
     expect(kanso.starter.remove).not.toHaveBeenCalled()
-  })
-})
-
-describe('setup with the starter site', () => {
-  it('installs the starter site when asked and bumps the cache generation', async () => {
-    vi.mocked(installStarter).mockResolvedValue(installResult)
-    const { app, env, kanso } = testApp()
-    const response = await app.request(
-      '/api/v1/setup',
-      postJson({ ...setupInput, siteTitle: 'Example Shop', starter: true }),
-      env,
-    )
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
-      user: { id: 1 },
-      starter: { installed: true, error: null },
-    })
-    expect(installStarter).toHaveBeenCalledWith(kanso, {
-      userId: 1,
-      loadImage: expect.any(Function),
-    })
-    // The site title is saved before the starter content reads it.
-    expect(vi.mocked(kanso.settings.set).mock.invocationCallOrder[0]).toBeLessThan(
-      vi.mocked(installStarter).mock.invocationCallOrder[0] ?? 0,
-    )
-    expect(kanso.cacheVersion.bump).toHaveBeenCalled()
-  })
-
-  it('completes setup even when the starter install fails', async () => {
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.mocked(installStarter).mockRejectedValue(new Error('Starter image hero.webp is missing'))
-    const { app, env, kanso } = testApp()
-    const response = await app.request(
-      '/api/v1/setup',
-      postJson({ ...setupInput, starter: true }),
-      env,
-    )
-    expect(response.status).toBe(200)
-    expect(response.headers.get('set-cookie')).toContain('new-session')
-    expect(await response.json()).toMatchObject({
-      starter: { installed: false, error: 'Starter image hero.webp is missing' },
-    })
-    expect(kanso.auth.createSession).toHaveBeenCalled()
-    error.mockRestore()
-  })
-
-  it('does not install the starter site unless asked', async () => {
-    const { app, env } = testApp()
-    const response = await app.request('/api/v1/setup', postJson(setupInput), env)
-    expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ starter: null })
-    expect(installStarter).not.toHaveBeenCalled()
   })
 })

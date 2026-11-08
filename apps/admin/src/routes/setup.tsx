@@ -6,12 +6,17 @@ import { api } from '../api/client.ts'
 import { ApiError } from '../api/errors.ts'
 import { meQueryOptions, setupStatusQueryOptions } from '../api/queries.ts'
 import { unwrap } from '../api/request.ts'
+import {
+  createPasskey,
+  defaultPasskeyName,
+  passkeyErrorMessage,
+  passkeysSupported,
+} from '../lib/passkey.ts'
 
 type SetupInput = {
   siteTitle?: string
   name: string
   email: string
-  password: string
   starter: boolean
 }
 
@@ -26,11 +31,17 @@ export const Route = createFileRoute('/setup')({
 function SetupPage() {
   const navigate = useNavigate({ from: '/setup' })
   const { queryClient } = Route.useRouteContext()
-  const [clientError, setClientError] = useState<string | null>(null)
+  const supported = passkeysSupported()
   // Setup still succeeds when the starter site fails; say so before moving on.
   const [starterError, setStarterError] = useState<string | null>(null)
   const setup = useMutation({
-    mutationFn: (input: SetupInput) => unwrap(api.setup.$post({ json: input })),
+    // The admin is created only after the passkey exists, so cancelling the
+    // browser dialog leaves setup untouched and the form can be sent again.
+    mutationFn: async (input: SetupInput) => {
+      const { options } = await unwrap(api.setup.options.$post({ json: input }))
+      const credential = await createPasskey(options)
+      return unwrap(api.setup.$post({ json: { credential, passkeyName: defaultPasskeyName() } }))
+    },
     onSuccess: async (data) => {
       queryClient.setQueryData(meQueryOptions.queryKey, data.user)
       queryClient.setQueryData(setupStatusQueryOptions.queryKey, { needed: false })
@@ -44,27 +55,26 @@ function SetupPage() {
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    setClientError(null)
     const form = new FormData(event.currentTarget)
-    const password = String(form.get('password') ?? '')
-    const passwordConfirm = String(form.get('passwordConfirm') ?? '')
-
-    if (password !== passwordConfirm) {
-      setClientError('パスワードが一致しません。')
-      return
-    }
-
     const siteTitle = String(form.get('siteTitle') ?? '').trim()
     setup.mutate({
       siteTitle: siteTitle || undefined,
       name: String(form.get('name') ?? '').trim(),
       email: String(form.get('email') ?? '').trim(),
-      password,
       starter: form.get('starter') === 'on',
     })
   }
 
-  const serverError = setup.error instanceof ApiError ? setup.error.message : null
+  // Validation errors come back in English from the API; everything else is a
+  // passkey ceremony failure with its own Japanese message.
+  const status = setup.error instanceof ApiError ? setup.error.status : null
+  const error = setup.error
+    ? status === 400
+      ? '入力内容を確認してください。'
+      : status === 409
+        ? 'セットアップはすでに完了しています。ログイン画面からログインしてください。'
+        : passkeyErrorMessage(setup.error)
+    : null
 
   if (starterError !== null) {
     return (
@@ -94,32 +104,20 @@ function SetupPage() {
         <p className="text-sm font-medium text-neutral-500">kansoCMS</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">サイトをセットアップ</h1>
         <p className="mt-2 text-sm leading-6 text-neutral-600">
-          サイト名と最初の管理者アカウントを登録します。
+          サイト名と最初の管理者アカウントを登録します。ログインにはパスワードではなく、この端末に保存するパスキー
+          (指紋・顔認証・PIN で使う鍵) を使います。
         </p>
+        {!supported && (
+          <p role="alert" className="mt-4 border-l-2 border-red-600 pl-3 text-sm text-red-700">
+            このブラウザはパスキーに対応していません。最新の Chrome、Edge、Safari、Firefox
+            でセットアップしてください。
+          </p>
+        )}
 
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
           <Field label="サイト名" name="siteTitle" autoComplete="organization" maxLength={120} />
           <Field label="名前" name="name" autoComplete="name" maxLength={100} required />
           <Field label="メールアドレス" name="email" type="email" autoComplete="email" required />
-          <Field
-            label="パスワード"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            maxLength={256}
-            required
-          />
-          <Field
-            label="パスワード（確認）"
-            name="passwordConfirm"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            maxLength={256}
-            required
-          />
-
           <label className="flex items-start gap-3 border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-800">
             <input type="checkbox" name="starter" defaultChecked className="mt-1 size-4" />
             <span>
@@ -130,18 +128,18 @@ function SetupPage() {
             </span>
           </label>
 
-          {(clientError || serverError) && (
+          {error && (
             <p role="alert" className="border-l-2 border-red-600 pl-3 text-sm text-red-700">
-              {clientError || serverError}
+              {error}
             </p>
           )}
 
           <button
             type="submit"
-            disabled={setup.isPending}
+            disabled={!supported || setup.isPending}
             className="w-full bg-neutral-950 px-4 py-2.5 text-sm font-medium text-white outline-none hover:bg-neutral-800 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-neutral-400"
           >
-            {setup.isPending ? 'セットアップ中…' : 'セットアップを完了'}
+            {setup.isPending ? 'パスキーを作成中…' : 'パスキーを作成してセットアップ'}
           </button>
         </form>
       </section>
@@ -152,10 +150,9 @@ function SetupPage() {
 type FieldProps = {
   label: string
   name: string
-  type?: 'email' | 'password' | 'text'
+  type?: 'email' | 'text'
   autoComplete: string
   required?: boolean
-  minLength?: number
   maxLength?: number
 }
 

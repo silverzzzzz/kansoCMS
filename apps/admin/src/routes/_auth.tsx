@@ -72,6 +72,7 @@ function AuthLayout() {
               <NavLink to="/api-keys" label="API キー" />
             </>
           )}
+          <NavLink to="/account" label="アカウント" />
         </nav>
         <p className="border-t border-neutral-200 px-6 py-4 text-xs leading-5 text-neutral-500">
           シンプルに書き、確実に届ける。
@@ -98,6 +99,7 @@ function AuthLayout() {
                     <NavLink to="/api-keys" label="API キー" />
                   </>
                 )}
+                <NavLink to="/account" label="アカウント" />
               </nav>
             </details>
 
@@ -150,6 +152,7 @@ type NavLinkProps = {
     | '/redirects'
     | '/settings'
     | '/api-keys'
+    | '/account'
   label: string
   exact?: boolean
 }

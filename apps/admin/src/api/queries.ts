@@ -106,6 +106,10 @@ async function getStarter() {
   return unwrap(api.starter.$get())
 }
 
+async function getPasskeys() {
+  return unwrap(api.auth.passkeys.$get())
+}
+
 export type StarterStatus = Awaited<ReturnType<typeof getStarter>>
 
 export type PageItem = Awaited<ReturnType<typeof getPage>>['item']
@@ -214,6 +218,12 @@ export const themeSettingsQuery = queryOptions({
 export const starterQuery = queryOptions({
   queryKey: ['starter'] as const,
   queryFn: getStarter,
+})
+
+/** The signed-in user's own passkeys. */
+export const passkeysQuery = queryOptions({
+  queryKey: ['auth', 'passkeys'] as const,
+  queryFn: getPasskeys,
 })
 
 export const formsListQuery = queryOptions({

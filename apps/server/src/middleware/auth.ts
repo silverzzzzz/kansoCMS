@@ -64,6 +64,25 @@ export function requireAuth(scope: ApiKeyScope = 'write') {
   })
 }
 
+/**
+ * Signed-in people only: account settings such as passkeys are never
+ * reachable with an API key.
+ */
+export const requireSession = createMiddleware<AppEnv>(async (c, next) => {
+  const principal = c.var.principal
+  if (!principal) throw KansoError.unauthorized()
+  if (principal.kind !== 'session') throw KansoError.forbidden()
+  if (!SAFE_METHODS.has(c.req.method)) checkCsrf(c)
+  await next()
+})
+
+/** The signed-in user of a route behind `requireSession`. */
+export function sessionUser(c: Context<AppEnv>): PublicUser {
+  const principal = c.var.principal
+  if (principal?.kind !== 'session') throw KansoError.unauthorized()
+  return principal.user
+}
+
 export function requireRole(role: 'admin') {
   return createMiddleware<AppEnv>(async (c, next) => {
     const principal = c.var.principal
