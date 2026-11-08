@@ -1,12 +1,5 @@
 import { type APIRequestContext, expect, test } from '@playwright/test'
-import {
-  apiLogin,
-  cleanupE2E,
-  E2E_EMAIL,
-  E2E_PASSWORD,
-  ensureAdmin,
-  uniqueSuffix,
-} from './helpers.ts'
+import { apiLogin, cleanupE2E, ensureAdmin, shareSession, uniqueSuffix } from './helpers.ts'
 
 type PageResponse = { item: { id: number } }
 type ThemeSettingsResponse = { theme: Record<string, Record<string, unknown>> }
@@ -63,11 +56,9 @@ test.describe('customize editor', () => {
       pageId = ((await response.json()) as PageResponse).item.id
     })
 
-    await test.step('log in through the admin UI', async () => {
-      await page.goto('/admin/login')
-      await page.getByLabel('メールアドレス', { exact: true }).fill(E2E_EMAIL)
-      await page.getByLabel('パスワード', { exact: true }).fill(E2E_PASSWORD)
-      await page.getByRole('button', { name: 'ログイン', exact: true }).click()
+    await test.step('open the admin signed in', async () => {
+      await shareSession(page.context(), apiRequest)
+      await page.goto('/admin/')
       await expect(page).toHaveURL(/\/admin\/$/)
     })
 

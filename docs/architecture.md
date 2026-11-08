@@ -42,7 +42,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 | DB | **D1 + Drizzle ORM** | drizzle-kit で SQL マイグレーション生成 → `wrangler d1 migrations apply` |
 | ストレージ | **R2** | Worker 経由 `/media/*` で配信 (Cache-Control 付与)。将来 R2 カスタムドメイン直配信に切替可能 |
 | バリデーション | zod | server / admin / 外部クライアントで共有 |
-| 認証 | メール + パスワード (WebCrypto PBKDF2)、D1 セッション、Cookie | 外部 IdP 不要。`/admin` に Cloudflare Access を被せる運用も可 |
+| 認証 | パスキー (WebAuthn。CBOR / COSE の解析は自前、署名検証は WebCrypto)、D1 セッション、Cookie | パスワードなし (Phase 6)。外部 IdP・メール送信は不要。復旧は wrangler で発行する登録リンク。`/admin` に Cloudflare Access を被せる運用も可 |
 | メール | Cloudflare Email Service (`send_email` binding) | API キー不要。ドメイン onboarding だけ |
 | Bot 対策 | honeypot + Turnstile (任意) | honeypot は常時。Turnstile はフォームごとに ON/OFF (既定 OFF)、サイトキーは設定画面・シークレットは Worker secret |
 | エディタ | Tiptap (ProseMirror JSON を正) | サーバで JSON → HTML 生成し `body_html` にキャッシュ。クライアント HTML を信用しない |
@@ -97,11 +97,11 @@ kansoCMS/
 │   └── admin/                      # 管理画面 SPA (React 19 + Vite + Tailwind v4)
 │       ├── src/
 │       │   ├── main.tsx / router.tsx   # TanStack Router (basepath /admin), QueryClient
-│       │   ├── routes/             # file-based: setup, login, _auth/(index, pages, posts, post-types,
-│       │   │                       #   tags, media, forms, redirects, settings, api-keys)。routeTree.gen.ts は生成物
+│       │   ├── routes/             # file-based: setup, login, passkey-link, _auth/(index, pages, posts, post-types,
+│       │   │                       #   tags, media, forms, redirects, settings, api-keys, account)。routeTree.gen.ts は生成物
 │       │   ├── api/                # hc<ApiType>() クライアント, queries (TanStack Query), errors
 │       │   ├── components/         # ui, content/ContentForm, editor/ (Tiptap), media/ (picker, upload)
-│       │   └── lib/                # datetime, page-tree
+│       │   └── lib/                # datetime, page-tree, passkey (WebAuthn の JSON 変換・エラー文言)
 │       ├── vite.config.ts          # base: /admin/, outDir: ../server/public/admin, dev proxy /api,/media → :5173
 │       └── tsconfig.json           # jsxImportSource: "react"
 │
@@ -113,9 +113,9 @@ kansoCMS/
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, search, taxonomies, media, settings
+│   │   │   ├── services/           # auth (セッション・API キー), passkeys, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, search, taxonomies, media, settings, starter
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt / plainText
-│   │   │   ├── auth/               # PBKDF2 パスワードハッシュ
+│   │   │   ├── auth/               # webauthn (登録・認証の検証), cbor, encoding, soft-authenticator (テスト用)
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
 │   │   │   ├── errors.ts           # KansoError (notFound / validation / forbidden / unauthorized / conflict)
 │   │   │   └── index.ts            # createKanso({ db, media }) → services
@@ -163,7 +163,10 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 
 | テーブル | 主な列 | 備考 |
 |---|---|---|
-| `users` | id, email (uniq), password_hash, name, role (`admin`/`editor`), created_at | 初回起動時 `/admin/setup` で作成 |
+| `users` | id, email (uniq), name, role (`admin`/`editor`), webauthn_user_id (uniq), timestamps | 初回起動時 `/admin/setup` で作成。パスワードは持たない (Phase 6 で `password_hash` を削除) |
+| `passkeys` | id, user_id, credential_id (uniq), public_key (SPKI), algorithm (ES256/RS256), sign_count, transports_json, backed_up, name, created_at, last_used_at | 1 ユーザー 10 個まで。最後の 1 つは削除不可 |
+| `auth_challenges` | id (= チャレンジ), purpose (`setup`/`login`/`register`/`link`), user_id, data_json, expires_at | 5 分、1 回限り (`delete … returning`) |
+| `passkey_links` | id (= トークンの SHA-256), user_id, expires_at, created_at | `pnpm passkey:link` が発行する登録リンク。1 時間、1 回限り |
 | `sessions` | id, user_id, expires_at, created_at | Cookie は `HttpOnly; Secure; SameSite=Lax` |
 | `api_keys` | id, name, key_hash, scope (`read`/`write`), last_used_at | headless 用。`X-API-KEY` |
 | `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, sections_json, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`)。`sections_json` 非 null のページは本文の代わりにセクション列を描画 (Phase 4) |
@@ -210,7 +213,10 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は `/` + index 可の公開ページ + 全投稿タイプ + index 可の公開投稿。feed は Atom 最新 20 件 | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable` | 公開 |
-| `GET /api/v1/health`, `/setup`, `POST /api/v1/setup`, `/auth/login` | 初期化・ログイン。setup は `starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 |
+| `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 (ユーザー 0 人のときだけ) |
+| `POST /api/v1/auth/passkey/options`, `POST /api/v1/auth/passkey` | パスキーでログイン (ユーザー名なし) → セッション Cookie | 公開 |
+| `POST /api/v1/auth/passkey-link/options`, `POST /api/v1/auth/passkey-link` | 登録リンク (`token`) でパスキーを追加してログイン | 公開 (有効なリンクのみ) |
+| `GET/POST /api/v1/auth/passkeys`, `POST /api/v1/auth/passkeys/options`, `PATCH/DELETE /api/v1/auth/passkeys/:id` | 自分のパスキーの一覧・追加・名前変更・削除 | セッションのみ (API キーは 403) |
 | `/api/v1/**` (それ以外) | 管理 API (CRUD)。`GET` は `read`、変更系は `write` | セッション or `x-api-key` |
 | `GET /api/v1/pages/:id/revisions`, `GET /api/v1/posts/:id/revisions` | 固定ページ / 投稿の更新前スナップショット一覧 (最新 20 件) | セッション or `x-api-key` (`read`) |
 | `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
@@ -231,7 +237,9 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 ### 認証 (実装済み)
 
-- セッション: Cookie `kanso_session` (`HttpOnly; SameSite=Lax`, 本番は `Secure`)。`POST /api/v1/auth/login` で発行。
+- ログイン: パスキーのみ (Phase 6、[tasks/phase-6.md](tasks/phase-6.md))。オプション発行 → ブラウザの `navigator.credentials` → 検証の 2 往復。ユーザー確認 (UV) 必須、discoverable credential でメールアドレスを聞かない。RP ID はリクエストのホスト名、origin はリクエストの origin (localhost だけは管理画面の開発サーバー経由を許すため、localhost の `Origin` を受け入れる)。
+- パスキーを失ったとき: `pnpm passkey:link <email> [--remote] [--url <サイト>]` が D1 (`DB` バインディング) に 1 時間有効・1 回限りの登録リンクを書き込み、`/admin/passkey-link?token=…` で新しいパスキーを登録してログインする。D1 に書ける = Cloudflare アカウントの管理者であることを本人確認とする。
+- セッション: Cookie `kanso_session` (`HttpOnly; SameSite=Lax`, 本番は `Secure`)。パスキーの検証後に発行。
 - API キー: `kanso_<base64url>` を `x-api-key` ヘッダで送る。D1 には SHA-256 ハッシュのみ保存。`scope` は `read` / `write`。
 - ロール: `admin` / `editor`。設定と API キー管理は `admin` のみ (`requireRole('admin')`)。生 HTML ブロックも `admin` のみ。
 - CSRF: 変更系リクエストは `Sec-Fetch-Site` / `Origin` を `Host` と照合する (`middleware/auth.ts`)。
@@ -280,7 +288,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 - CSRF: Cookie は `SameSite=Lax` + 変更系 API で `Origin` ヘッダ検証。
 - CSP: 現在は CSP ヘッダーを出力していない。追加する場合、公開サイトで Turnstile を使うときは `script-src` で `https://challenges.cloudflare.com` を許可する。管理画面は Vite の hash を許可する。
-- パスワード: PBKDF2-SHA256 (WebCrypto)、比較はバイト XOR の累積で定数時間にする。API キーは SHA-256 ハッシュ保存。
+- パスキー: 公開鍵 (SPKI) だけを保存し、署名は WebCrypto (ECDSA P-256 / RSASSA-PKCS1-v1_5) で検証する。チャレンジは 1 回限りで 5 分、署名カウンタが戻ったら拒否 (0 固定の同期パスキーは許可)。attestation は検証しない (`none` を要求)。API キーと登録リンクのトークンは SHA-256 ハッシュ保存。
 - フォーム: Turnstile + honeypot + サイズ上限 + (任意) Workers Rate Limiting binding。
 - アップロード: MIME 許可リスト、拡張子正規化、`Content-Disposition` 制御。SVG は既定で不可。
 
@@ -329,6 +337,7 @@ pnpm deploy                                                 # admin build → se
 | 3. 仕上げ | **done (2026-11-08)** | テーマ i18n、キャッシュ世代キーによる全拠点即時無効化、管理画面 E2E (Playwright)、CI (`.github/workflows`)、revisions、redirects、FTS5 検索、テーマ切替、`examples/astro-blog`、`create-kanso` スキャフォールド ([tasks/phase-3.md](tasks/phase-3.md))。管理画面 i18n は見送り (当面日本語のみ、2026-11-08) | v1.0 |
 | 4. セクションエディタ | **done (2026-11-07)** | Shopify 風カスタマイズ: field DSL、`pages.sections_json`、テーマのセクションレジストリと SSR、draft プレビュー、管理画面「カスタマイズ」エディタ、テーマ設定 (accent / footer / SNS) ([tasks/phase-4.md](tasks/phase-4.md)) | 管理画面からページ構成とテーマ設定を編集でき、公開に即反映される |
 | 5. サンプルサイト | **done (2026-11-08)** | 会社・店舗向けのサンプル一式をセットアップ時 (既定オン) / 設定画面から投入、編集していない部分を一括削除。D1 クエリ上限に収まる一括書き込み ([tasks/phase-5.md](tasks/phase-5.md)) | セットアップ直後から編集できるサイトが公開され、不要なら片付けられる |
+| 6. パスキー認証 | **done (2026-11-08)** | パスワードを廃止し、パスキー (WebAuthn) だけでセットアップ・ログイン。アカウント画面でのパスキー管理、`pnpm passkey:link` による復旧 ([tasks/phase-6.md](tasks/phase-6.md)) | パスワードなしで管理画面を運用でき、パスキーを失っても復旧できる |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

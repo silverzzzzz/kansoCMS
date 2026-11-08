@@ -6,6 +6,7 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Server-rendered HTML with JSON-LD, Open Graph, `sitemap.xml`, `robots.txt` and an Atom feed per post type — no client JS
 - The same content over a headless JSON API (`/api/v1`, API-key auth) for Astro / Next / anything else
 - Admin UI with a Tiptap editor, media library (R2) and draft preview
+- Passwordless sign-in with passkeys (WebAuthn): Windows Hello, Touch ID, a phone or a security key — no passwords stored, no email service needed
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
 - Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
@@ -17,9 +18,9 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 5 complete** — blog + fixed pages, contact forms, full-text search, themes, the
-> section-based customize editor and a removable starter site all work from the admin UI. The admin
-> UI is Japanese only for now.
+> Status: **Phase 6 complete** — blog + fixed pages, contact forms, full-text search, themes, the
+> section-based customize editor, a removable starter site and passkey sign-in all work from the
+> admin UI. The admin UI is Japanese only for now.
 
 ## Layout
 
@@ -59,10 +60,27 @@ pnpm dev                  # server on http://localhost:5173, admin dev server on
 - `http://localhost:5173/api/v1/health` — API
 - `http://localhost:5174/admin/` — admin UI with hot reload (proxies `/api` and `/media` to :5173)
 
-On first run open `/admin/setup` to create the admin user, then log in at `/admin/login`. Setup
-installs the starter site unless you untick **サンプルサイトを入れる**; remove it (or add it later) under
+On first run open `/admin/setup`: enter the site name and the first admin, then create a passkey
+when the browser asks (there are no passwords). Sign in at `/admin/login` with that passkey, and add
+passkeys for your other devices under **アカウント**. Passkeys work on `localhost` (any port) and on
+HTTPS domains, not on IP addresses such as `127.0.0.1`, and they belong to the domain they were
+created on. Setup installs the starter site unless you untick **サンプルサイトを入れる**; remove it (or add it later) under
 設定 → サンプルサイト. Removal keeps pages and posts you edited, images still in use, forms with
 submissions and post types you added posts to.
+
+#### Lost passkeys
+
+Anyone who can write to the site's D1 database can issue a one-time link (valid for an hour) that
+registers a new passkey for an existing user and signs them in:
+
+```sh
+pnpm passkey:link you@example.com                                   # local D1, prints http://localhost:5173/…
+pnpm passkey:link you@example.com --remote --url https://example.com  # production D1
+```
+
+Upgrading from a version with passwords: `pnpm db:migrate` applies `0006_passkeys.sql`, which deletes
+the stored password hashes. Sessions that are already signed in keep working, so add a passkey
+under **アカウント** before they expire; otherwise use `pnpm passkey:link`.
 
 To see the built admin served by the Worker itself, run `pnpm build` once; it lands in `apps/server/public/admin/` and is served at `http://localhost:5173/admin/`.
 
@@ -80,9 +98,11 @@ pnpm e2e
 ```
 
 `pnpm e2e` builds the admin and starts the Worker on port 5199, or reuses a server already
-running there. The local D1 must have its migrations applied. If setup has not run, the test
-creates `admin@example.com` with password `password123`; otherwise that account and password must
-already exist. Test pages and forms use the `e2e-` slug prefix and are deleted after the run. The
+running there. The local D1 must have its migrations applied. The suite signs in as
+`admin@example.com` with a test-only software passkey (a fixed key in `e2e/helpers.ts`): if setup
+has not run it creates that admin with it, and if the admin exists without it (for example a
+database set up by hand) it registers the key through `passkey:link` against the local D1. The
+passkey screens are tested with Chromium's virtual authenticator. Test pages and forms use the `e2e-` slug prefix and are deleted after the run. The
 starter-site test installs and removes the starter site, and skips itself when the database
 already has it installed.
 
@@ -137,22 +157,19 @@ Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MIS
 
 For a complete headless frontend, see [examples/astro-blog](examples/astro-blog): an Astro 5 static blog that reads the API with a read key at build time. Its README covers setup, local development and static hosting.
 
-Every `/api/v1` route except `health`, `setup` and `auth/login` requires either the admin session cookie or an API key in `x-api-key`. Keys are created in the admin UI (or `POST /api/v1/api-keys`) with a `read` or `write` scope; `write` is required for `POST`/`PATCH`/`PUT`/`DELETE`.
+Every `/api/v1` route except `health`, `setup` and the passkey sign-in routes (`auth/passkey*`, `auth/passkey-link*`) requires either the admin session cookie or an API key in `x-api-key`. Sessions come from signing in with a passkey in the browser, so scripts use API keys. Keys are created in the admin UI (or `POST /api/v1/api-keys`) with a `read` or `write` scope; `write` is required for `POST`/`PATCH`/`PUT`/`DELETE`.
 
 ```sh
-# with a session (mutations also need an Origin header matching the site)
-curl -c cookies.txt -H "content-type: application/json" \
-  -d '{"email":"admin@example.com","password":"password123"}' \
-  http://localhost:5173/api/v1/auth/login
-curl -b cookies.txt -H "origin: http://localhost:5173" -H "content-type: application/json" \
+# write with a `write` key
+curl -H "x-api-key: kanso_…" -H "content-type: application/json" \
   -d '{"title":"About","slug":"about","status":"published"}' \
   http://localhost:5173/api/v1/pages
 
-# headless read with an API key
+# headless read with a `read` key
 curl -H "x-api-key: kanso_…" "http://localhost:5173/api/v1/posts?type=blog&status=published"
 ```
 
-Upload media with `curl -b cookies.txt -H "origin: http://localhost:5173" -F file=@photo.png -F alt="Photo" http://localhost:5173/api/v1/media`.
+Upload media with `curl -H "x-api-key: kanso_…" -F file=@photo.png -F alt="Photo" http://localhost:5173/api/v1/media`.
 
 Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, renders `bodyHtml`, and derives an effective excerpt at render time when no explicit excerpt is stored. The admin UI is a plain client of this API — `hc<ApiType>` from `apps/server` gives it end-to-end types.
 
@@ -211,6 +228,7 @@ Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is 
 | `pnpm types` | Regenerate `worker-configuration.d.ts` from `wrangler.jsonc` |
 | `pnpm db:generate` | Generate a SQL migration from the Drizzle schema |
 | `pnpm db:migrate:local` / `pnpm db:migrate` | Apply migrations to local / remote D1 |
+| `pnpm passkey:link <email> [--remote] [--url <site>]` | Issue a one-time link that registers a new passkey (account recovery) |
 
 CI (GitHub Actions, `.github/workflows/ci.yml`) runs the four gates and the Playwright E2E on every push to `main` and on pull requests.
 

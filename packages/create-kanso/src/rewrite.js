@@ -77,14 +77,16 @@ pnpm --filter @kanso/server exec wrangler r2 bucket create ${project.r2}
 pnpm db:migrate:local
 pnpm dev
 
-Open http://localhost:5174/admin/setup to create your local admin user (a starter site is
-installed unless you untick it; remove it later under 設定 → サンプルサイト).
+Open http://localhost:5174/admin/setup to create your local admin user and its passkey (a
+starter site is installed unless you untick it; remove it later under 設定 → サンプルサイト).
 
 For production, set vars.SITE_URL in apps/server/wrangler.jsonc to your real domain, then:
 pnpm db:migrate
 pnpm deploy
 
-Open /admin/setup on the deployed site to create your production admin user.`
+Open /admin/setup on the deployed site to create your production admin user and its passkey.
+Passkeys belong to the domain they were created on. If you lose them all, issue a recovery link:
+pnpm passkey:link you@example.com --remote --url https://your-domain`
 }
 
 /** @param {Project} project */

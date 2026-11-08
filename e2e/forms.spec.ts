@@ -1,12 +1,5 @@
 import { type APIRequestContext, expect, test } from '@playwright/test'
-import {
-  apiLogin,
-  cleanupE2E,
-  E2E_EMAIL,
-  E2E_PASSWORD,
-  ensureAdmin,
-  uniqueSuffix,
-} from './helpers.ts'
+import { apiLogin, cleanupE2E, ensureAdmin, shareSession, uniqueSuffix } from './helpers.ts'
 
 type FormListResponse = { items: { id: number; slug: string }[] }
 
@@ -46,13 +39,9 @@ test.describe('admin form publishing and submission', () => {
     const pageTitle = `E2E Contact Page ${suffix}`
     const pageSlug = `e2e-page-${suffix}`
 
-    await test.step('log in through the admin UI', async () => {
-      await page.goto('/admin/login')
-      await expect(page.getByRole('heading', { name: '管理画面にログイン' })).toBeVisible()
-      await page.getByLabel('メールアドレス', { exact: true }).fill(E2E_EMAIL)
-      await page.getByLabel('パスワード', { exact: true }).fill(E2E_PASSWORD)
-      await page.getByRole('button', { name: 'ログイン', exact: true }).click()
-      await expect(page).toHaveURL(/\/admin\/$/)
+    await test.step('open the admin signed in', async () => {
+      await shareSession(page.context(), apiRequest)
+      await page.goto('/admin/')
       await expect(page.getByRole('heading', { name: /^おかえりなさい、/ })).toBeVisible()
     })
 
