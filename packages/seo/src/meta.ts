@@ -9,6 +9,8 @@ export interface PageMeta {
   siteDescription?: string
   ogType: 'website' | 'article'
   ogImage?: string | null
+  /** `twitter:site` value (`@handle`), from the organisation settings. */
+  twitterSite?: string | null
   noindex: boolean
   publishedAt?: Date | null
   updatedAt?: Date | null
@@ -47,4 +49,20 @@ export function excerptFromHtml(html: string, maxLength = 160): string {
 
 export function absoluteUrl(origin: string, path: string): string {
   return new URL(path, `${origin}/`).toString()
+}
+
+/**
+ * OGP `og:locale` (`language_TERRITORY`) from a BCP 47 tag. A bare language
+ * like `ja` is invalid for Facebook; `Intl.Locale.maximize()` fills in the
+ * likely region (`ja_JP`). Unparseable input is passed through with `-`
+ * normalised to `_`.
+ */
+export function toOgLocale(locale: string): string {
+  try {
+    const { language, region } = new Intl.Locale(locale).maximize()
+    if (region) return `${language}_${region}`
+  } catch {
+    // fall through to the tag as written
+  }
+  return locale.replace('-', '_')
 }

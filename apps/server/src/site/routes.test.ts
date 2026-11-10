@@ -45,7 +45,7 @@ const testPage = {
   id: 1,
   slug: 'contact',
   path: 'contact',
-  parentId: null,
+  parentId: null as number | null,
   sortOrder: 0,
   title: 'Contact',
   bodyJson: null as RichTextDoc | null,
@@ -57,7 +57,7 @@ const testPage = {
   seoDescription: null,
   noindex: false,
   canonicalUrl: null,
-  ogMediaId: null,
+  ogMediaId: null as number | null,
   createdAt: new Date('2026-09-15T00:00:00Z'),
   updatedAt: new Date('2026-09-15T00:00:00Z'),
 }
@@ -87,6 +87,14 @@ function testSetup(
     locale?: string
     theme?: string
     siteDescription?: string
+    siteOgImageMediaId?: number
+    siteLogoMediaId?: number
+    organization?: {
+      name?: string
+      logoMediaId?: number | null
+      twitterHandle?: string
+    }
+    ancestors?: { id: number; parentId: number | null; path: string; title: string }[]
     redirect?: { to: string; status: 301 | 302 } | null
     turnstileSiteKey?: string
     turnstileSecretKey?: string
@@ -104,11 +112,19 @@ function testSetup(
         description: options.siteDescription ?? '',
         locale: options.locale ?? 'en',
         timezone: 'UTC',
-        logoMediaId: null,
+        logoMediaId: options.siteLogoMediaId ?? null,
+        ogImageMediaId: options.siteOgImageMediaId ?? null,
         homePostTypeSlug: null,
         theme: options.theme,
       }),
-      organization: vi.fn().mockResolvedValue({ name: '', url: null, logoUrl: null, sameAs: [] }),
+      organization: vi.fn().mockResolvedValue({
+        name: '',
+        url: null,
+        logoMediaId: null,
+        twitterHandle: '',
+        sameAs: [],
+        ...options.organization,
+      }),
       theme: vi.fn().mockResolvedValue({}),
       forms: vi.fn().mockResolvedValue({
         fromEmail: '',
@@ -124,6 +140,12 @@ function testSetup(
         .mockImplementation((path: string) =>
           Promise.resolve(path === page.path ? page : undefined),
         ),
+      listPublishedAncestors: vi.fn().mockResolvedValue(options.ancestors ?? []),
+    },
+    media: {
+      find: vi
+        .fn()
+        .mockImplementation((id: number) => Promise.resolve({ id, url: `/media/${id}.png` })),
     },
     postTypes: {
       list: vi.fn().mockResolvedValue([]),
@@ -192,6 +214,101 @@ describe('site page metadata', () => {
     expect(response.status).toBe(200)
     expect(html).toContain('<meta name="description" content="Stored description."/>')
     expect(html).not.toContain('<meta name="description" content="Body derived description."/>')
+  })
+
+  it('emits og:locale in language_TERRITORY form for a bare language tag', async () => {
+    const { app, env, executionCtx } = testSetup({ locale: 'ja' })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta property="og:locale" content="ja_JP"/>')
+  })
+
+  it('emits no og:image when neither the page nor the site sets one', async () => {
+    const { app, env, executionCtx } = testSetup()
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).not.toContain('og:image')
+    expect(html).toContain('<meta name="twitter:card" content="summary"/>')
+  })
+
+  it('falls back to the site-wide OG image when the page has none', async () => {
+    const { app, env, executionCtx } = testSetup({ siteOgImageMediaId: 9 })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta property="og:image" content="https://example.com/media/9.png"/>')
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image"/>')
+  })
+
+  it('prefers the page OG image over the site-wide default', async () => {
+    const { app, env, executionCtx } = testSetup({
+      siteOgImageMediaId: 9,
+      page: { ...testPage, ogMediaId: 7 },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta property="og:image" content="https://example.com/media/7.png"/>')
+    expect(html).not.toContain('/media/9.png')
+  })
+
+  it('emits twitter:site from the organisation X handle', async () => {
+    const { app, env, executionCtx } = testSetup({
+      organization: { twitterHandle: 'kansocms' },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta name="twitter:site" content="@kansocms"/>')
+  })
+
+  it('uses the organisation logo in the Organization JSON-LD', async () => {
+    const { app, env, executionCtx } = testSetup({
+      organization: { name: 'Example Inc.', logoMediaId: 4 },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('"@type":"Organization"')
+    expect(html).toContain('"logo":"https://example.com/media/4.png"')
+  })
+
+  it('falls back to the site logo for the Organization JSON-LD', async () => {
+    const { app, env, executionCtx } = testSetup({
+      siteLogoMediaId: 3,
+      organization: { name: 'Example Inc.' },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('"logo":"https://example.com/media/3.png"')
+  })
+
+  it('includes published ancestors in the page breadcrumb', async () => {
+    const { app, env, executionCtx } = testSetup({
+      page: { ...testPage, slug: 'team', path: 'company/team', parentId: 2, title: 'Team' },
+      ancestors: [{ id: 2, parentId: null, path: 'company', title: 'About' }],
+    })
+    const response = await app.request('/company/team', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain(
+      '"@type":"BreadcrumbList","itemListElement":[' +
+        '{"@type":"ListItem","position":1,"name":"Test site","item":"https://example.com/"},' +
+        '{"@type":"ListItem","position":2,"name":"About","item":"https://example.com/company"},' +
+        '{"@type":"ListItem","position":3,"name":"Team","item":"https://example.com/company/team"}' +
+        ']}',
+    )
   })
 })
 

@@ -10,6 +10,7 @@ const site: SiteSettings = {
   locale: 'ja',
   timezone: 'Asia/Tokyo',
   logoMediaId: null,
+  ogImageMediaId: null,
   homePostTypeSlug: null,
   theme: 'paper',
 }

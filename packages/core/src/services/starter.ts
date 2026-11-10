@@ -534,7 +534,7 @@ export function starterService(db: Db, bucket: R2Bucket) {
     // instr(), not LIKE: D1 caps LIKE patterns at 50 bytes and a media URL is longer.
     const bodyMatch = (column: typeof pages.bodyJson | typeof posts.bodyJson) =>
       or(...mediaRows.map((row) => sql`instr(${column}, ${mediaUrl(row.r2Key)}) > 0`))
-    const [pageRefs, postRefs, sectionRows, pageBodies, postBodies, site, themes] =
+    const [pageRefs, postRefs, sectionRows, pageBodies, postBodies, site, organization, themes] =
       await Promise.all([
         db
           .select({ ogMediaId: pages.ogMediaId })
@@ -574,12 +574,15 @@ export function starterService(db: Db, bucket: R2Bucket) {
               .where(and(bodyMatch(posts.bodyJson), notInArray(posts.id, listOr(deletePosts))))
           : Promise.resolve([]),
         settingsStore.site(),
+        settingsStore.organization(),
         settingsStore.theme(),
       ])
     const referenced = referencedMediaIds({
       candidates: mediaRows,
       direct: [
         site.logoMediaId,
+        site.ogImageMediaId,
+        organization.logoMediaId,
         ...pageRefs.map((row) => row.ogMediaId),
         ...postRefs.flatMap((row) => [row.coverMediaId, row.ogMediaId]),
       ],

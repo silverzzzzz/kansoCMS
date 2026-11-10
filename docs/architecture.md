@@ -178,7 +178,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
-| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoUrl / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
+| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / ogImageMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoMediaId / twitterHandle / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
@@ -249,9 +249,11 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 ### SEO / SSR
 
 - `site/head.tsx` が 1 ヶ所で `title` / `description` / `canonical` / `rel=prev,next` / feed の `rel=alternate` / OG / `<script type="application/ld+json">` を出力する。`loadSiteContext()` が設定から `ctx.theme` を解決し、各描画処理はその `Layout` / `PostList` / `PostArticle` を使う (未設定・未知のテーマは default)。各テーマの `<Layout meta jsonLd nav search>` は共通の `<Head>` を使う。`search` は `loadSiteContext()` が検索フォームの文言を用意する。
-- `site/context.ts` の `loadSiteContext()` がリクエストごとに settings / organization / ナビ (最上位ページ + 投稿タイプ) を 1 回読み、`meta()` でサイト既定値を適用した `PageMeta` を作る。
+- `site/context.ts` の `loadSiteContext()` がリクエストごとに settings / organization / ナビ (最上位ページ + 投稿タイプ) を 1 回読み、`meta()` でサイト既定値を適用した `PageMeta` を作る。`og:image` は `site.ogImageMediaId` を解決したサイト既定を `meta()` が入れ、ページ・投稿の個別画像 (`ogMediaId` / カバー画像) があればそれを優先する。
+- `og:locale` は `@kanso/seo` の `toOgLocale()` が BCP 47 タグを `language_TERRITORY` に正規化する (`Intl.Locale.maximize()`。`ja` → `ja_JP`)。
 - JSON-LD は `@kanso/seo` の pure 関数 (`buildBlogPosting(site, post)`, `buildBreadcrumb(...)` …) で生成。ユニットテスト済みで headless 利用者も使える。
-- `WebSite` をコンテンツページ、`Organization` は `settings.organization.name` がある場合に出力。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList`。検索ページは JSON-LD なし。
+- `WebSite` をコンテンツページ、`Organization` は `settings.organization.name` がある場合に出力。`Organization` の `logo` は `organization.logoMediaId` (未選択ならサイトロゴ) をメディアから解決する。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList` (固定ページでは公開済みの祖先ページを `pages.listPublishedAncestors()` が挟む。非公開の祖先で連鎖を打ち切る)。検索ページは JSON-LD なし。
+- `organization.twitterHandle` があると全ページに `<meta name="twitter:site" content="@…">` を出す (`@` は保存時に除く)。`twitter:card` は `og:image` 有無で `summary_large_image` / `summary`。
 - `canonical` は `canonical_url` が設定されていればそれ、なければ自 URL (`SITE_URL` 基準)。プレビューでは常に自 URL + `noindex`。
 - ページネーションは `rel=prev/next` を出し、2 ページ目以降も自分自身を canonical にする。
 - `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
@@ -338,6 +340,7 @@ pnpm deploy                                                 # admin build → se
 | 4. セクションエディタ | **done (2026-11-07)** | Shopify 風カスタマイズ: field DSL、`pages.sections_json`、テーマのセクションレジストリと SSR、draft プレビュー、管理画面「カスタマイズ」エディタ、テーマ設定 (accent / footer / SNS) ([tasks/phase-4.md](tasks/phase-4.md)) | 管理画面からページ構成とテーマ設定を編集でき、公開に即反映される |
 | 5. サンプルサイト | **done (2026-11-08)** | 会社・店舗向けのサンプル一式をセットアップ時 (既定オン) / 設定画面から投入、編集していない部分を一括削除。D1 クエリ上限に収まる一括書き込み ([tasks/phase-5.md](tasks/phase-5.md)) | セットアップ直後から編集できるサイトが公開され、不要なら片付けられる |
 | 6. パスキー認証 | **done (2026-11-08)** | パスワードを廃止し、パスキー (WebAuthn) だけでセットアップ・ログイン。アカウント画面でのパスキー管理、`pnpm passkey:link` による復旧 ([tasks/phase-6.md](tasks/phase-6.md)) | パスワードなしで管理画面を運用でき、パスキーを失っても復旧できる |
+| 7. SEO 強化 | **done (2026-11-11)** | サイト既定 OG 画像 (`site.ogImageMediaId` + `ctx.meta` フォールバック)、`og:locale` の `language_TERRITORY` 正規化 (`toOgLocale`)、パンくずの祖先ページ、組織ロゴのメディア選択 + サイトロゴへのフォールバック、`twitter:site` ([tasks/phase-7.md](tasks/phase-7.md)) | SNS シェアと検索結果の見え方が揃う |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

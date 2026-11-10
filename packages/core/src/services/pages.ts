@@ -372,6 +372,31 @@ export function pagesService(db: Db) {
       })
     },
 
+    /**
+     * Public: the page's published ancestors, root first, for breadcrumbs.
+     * An unpublished or missing ancestor ends the chain; a cycle in the tree
+     * cannot loop forever.
+     */
+    async listPublishedAncestors(page: { parentId: number | null }) {
+      if (page.parentId === null) return []
+      const all = await db.query.pages.findMany({
+        where: publishedNow(),
+        columns: { id: true, parentId: true, path: true, title: true },
+      })
+      const byId = new Map(all.map((row) => [row.id, row]))
+      const chain: typeof all = []
+      const visited = new Set<number>()
+      let parentId: number | null = page.parentId
+      while (parentId !== null && !visited.has(parentId)) {
+        visited.add(parentId)
+        const parent = byId.get(parentId)
+        if (!parent) break
+        chain.unshift(parent)
+        parentId = parent.parentId
+      }
+      return chain
+    },
+
     async listPublishedForSitemap() {
       return db.query.pages.findMany({
         where: and(publishedNow(), eq(pages.noindex, false)),

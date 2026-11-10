@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SETTINGS_KEYS, themeSettingsSchema } from './settings.ts'
+import { organizationSettingsSchema, SETTINGS_KEYS, themeSettingsSchema } from './settings.ts'
 
 describe('theme settings', () => {
   it('keeps independent settings for arbitrary theme names', () => {
@@ -18,6 +18,25 @@ describe('theme settings', () => {
     'rejects values without the two record levels: %j',
     (value) => {
       expect(themeSettingsSchema.safeParse(value).success).toBe(false)
+    },
+  )
+})
+
+describe('organization settings', () => {
+  it('stores the X handle without the leading @', () => {
+    expect(organizationSettingsSchema.parse({ twitterHandle: '@kansocms' }).twitterHandle).toBe(
+      'kansocms',
+    )
+    expect(organizationSettingsSchema.parse({ twitterHandle: 'kansocms' }).twitterHandle).toBe(
+      'kansocms',
+    )
+    expect(organizationSettingsSchema.parse({}).twitterHandle).toBe('')
+  })
+
+  it.each(['not a handle', 'toolonghandle123456', 'bad-hyphen'])(
+    'rejects invalid X handles: %s',
+    (twitterHandle) => {
+      expect(organizationSettingsSchema.safeParse({ twitterHandle }).success).toBe(false)
     },
   )
 })

@@ -10,6 +10,8 @@ export const siteSettingsSchema = z.object({
   locale: z.string().min(2).max(35).default('ja'),
   timezone: z.string().default('Asia/Tokyo'),
   logoMediaId: z.number().int().positive().nullable().default(null),
+  /** Fallback og:image for pages and archives that do not set their own. */
+  ogImageMediaId: z.number().int().positive().nullable().default(null),
   /** Post type shown on `/` when no `home` page exists. */
   homePostTypeSlug: z.string().nullable().default(null),
   theme: themeNameSchema.default('default'),
@@ -20,7 +22,15 @@ export type SiteSettings = z.infer<typeof siteSettingsSchema>
 export const organizationSettingsSchema = z.object({
   name: z.string().max(120).default(''),
   url: z.url().nullable().default(null),
-  logoUrl: z.url().nullable().default(null),
+  /** Organization logo from the media library; the site logo is the fallback. */
+  logoMediaId: z.number().int().positive().nullable().default(null),
+  /** X (Twitter) account for `twitter:site`, stored without the leading @. */
+  twitterHandle: z
+    .string()
+    .trim()
+    .regex(/^@?[A-Za-z0-9_]{0,15}$/)
+    .transform((value) => value.replace(/^@+/, ''))
+    .default(''),
   sameAs: z.array(z.url()).default([]),
 })
 export type OrganizationSettings = z.infer<typeof organizationSettingsSchema>

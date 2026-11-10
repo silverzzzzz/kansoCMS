@@ -1,4 +1,4 @@
-import { type PageMeta, serializeJsonLd } from '@kanso/seo'
+import { type PageMeta, serializeJsonLd, toOgLocale } from '@kanso/seo'
 import { raw } from 'hono/html'
 
 export interface HeadProps {
@@ -36,7 +36,7 @@ export function Head({ meta, jsonLd = [] }: HeadProps) {
       {meta.description && <meta property="og:description" content={meta.description} />}
       <meta property="og:url" content={meta.canonical} />
       <meta property="og:site_name" content={meta.siteName} />
-      <meta property="og:locale" content={meta.locale.replace('-', '_')} />
+      <meta property="og:locale" content={toOgLocale(meta.locale)} />
       {meta.ogImage && <meta property="og:image" content={meta.ogImage} />}
       {meta.ogType === 'article' && meta.publishedAt && (
         <meta property="article:published_time" content={meta.publishedAt.toISOString()} />
@@ -45,6 +45,7 @@ export function Head({ meta, jsonLd = [] }: HeadProps) {
         <meta property="article:modified_time" content={meta.updatedAt.toISOString()} />
       )}
       <meta name="twitter:card" content={meta.ogImage ? 'summary_large_image' : 'summary'} />
+      {meta.twitterSite && <meta name="twitter:site" content={meta.twitterSite} />}
 
       {jsonLd.filter(Boolean).map((data) => (
         <script type="application/ld+json">{raw(serializeJsonLd(data))}</script>

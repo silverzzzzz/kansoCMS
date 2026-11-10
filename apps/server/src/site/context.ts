@@ -1,5 +1,5 @@
 import type { Kanso } from '@kanso/core'
-import { buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
+import { absoluteUrl, buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
 import { type SectionValues, sectionValuesSchemaFor } from '@kanso/shared'
 import { resolveMessages, type SiteMessages } from '../i18n.ts'
 import { formatDate } from './format.ts'
@@ -43,12 +43,20 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     kanso.postTypes.list(),
   ])
 
+  const orgLogoId = organization.logoMediaId ?? settings.logoMediaId
+  const [ogMedia, orgLogoMedia] = await Promise.all([
+    settings.ogImageMediaId ? kanso.media.find(settings.ogImageMediaId) : null,
+    orgLogoId ? kanso.media.find(orgLogoId) : null,
+  ])
+  const defaultOgImage = ogMedia ? absoluteUrl(origin, ogMedia.url) : null
+  const orgLogoUrl = orgLogoMedia ? absoluteUrl(origin, orgLogoMedia.url) : null
+
   const site: SiteContext = {
     url: origin,
     name: settings.title,
     description: settings.description,
     locale: settings.locale,
-    organization: organization.name ? organization : undefined,
+    organization: organization.name ? { ...organization, logoUrl: orgLogoUrl } : undefined,
   }
 
   const nav: NavItem[] = [
@@ -80,7 +88,7 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     },
     formatDate: (date) =>
       formatDate(date, { locale: settings.locale, timeZone: settings.timezone }),
-    meta: ({ title, path, ...overrides }) => ({
+    meta: ({ title, path, ogImage, ...overrides }) => ({
       title: buildTitle(title, { siteName: settings.title }),
       description: settings.description,
       canonical: new URL(path, `${origin}/`).toString(),
@@ -88,6 +96,8 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
       siteName: settings.title,
       siteDescription: settings.description,
       ogType: 'website',
+      ogImage: ogImage ?? defaultOgImage,
+      twitterSite: organization.twitterHandle ? `@${organization.twitterHandle}` : null,
       noindex: false,
       ...overrides,
     }),

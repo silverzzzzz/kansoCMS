@@ -56,11 +56,17 @@ function SettingsForms() {
   const [locale, setLocale] = useState(initial?.site.locale ?? 'ja')
   const [timezone, setTimezone] = useState(initial?.site.timezone ?? 'Asia/Tokyo')
   const [logoMediaId, setLogoMediaId] = useState<number | null>(initial?.site.logoMediaId ?? null)
+  const [ogImageMediaId, setOgImageMediaId] = useState<number | null>(
+    initial?.site.ogImageMediaId ?? null,
+  )
   const [homePostTypeSlug, setHomePostTypeSlug] = useState(initial?.site.homePostTypeSlug ?? '')
   const [theme, setTheme] = useState<ThemeName>(initial?.site.theme ?? 'default')
   const [name, setName] = useState(initial?.organization.name ?? '')
   const [url, setUrl] = useState(initial?.organization.url ?? '')
-  const [logoUrl, setLogoUrl] = useState(initial?.organization.logoUrl ?? '')
+  const [orgLogoMediaId, setOrgLogoMediaId] = useState<number | null>(
+    initial?.organization.logoMediaId ?? null,
+  )
+  const [twitterHandle, setTwitterHandle] = useState(initial?.organization.twitterHandle ?? '')
   const [sameAs, setSameAs] = useState((initial?.organization.sameAs ?? []).join('\n'))
   const [fromEmail, setFromEmail] = useState(initial?.forms.fromEmail ?? '')
   const [fromName, setFromName] = useState(initial?.forms.fromName ?? '')
@@ -79,6 +85,7 @@ function SettingsForms() {
             locale,
             timezone,
             logoMediaId,
+            ogImageMediaId,
             homePostTypeSlug: homePostTypeSlug || null,
             theme,
           },
@@ -100,7 +107,8 @@ function SettingsForms() {
           json: {
             name,
             url: url.trim() || null,
-            logoUrl: logoUrl.trim() || null,
+            logoMediaId: orgLogoMediaId,
+            twitterHandle,
             sameAs: sameAs
               .split(/\r?\n/)
               .map((value) => value.trim())
@@ -211,6 +219,12 @@ function SettingsForms() {
           />
         </Field>
         <MediaField label="ロゴ" value={logoMediaId} onChange={setLogoMediaId} />
+        <div>
+          <MediaField label="既定のOG画像" value={ogImageMediaId} onChange={setOgImageMediaId} />
+          <p className="mt-1 text-xs text-neutral-500">
+            ページ・投稿・一覧で OG 画像を設定していないときに使われます。
+          </p>
+        </div>
         <div className="flex justify-end border-t border-neutral-200 pt-5">
           <Button type="submit" disabled={saveSite.isPending}>
             {saveSite.isPending ? '保存中…' : 'サイト設定を保存'}
@@ -250,12 +264,11 @@ function SettingsForms() {
               onChange={(event) => setUrl(event.target.value)}
             />
           </Field>
-          <Field label="ロゴ URL">
+          <Field label="X アカウント" hint="@なしで入力します。twitter:site に使われます。">
             <input
               className={inputClass}
-              type="url"
-              value={logoUrl}
-              onChange={(event) => setLogoUrl(event.target.value)}
+              value={twitterHandle}
+              onChange={(event) => setTwitterHandle(event.target.value)}
             />
           </Field>
           <Field label="関連 URL" hint="1 行に 1 件入力します。">
@@ -266,6 +279,12 @@ function SettingsForms() {
               onChange={(event) => setSameAs(event.target.value)}
             />
           </Field>
+        </div>
+        <div>
+          <MediaField label="ロゴ" value={orgLogoMediaId} onChange={setOrgLogoMediaId} />
+          <p className="mt-1 text-xs text-neutral-500">
+            JSON-LD の Organization logo に使われます。未選択ならサイトのロゴを使います。
+          </p>
         </div>
         <div className="flex justify-end border-t border-neutral-200 pt-5">
           <Button type="submit" disabled={saveOrganization.isPending}>

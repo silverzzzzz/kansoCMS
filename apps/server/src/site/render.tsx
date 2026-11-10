@@ -38,6 +38,8 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
     ? { html: '', scripts: [] as string[] }
     : await prepareForms(c, page.bodyHtml, ownPath, options.form, ctx.messages.form)
   const ogMedia = page.ogMediaId ? await c.var.kanso.media.find(page.ogMediaId) : null
+  const ancestors =
+    !isHome && page.parentId !== null ? await c.var.kanso.pages.listPublishedAncestors(page) : []
   const canonical =
     options.preview || !page.canonicalUrl ? absoluteUrl(ctx.origin, ownPath) : page.canonicalUrl
   const ogImage = ogMedia ? absoluteUrl(ctx.origin, ogMedia.url) : null
@@ -72,6 +74,10 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
       }),
       buildBreadcrumb([
         { name: ctx.site.name, url: `${ctx.origin}/` },
+        ...ancestors.map((ancestor) => ({
+          name: ancestor.title,
+          url: absoluteUrl(ctx.origin, ancestor.path === 'home' ? '/' : `/${ancestor.path}`),
+        })),
         { name: page.title, url: meta.canonical },
       ]),
     )

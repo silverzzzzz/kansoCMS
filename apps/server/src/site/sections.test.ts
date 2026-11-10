@@ -118,10 +118,17 @@ describe('sections page rendering', () => {
           locale: 'en',
           timezone: 'UTC',
           logoMediaId: null,
+          ogImageMediaId: null,
           homePostTypeSlug: null,
           theme: 'default',
         }),
-        organization: vi.fn().mockResolvedValue({ name: '', url: null, logoUrl: null, sameAs: [] }),
+        organization: vi.fn().mockResolvedValue({
+          name: '',
+          url: null,
+          logoMediaId: null,
+          twitterHandle: '',
+          sameAs: [],
+        }),
         theme: vi.fn().mockResolvedValue(themeSettingsRow),
       },
       pages: {

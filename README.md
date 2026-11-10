@@ -18,9 +18,9 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 6 complete** — blog + fixed pages, contact forms, full-text search, themes, the
-> section-based customize editor, a removable starter site and passkey sign-in all work from the
-> admin UI. The admin UI is Japanese only for now.
+> Status: **Phase 7 complete** — blog + fixed pages, contact forms, full-text search, themes,
+> the section-based customize editor, a removable starter site and passkey sign-in all work from
+> the admin UI. The admin UI is Japanese only for now.
 
 ## Layout
 
@@ -149,7 +149,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
 
-Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. Search pages have no JSON-LD.
+Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. A site-wide default OG image can be picked in settings — used whenever a page, post or archive doesn't set its own — fixed-page breadcrumbs include the published ancestor pages, and an X account in the organisation settings emits `twitter:site`. Search pages have no JSON-LD.
 
 Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Every content write through the admin API rotates a site-wide cache generation, so changes show up immediately in every data centre; requests carrying an admin session bypass the cache.
 
