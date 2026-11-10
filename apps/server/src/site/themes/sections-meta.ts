@@ -94,6 +94,112 @@ export const themeSettingsFieldsByTheme: Record<ThemeName, SectionField[]> = {
 }
 
 /**
+ * Page templates (WP block patterns / STUDIO templates): preset section
+ * layouts offered when creating a page. Sections omit `id`; the client
+ * assigns one per instance, so a template can be inserted repeatedly.
+ */
+export interface PageTemplate {
+  id: string
+  name: string
+  description: string
+  sections: { type: string; settings: Record<string, unknown> }[]
+}
+
+const standardPageTemplates: PageTemplate[] = [
+  {
+    id: 'landing',
+    name: 'ランディング',
+    description: 'ヒーロー + 本文 + CTA',
+    sections: [
+      {
+        type: 'hero',
+        settings: {
+          heading: 'ページの見出し',
+          text: 'このページで伝えたいことを一文で。',
+          button_label: '詳しく見る',
+          button_url: '/',
+        },
+      },
+      {
+        type: 'richtext',
+        settings: { heading: 'セクションの見出し', body: '本文をここに書きます。' },
+      },
+      {
+        type: 'cta',
+        settings: { heading: 'お問い合わせ', button_label: '問い合わせる', button_url: '/contact' },
+      },
+    ],
+  },
+  {
+    id: 'services',
+    name: 'サービス・料金一覧',
+    description: 'ヒーロー + 画像付き項目 x2 + CTA',
+    sections: [
+      {
+        type: 'hero',
+        settings: { heading: 'サービス', text: '提供しているサービスの紹介です。' },
+      },
+      {
+        type: 'image_with_text',
+        settings: { heading: 'サービス 1', body: 'サービスの説明をここに書きます。' },
+      },
+      {
+        type: 'image_with_text',
+        settings: {
+          heading: 'サービス 2',
+          body: 'サービスの説明をここに書きます。',
+          reverse: true,
+        },
+      },
+      {
+        type: 'cta',
+        settings: { heading: 'お問い合わせ', button_label: '相談する', button_url: '/contact' },
+      },
+    ],
+  },
+  {
+    id: 'about',
+    name: '会社概要・ページについて',
+    description: '本文 + 画像付き本文',
+    sections: [
+      {
+        type: 'richtext',
+        settings: { heading: 'このページについて', body: '概要をここに書きます。' },
+      },
+      {
+        type: 'image_with_text',
+        settings: { heading: '私たちについて', body: '詳しい説明をここに書きます。' },
+      },
+    ],
+  },
+  {
+    id: 'guide',
+    name: 'お問い合わせ誘導',
+    description: '本文 + CTA',
+    sections: [
+      {
+        type: 'richtext',
+        settings: { heading: 'お問い合わせ', body: '案内文をここに書きます。' },
+      },
+      {
+        type: 'cta',
+        settings: {
+          heading: 'まずはご相談ください',
+          button_label: '問い合わせる',
+          button_url: '/contact',
+        },
+      },
+    ],
+  },
+]
+
+/** Per-theme page templates; the bundled themes share the standard set. */
+export const pageTemplatesByTheme: Record<ThemeName, PageTemplate[]> = {
+  default: standardPageTemplates,
+  paper: standardPageTemplates,
+}
+
+/**
  * Validation details for section input saved through the management API,
  * checked against a theme's catalog. Empty when everything is valid.
  */

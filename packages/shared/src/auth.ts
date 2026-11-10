@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { API_KEY_SCOPES, USER_ROLES } from './content.ts'
+import { slugSchema } from './slug.ts'
 
 const base64url = (max: number) =>
   z
@@ -111,9 +112,18 @@ export const publicUserSchema = z.object({
   id: z.number().int(),
   email: z.email(),
   name: z.string(),
+  slug: z.string().nullable(),
   role: z.enum(USER_ROLES),
 })
 export type PublicUser = z.infer<typeof publicUserSchema>
+
+/** Self-service author profile: slug, bio and avatar (account screen). */
+export const updateProfileSchema = z.object({
+  slug: slugSchema.optional(),
+  bio: z.string().trim().max(1000).nullable().optional(),
+  avatarMediaId: z.number().int().nullable().optional(),
+})
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 
 export const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(100),

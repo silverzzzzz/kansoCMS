@@ -7,9 +7,10 @@ import type {
 import type { SQL } from 'drizzle-orm'
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
-import { categories, postTypes, tags } from '../db/schema/index.ts'
+import { categories, postCategories, posts, postTags, postTypes, tags } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { hasAncestorCycle } from './page-tree.ts'
+import { postsPublishedNow } from './posts.ts'
 
 function searchPattern(query: string): string {
   return `%${query.replace(/[\\%_]/g, '\\$&')}%`
@@ -196,6 +197,36 @@ export function taxonomiesService(db: Db) {
     await db.delete(tags).where(eq(tags.id, id))
   }
 
+  /** `(postTypeId, slug)` pairs whose archive holds ≥1 published indexable post, with the newest update. */
+  async function listCategoryArchivesForSitemap() {
+    return db
+      .select({
+        postTypeId: categories.postTypeId,
+        slug: categories.slug,
+        updatedAt: sql`max(${posts.updatedAt})`.mapWith(posts.updatedAt),
+      })
+      .from(categories)
+      .innerJoin(postCategories, eq(postCategories.categoryId, categories.id))
+      .innerJoin(posts, eq(posts.id, postCategories.postId))
+      .where(and(postsPublishedNow(), eq(posts.noindex, false)))
+      .groupBy(categories.postTypeId, categories.slug)
+  }
+
+  /** Tags are global, but archives live per post type — so the pair is keyed by `posts.postTypeId`. */
+  async function listTagArchivesForSitemap() {
+    return db
+      .select({
+        postTypeId: posts.postTypeId,
+        slug: tags.slug,
+        updatedAt: sql`max(${posts.updatedAt})`.mapWith(posts.updatedAt),
+      })
+      .from(postTags)
+      .innerJoin(posts, eq(posts.id, postTags.postId))
+      .innerJoin(tags, eq(tags.id, postTags.tagId))
+      .where(and(postsPublishedNow(), eq(posts.noindex, false)))
+      .groupBy(posts.postTypeId, tags.slug)
+  }
+
   return {
     findCategoryBySlug,
     findTagBySlug,
@@ -207,6 +238,8 @@ export function taxonomiesService(db: Db) {
     createTag,
     updateTag,
     deleteTag,
+    listCategoryArchivesForSitemap,
+    listTagArchivesForSitemap,
   }
 }
 

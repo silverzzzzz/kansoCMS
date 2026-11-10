@@ -17,7 +17,18 @@ import {
   type ThemeName,
   themeSettingsSchema,
 } from '@kanso/shared'
-import { and, count, eq, inArray, isNotNull, notInArray, or, type SQL, sql } from 'drizzle-orm'
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import {
   categories,
@@ -439,6 +450,7 @@ export function starterService(db: Db, bucket: R2Bucket) {
           and(
             inArray(pages.parentId, listOr(manifest.pages)),
             notInArray(pages.id, listOr(manifest.pages)),
+            isNull(pages.deletedAt),
           ),
         ),
     ])

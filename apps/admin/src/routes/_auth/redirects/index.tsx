@@ -28,6 +28,13 @@ function RedirectsPage() {
   const [editTo, setEditTo] = useState('')
   const [editStatus, setEditStatus] = useState<RedirectStatus>(301)
   const [deleting, setDeleting] = useState<RedirectItem | null>(null)
+  const [csv, setCsv] = useState('')
+  const [importResult, setImportResult] = useState<{
+    created: number
+    updated: number
+    errors: { line: number; message: string }[]
+    truncated: boolean
+  } | null>(null)
   const redirects = useQuery(redirectsQuery(search || undefined))
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['redirects'] })
   const create = useMutation({
@@ -64,7 +71,14 @@ function RedirectsPage() {
       await invalidate()
     },
   })
-  const error = create.error ?? update.error ?? remove.error ?? redirects.error
+  const importCsv = useMutation({
+    mutationFn: () => unwrap(api.redirects.import.$post({ json: { csv } })),
+    onSuccess: async (result) => {
+      setImportResult(result)
+      await invalidate()
+    },
+  })
+  const error = create.error ?? update.error ?? remove.error ?? importCsv.error ?? redirects.error
 
   return (
     <div>
@@ -141,6 +155,58 @@ function RedirectsPage() {
           </Button>
         </div>
       </form>
+      <details className="mt-6 border border-neutral-200 bg-white p-5">
+        <summary className="cursor-pointer text-sm font-medium">
+          CSV インポート (最大 500 行)
+        </summary>
+        <form
+          className="mt-4 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            setImportResult(null)
+            importCsv.mutate()
+          }}
+        >
+          <Field
+            label="CSV"
+            hint="1 行に `転送元,転送先[,種類]`。種類は 301 または 302 (省略時 301)。ヘッダ行は任意。同じ転送元は上書きされます。"
+          >
+            <textarea
+              className={`${inputClass} font-mono text-xs`}
+              rows={8}
+              value={csv}
+              required
+              placeholder={'/old-path,/new-path,301\n/legacy,/modern'}
+              onChange={(event) => setCsv(event.target.value)}
+            />
+          </Field>
+          <div className="flex justify-end">
+            <Button type="submit" disabled={importCsv.isPending}>
+              {importCsv.isPending ? 'インポート中…' : 'インポート'}
+            </Button>
+          </div>
+        </form>
+        {importResult && (
+          <div className="mt-4 space-y-2">
+            <Alert tone="success">
+              {importResult.created} 件を追加、{importResult.updated} 件を更新しました。
+              {importResult.truncated && ' (500 行を超えた分は無視されました)'}
+            </Alert>
+            {importResult.errors.length > 0 && (
+              <Alert tone="error">
+                エラー:
+                <ul className="mt-1 list-inside list-disc">
+                  {importResult.errors.map((entry) => (
+                    <li key={entry.line}>
+                      {entry.line} 行目: {entry.message}
+                    </li>
+                  ))}
+                </ul>
+              </Alert>
+            )}
+          </div>
+        )}
+      </details>
       <div className="mt-6">
         {redirects.data?.items.length === 0 ? (
           <EmptyState>リダイレクトはありません。</EmptyState>

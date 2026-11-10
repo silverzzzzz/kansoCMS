@@ -29,6 +29,44 @@
   height: auto;
 }
 
+.site-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.site-nav-list > li {
+  position: relative;
+}
+
+.site-nav-children {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 10rem;
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+}
+
+.site-nav-list > li:hover > .site-nav-children,
+.site-nav-list > li:focus-within > .site-nav-children {
+  display: block;
+}
+
+.site-nav-children a {
+  display: block;
+  padding: 0.35rem 1rem;
+  white-space: nowrap;
+}
+
 .post-summary {
   padding-block: 1.25rem;
   border-bottom: 1px solid var(--color-border);
@@ -60,6 +98,96 @@
 
 .post-terms {
   margin-block: 1rem;
+}
+
+.post-fields {
+  margin-block: 2rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.post-field {
+  display: flex;
+  gap: 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.post-field dt {
+  flex: 0 0 10rem;
+  font-weight: 600;
+}
+
+.post-field dd {
+  flex: 1;
+  margin: 0;
+}
+
+.post-field-image {
+  max-width: 100%;
+  height: auto;
+}
+
+.post-field-posts {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.post-author {
+  font-weight: 500;
+}
+
+.toc {
+  margin-block: 1.5rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface, #fafafa);
+}
+
+.toc-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.toc ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+}
+
+.toc .toc-nested {
+  margin-left: 1.25rem;
+  list-style: circle;
+}
+
+.related-posts {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.related-posts ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.related-posts time {
+  margin-left: 0.5rem;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.post-list-heading {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.author-avatar {
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .pagination {

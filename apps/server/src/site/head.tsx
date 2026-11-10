@@ -29,7 +29,9 @@ export function Head({ meta, jsonLd = [] }: HeadProps) {
           href={meta.feed.href}
         />
       )}
-      {meta.noindex && <meta name="robots" content="noindex, nofollow" />}
+      {meta.noindex && (
+        <meta name="robots" content={meta.nofollow ? 'noindex, nofollow' : 'noindex, follow'} />
+      )}
 
       <meta property="og:type" content={meta.ogType} />
       <meta property="og:title" content={meta.title} />

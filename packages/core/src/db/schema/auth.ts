@@ -1,27 +1,38 @@
 import { API_KEY_SCOPES, USER_ROLES } from '@kanso/shared'
 import { sql } from 'drizzle-orm'
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { randomHex } from '../../auth/encoding.ts'
 import { timestamps } from './_columns.ts'
+import { media } from './media.ts'
 
 export const PASSKEY_CHALLENGE_PURPOSES = ['setup', 'login', 'register', 'link'] as const
 export type PasskeyChallengePurpose = (typeof PASSKEY_CHALLENGE_PURPOSES)[number]
 
-export const users = sqliteTable('users', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  email: text('email').notNull().unique(),
-  name: text('name').notNull(),
-  role: text('role', { enum: USER_ROLES }).notNull().default('editor'),
-  /**
-   * Opaque WebAuthn user handle (32 hex chars). Nullable only because SQLite
-   * cannot add a NOT NULL column to a populated table; every row has one
-   * (migration 0006 fills existing users, inserts generate it).
-   */
-  webauthnUserId: text('webauthn_user_id')
-    .unique()
-    .$defaultFn(() => randomHex(16)),
-  ...timestamps,
-})
+export const users = sqliteTable(
+  'users',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    email: text('email').notNull().unique(),
+    name: text('name').notNull(),
+    role: text('role', { enum: USER_ROLES }).notNull().default('editor'),
+    /**
+     * Opaque WebAuthn user handle (32 hex chars). Nullable only because SQLite
+     * cannot add a NOT NULL column to a populated table; every row has one
+     * (migration 0006 fills existing users, inserts generate it).
+     */
+    webauthnUserId: text('webauthn_user_id')
+      .unique()
+      .$defaultFn(() => randomHex(16)),
+    /** Public author slug for `/{type}/author/{slug}` archives. */
+    slug: text('slug'),
+    bio: text('bio'),
+    avatarMediaId: integer('avatar_media_id').references(() => media.id, {
+      onDelete: 'set null',
+    }),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('users_slug_uq').on(t.slug)],
+)
 
 export const passkeys = sqliteTable(
   'passkeys',

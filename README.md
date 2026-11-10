@@ -13,14 +13,21 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Bundled Default and Paper themes, switchable in site settings
 - Shopify-style customize editor: compose pages from theme sections (hero, text, latest posts, …) with a live preview, plus theme-wide settings (accent color, footer, social links) — no code, no Liquid
 - A starter site for a small business (sectioned home and services pages, about, contact form, news posts, images) installed at setup by default, and removable later without touching what you edited
+- Scheduled publishing, a menu builder, trash with restore, content duplication and expiring draft-share links, pinned posts, a custom 404 page and maintenance mode
+- Per-post-type custom fields, page templates and Workers AI assist (excerpt/SEO text/image alt generation)
+- Author archives with editable profiles, related posts and an automatic table of contents on articles
+- Cookie-less analytics (daily D1 aggregation) and an activity log of every admin mutation
+- Full-site JSON export/import — content moves between installs by slug, media is referenced but not embedded
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
 [docs/tasks/phase-1.md](docs/tasks/phase-1.md) (both Japanese).
 
-> Status: **Phase 7 complete** — blog + fixed pages, contact forms, full-text search, themes,
-> the section-based customize editor, a removable starter site and passkey sign-in all work from
-> the admin UI. The admin UI is Japanese only for now.
+> Status: **all planned phases complete** — blog + fixed pages, contact forms, full-text search,
+> themes, the section-based customize editor, a removable starter site, passkey sign-in,
+> scheduled publishing, trash, menus, analytics, custom fields, author archives, JSON
+> export/import and an activity log all work from the admin UI. The admin UI is Japanese only
+> for now.
 
 ## Layout
 
@@ -140,16 +147,17 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/` | The page whose path is `home`; otherwise the archive of the post type set as *home* in settings; otherwise a placeholder |
 | `/company`, `/company/team` | Fixed pages, resolved by their full `path` |
 | `/old-path` | A managed 301/302 redirect when no published page or post matches the path |
-| `/search?q=…` | Published page/post search with highlighted snippets and `?q=…&page=2` pagination; `noindex` |
+| `/search?q=…` | Published page/post search with highlighted snippets and `?q=…&page=2` pagination; noindexed content is excluded and the page itself is `noindex` |
 | `/blog` | Post-type archive, 10 per page, `?page=2` … (`page=1` and invalid values redirect to the bare URL) |
 | `/blog/hello-world` | A post: `BlogPosting` + `BreadcrumbList` JSON-LD, `og:type=article`, `rel=alternate` to the feed |
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |
-| `/blog/feed.xml` | Atom feed of the 20 latest posts |
-| `/sitemap.xml`, `/robots.txt` | Home, indexable published pages, every post type and indexable published posts |
+| `/blog/author/jane` | Author archive — posts by the author, `noindex` unless they have published posts |
+| `/blog/feed.xml` | Atom feed of the 20 latest posts, `X-Robots-Tag: noindex` |
+| `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex |
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
 
-Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. A site-wide default OG image can be picked in settings — used whenever a page, post or archive doesn't set its own — fixed-page breadcrumbs include the published ancestor pages, and an X account in the organisation settings emits `twitter:site`. Search pages have no JSON-LD.
+Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. A site-wide default OG image can be picked in settings — used whenever a page, post or archive doesn't set its own — fixed-page breadcrumbs include the published ancestor pages, and an X account in the organisation settings emits `twitter:site`. `noindex` works at three levels — per page/post, per post type (archives only, keeping posts indexable) and site-wide in settings — and drops the content out of the sitemap and on-site search alike. Search pages have no JSON-LD.
 
 Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MISS`). Every content write through the admin API rotates a site-wide cache generation, so changes show up immediately in every data centre; requests carrying an admin session bypass the cache.
 

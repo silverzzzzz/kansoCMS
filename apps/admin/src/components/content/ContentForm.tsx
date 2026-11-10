@@ -1,9 +1,12 @@
 import { type ContentStatus, type RichTextDoc, SLUG_PATTERN, slugify } from '@kanso/shared'
 import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
+import { docToText } from '../../lib/ai.ts'
 import { Editor } from '../editor/Editor.tsx'
 import { MediaField } from '../media/MediaField.tsx'
 import { Button, Field, inputClass } from '../ui.tsx'
+import { AiSuggestButton } from './AiSuggestButton.tsx'
+import { SeoPanel } from './SeoPanel.tsx'
 
 export type ContentFormValue = {
   title: string
@@ -41,6 +44,7 @@ export function ContentForm({
   errors = {},
   autoSlug = false,
   editorKey,
+  publicPath,
   children,
 }: {
   value: ContentFormValue
@@ -50,6 +54,8 @@ export function ContentForm({
   errors?: Record<string, string>
   autoSlug?: boolean
   editorKey: string
+  /** Public URL path shown in the SERP preview breadcrumb (e.g. `/about`). */
+  publicPath?: string
   children?: ReactNode
 }) {
   const [slugEdited, setSlugEdited] = useState(!autoSlug)
@@ -99,7 +105,7 @@ export function ContentForm({
         <Field
           label="公開日時"
           error={errors.publishedAt}
-          hint="空のまま公開すると、保存時刻が公開日時になります。"
+          hint="空のまま公開すると、保存時刻が公開日時になります。未来の日時にすると予約公開です。"
         >
           <input
             className={inputClass}
@@ -137,6 +143,13 @@ export function ContentForm({
           value={value.excerpt}
           onChange={(event) => change('excerpt', event.target.value)}
         />
+        <div className="mt-2">
+          <AiSuggestButton
+            kind="excerpt"
+            text={docToText(value.bodyJson)}
+            onResult={(text) => change('excerpt', text)}
+          />
+        </div>
       </Field>
 
       <details className="border border-neutral-200 bg-white p-5">
@@ -165,6 +178,13 @@ export function ContentForm({
                 value={value.seoDescription}
                 onChange={(event) => change('seoDescription', event.target.value)}
               />
+              <div className="mt-2">
+                <AiSuggestButton
+                  kind="description"
+                  text={docToText(value.bodyJson)}
+                  onResult={(text) => change('seoDescription', text)}
+                />
+              </div>
             </Field>
           </div>
           <MediaField
@@ -172,14 +192,22 @@ export function ContentForm({
             value={value.ogMediaId}
             onChange={(next) => change('ogMediaId', next)}
           />
-          <label className="flex items-start gap-2 self-end py-2 text-sm font-medium text-neutral-800">
-            <input
-              type="checkbox"
-              checked={value.noindex}
-              onChange={(event) => change('noindex', event.target.checked)}
-            />
-            検索エンジンに登録しない
-          </label>
+          <div className="self-end">
+            <label className="flex items-start gap-2 py-2 text-sm font-medium text-neutral-800">
+              <input
+                type="checkbox"
+                checked={value.noindex}
+                onChange={(event) => change('noindex', event.target.checked)}
+              />
+              検索エンジンに登録しない
+            </label>
+            <p className="text-xs text-neutral-500">
+              サイトマップとサイト内検索からも除外されます。
+            </p>
+          </div>
+        </div>
+        <div className="mt-5">
+          <SeoPanel value={value} publicPath={publicPath} />
         </div>
       </details>
 

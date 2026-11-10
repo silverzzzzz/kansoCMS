@@ -5,21 +5,87 @@ import type { AppEnv } from '../env.ts'
 type PostType = Awaited<ReturnType<AppEnv['Variables']['kanso']['postTypes']['get']>>
 
 export async function sitemapResponse(c: Context<AppEnv>) {
-  const [pages, postTypes, posts] = await Promise.all([
+  const [settings, home, pages, postTypes, posts, categories, tags, authors] = await Promise.all([
+    c.var.kanso.settings.site(),
+    c.var.kanso.pages.findPublishedByPath('home'),
     c.var.kanso.pages.listPublishedForSitemap(),
     c.var.kanso.postTypes.list(),
     c.var.kanso.posts.listPublishedForSitemap(),
+    c.var.kanso.taxonomies.listCategoryArchivesForSitemap(),
+    c.var.kanso.taxonomies.listTagArchivesForSitemap(),
+    c.var.kanso.posts.listAuthorsForSitemap(),
   ])
+  const xml = (urls: Parameters<typeof buildSitemap>[0]) =>
+    c.body(buildSitemap(urls), 200, { 'content-type': 'application/xml; charset=utf-8' })
+  // A site-wide noindex means nothing here is indexable; crawlers learn that from the pages.
+  if (settings.noindex) return xml([])
+
   const typeSlugs = new Map(postTypes.map((type) => [type.id, type.slug]))
+  const indexableTypes = postTypes.filter((type) => !type.noindex)
+  const indexableTypeIds = new Set(indexableTypes.map((type) => type.id))
+  const latestByType = new Map<number, Date>()
+  for (const post of posts) {
+    const current = latestByType.get(post.postTypeId)
+    if (!current || post.updatedAt > current) latestByType.set(post.postTypeId, post.updatedAt)
+  }
+  const globalLatest = [...pages, ...posts].reduce<Date | null>(
+    (latest, row) => (!latest || row.updatedAt > latest ? row.updatedAt : latest),
+    null,
+  )
+
   const urls = [
-    { loc: absoluteUrl(c.env.SITE_URL, '/') },
+    // `/` is the site entrance; it drops out only when the `home` page itself is noindexed.
+    ...(!home?.noindex
+      ? [
+          {
+            loc: absoluteUrl(c.env.SITE_URL, '/'),
+            lastmod: home?.updatedAt ?? globalLatest,
+          },
+        ]
+      : []),
     ...pages
       .filter((page) => page.path !== 'home')
       .map((page) => ({
         loc: absoluteUrl(c.env.SITE_URL, `/${page.path}`),
         lastmod: page.updatedAt,
       })),
-    ...postTypes.map((type) => ({ loc: absoluteUrl(c.env.SITE_URL, `/${type.slug}`) })),
+    ...indexableTypes.map((type) => ({
+      loc: absoluteUrl(c.env.SITE_URL, `/${type.slug}`),
+      lastmod: latestByType.get(type.id) ?? null,
+    })),
+    ...categories.flatMap((row) => {
+      const typeSlug = typeSlugs.get(row.postTypeId)
+      return typeSlug && indexableTypeIds.has(row.postTypeId)
+        ? [
+            {
+              loc: absoluteUrl(c.env.SITE_URL, `/${typeSlug}/category/${row.slug}`),
+              lastmod: row.updatedAt,
+            },
+          ]
+        : []
+    }),
+    ...tags.flatMap((row) => {
+      const typeSlug = typeSlugs.get(row.postTypeId)
+      return typeSlug && indexableTypeIds.has(row.postTypeId)
+        ? [
+            {
+              loc: absoluteUrl(c.env.SITE_URL, `/${typeSlug}/tag/${row.slug}`),
+              lastmod: row.updatedAt,
+            },
+          ]
+        : []
+    }),
+    ...authors.flatMap((row) => {
+      const typeSlug = typeSlugs.get(row.postTypeId)
+      return typeSlug && row.slug && indexableTypeIds.has(row.postTypeId)
+        ? [
+            {
+              loc: absoluteUrl(c.env.SITE_URL, `/${typeSlug}/author/${row.slug}`),
+              lastmod: row.updatedAt,
+            },
+          ]
+        : []
+    }),
     ...posts.flatMap((post) => {
       const typeSlug = typeSlugs.get(post.postTypeId)
       return typeSlug
@@ -32,15 +98,37 @@ export async function sitemapResponse(c: Context<AppEnv>) {
         : []
     }),
   ]
-  return c.body(buildSitemap(urls), 200, { 'content-type': 'application/xml; charset=utf-8' })
+  return xml(urls)
 }
 
-export function robotsResponse(c: Context<AppEnv>) {
+/** Admin-supplied robots.txt rules, normalised to LF with collapsed blank runs. */
+function normalizeRobotsExtra(extra: string): string[] {
+  const lines: string[] = []
+  let blank = true // leading blank lines are dropped
+  for (const raw of extra.replace(/\r\n?/g, '\n').split('\n')) {
+    const line = raw.trimEnd()
+    if (line === '') {
+      if (!blank) {
+        lines.push('')
+        blank = true
+      }
+      continue
+    }
+    lines.push(line)
+    blank = false
+  }
+  while (lines[lines.length - 1] === '') lines.pop()
+  return lines
+}
+
+export async function robotsResponse(c: Context<AppEnv>) {
+  const settings = await c.var.kanso.settings.site()
   const body = [
     'User-agent: *',
     'Disallow: /admin',
     'Disallow: /api',
     'Disallow: /preview',
+    ...(settings.robotsExtra ? ['', ...normalizeRobotsExtra(settings.robotsExtra)] : []),
     '',
     `Sitemap: ${absoluteUrl(c.env.SITE_URL, '/sitemap.xml')}`,
   ].join('\n')
@@ -73,5 +161,6 @@ export async function feedResponse(c: Context<AppEnv>, type: PostType) {
         : [],
     ),
   })
+  c.header('x-robots-tag', 'noindex')
   return c.body(body, 200, { 'content-type': 'application/atom+xml; charset=utf-8' })
 }

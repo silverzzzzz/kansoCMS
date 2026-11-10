@@ -6,7 +6,9 @@ export type SiteMessages = {
   archive: {
     categoryHeading: (term: string, type: string) => string
     tagHeading: (term: string, type: string) => string
+    authorHeading: (author: string, type: string) => string
   }
+  post: { toc: string; related: string }
   pagination: { newer: string; older: string }
   search: {
     title: string
@@ -48,7 +50,9 @@ export const en: SiteMessages = {
   archive: {
     categoryHeading: (term, type) => `${term} – ${type}`,
     tagHeading: (term, type) => `#${term} – ${type}`,
+    authorHeading: (author, type) => `${author} – ${type}`,
   },
+  post: { toc: 'Contents', related: 'Related posts' },
   pagination: { newer: 'Newer posts', older: 'Older posts' },
   form: {
     submit: 'Send',
@@ -84,7 +88,9 @@ export const ja: SiteMessages = {
   archive: {
     categoryHeading: (term, type) => `${term} – ${type}`,
     tagHeading: (term, type) => `#${term} – ${type}`,
+    authorHeading: (author, type) => `${author} – ${type}`,
   },
+  post: { toc: '目次', related: '関連記事' },
   pagination: { newer: '新しい投稿', older: '古い投稿' },
   form: {
     submit: '送信',

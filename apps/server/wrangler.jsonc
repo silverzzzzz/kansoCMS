@@ -31,6 +31,9 @@
     }
   ],
 
+  // Workers AI for the admin "AI で生成" assist (excerpt / SEO description / alt).
+  "ai": { "binding": "AI" },
+
   // Local development emulates delivery; adding "remote": true would send real email.
   "send_email": [{ "name": "EMAIL" }],
 

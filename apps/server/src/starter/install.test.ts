@@ -12,6 +12,15 @@ const site: SiteSettings = {
   logoMediaId: null,
   ogImageMediaId: null,
   homePostTypeSlug: null,
+  noindex: false,
+  faviconMediaId: null,
+  googleSiteVerification: '',
+  headHtml: null,
+  bodyEndHtml: null,
+  robotsExtra: null,
+  notFoundPageId: null,
+  maintenance: false,
+  maintenanceMessage: '',
   theme: 'paper',
 }
 

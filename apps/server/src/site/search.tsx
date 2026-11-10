@@ -18,6 +18,7 @@ export function SearchResults({ ctx, q, page, totalPages, result }: SearchResult
       nav={ctx.nav}
       search={ctx.search}
       themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
     >
       <section class="page search-results">
         <h1>{m.title}</h1>

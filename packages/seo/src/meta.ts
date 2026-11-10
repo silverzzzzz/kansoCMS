@@ -12,6 +12,8 @@ export interface PageMeta {
   /** `twitter:site` value (`@handle`), from the organisation settings. */
   twitterSite?: string | null
   noindex: boolean
+  /** Adds `nofollow` to the robots meta — for draft previews whose links should not be crawled. */
+  nofollow?: boolean
   publishedAt?: Date | null
   updatedAt?: Date | null
   prev?: string | null

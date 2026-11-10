@@ -5,6 +5,7 @@ import type { AppEnv } from '../env.ts'
 import { requireRole } from '../middleware/auth.ts'
 import { starterImageLoader } from '../starter/assets.ts'
 import { installStarter } from '../starter/install.ts'
+import { logActivity } from './activity.ts'
 import { currentUserId } from './principal.ts'
 
 /** The starter home page, while it still exists, for the dashboard's customize link. */
@@ -33,6 +34,19 @@ export const starter = new Hono<AppEnv>()
       userId: currentUserId(c.var.principal),
       loadImage: starterImageLoader(c.env, c.req.url),
     })
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'starter',
+      summary: 'スターターコンテンツをインストール',
+    })
     return c.json(result, 201)
   })
-  .delete('/', async (c) => c.json(await c.var.kanso.starter.remove()))
+  .delete('/', async (c) => {
+    const result = await c.var.kanso.starter.remove()
+    await logActivity(c, {
+      action: 'delete',
+      targetType: 'starter',
+      summary: 'スターターコンテンツを削除',
+    })
+    return c.json(result)
+  })

@@ -68,4 +68,53 @@ describe('redirects API', () => {
     })
     expect(create).not.toHaveBeenCalled()
   })
+
+  it('forwards the CSV body to importRows and returns the summary', async () => {
+    const importRows = vi
+      .fn()
+      .mockResolvedValue({ created: 2, updated: 1, errors: [], truncated: false })
+    const kanso: Kanso = Object.assign(Object.create(null), {
+      redirects: { importRows },
+    })
+    const app = new Hono<AppEnv>()
+      .use('*', async (c, next) => {
+        c.set('kanso', kanso)
+        await next()
+      })
+      .onError(onError)
+      .route('/api/v1/redirects', redirects)
+    const response = await app.request(
+      '/api/v1/redirects/import',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ csv: '/a,/b,301\n/c,/d' }),
+      },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(200)
+    expect(importRows).toHaveBeenCalledWith('/a,/b,301\n/c,/d')
+    await expect(response.json()).resolves.toEqual({
+      created: 2,
+      updated: 1,
+      errors: [],
+      truncated: false,
+    })
+  })
+
+  it('rejects an import body without csv', async () => {
+    const { app } = testSetup()
+    const response = await app.request(
+      '/api/v1/redirects/import',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(400)
+  })
 })

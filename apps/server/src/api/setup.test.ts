@@ -16,7 +16,13 @@ const installResult = {
   skipped: [],
 }
 
-const adminUser = { id: 1, email: 'admin@example.com', name: 'Admin', role: 'admin' as const }
+const adminUser = {
+  id: 1,
+  email: 'admin@example.com',
+  name: 'Admin',
+  slug: 'admin',
+  role: 'admin' as const,
+}
 const options = { challenge: 'challenge', rp: { id: 'localhost', name: 'Example Shop' } }
 
 const credential = {

@@ -1,13 +1,40 @@
-import { describe, expect, it } from 'vitest'
+import { SQLiteAsyncDialect } from 'drizzle-orm/sqlite-core'
+import { describe, expect, it, vi } from 'vitest'
 import { EMPTY_DOCUMENT, plainText } from '../content/index.ts'
+import type { Db } from '../db/client.ts'
 import {
   buildSnippet,
   likePattern,
   matchExpression,
+  searchService,
   searchTerms,
   snippetSource,
   usesMatch,
 } from './search.ts'
+
+describe('search', () => {
+  it('filters results to indexable published content', async () => {
+    const dialect = new SQLiteAsyncDialect()
+    const statements: string[] = []
+    const db = {
+      all: vi.fn().mockImplementation((query) => {
+        statements.push(dialect.sqlToQuery(query).sql)
+        return Promise.resolve([])
+      }),
+      get: vi.fn().mockImplementation((query) => {
+        statements.push(dialect.sqlToQuery(query).sql)
+        return Promise.resolve({ total: 0 })
+      }),
+    } as unknown as Db
+
+    await searchService(db).search({ q: 'hello', page: 1, perPage: 10 })
+
+    expect(statements[0]).toContain("p.status = 'published'")
+    expect(statements[0]).toContain('p.noindex = 0')
+    expect(statements[0]).toContain("o.status = 'published'")
+    expect(statements[0]).toContain('o.noindex = 0')
+  })
+})
 
 describe('search helpers', () => {
   it('splits whitespace and keeps at most eight terms', () => {

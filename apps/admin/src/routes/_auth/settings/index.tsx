@@ -4,7 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError } from '../../../api/errors.ts'
-import { postTypesQuery, settingsQuery } from '../../../api/queries.ts'
+import { pagesListQuery, postTypesQuery, settingsQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
@@ -17,6 +17,7 @@ export const Route = createFileRoute('/_auth/settings/')({
     await Promise.all([
       context.queryClient.ensureQueryData(settingsQuery),
       context.queryClient.ensureQueryData(postTypesQuery),
+      context.queryClient.ensureQueryData(pagesListQuery({ perPage: '100' })),
     ])
   },
   component: SettingsPage,
@@ -50,6 +51,7 @@ function SettingsForms() {
   const queryClient = useQueryClient()
   const settings = useQuery(settingsQuery)
   const postTypes = useQuery(postTypesQuery)
+  const pages = useQuery(pagesListQuery({ perPage: '100' }))
   const initial = settings.data
   const [title, setTitle] = useState(initial?.site.title ?? 'kansoCMS')
   const [description, setDescription] = useState(initial?.site.description ?? '')
@@ -60,6 +62,21 @@ function SettingsForms() {
     initial?.site.ogImageMediaId ?? null,
   )
   const [homePostTypeSlug, setHomePostTypeSlug] = useState(initial?.site.homePostTypeSlug ?? '')
+  const [siteNoindex, setSiteNoindex] = useState(initial?.site.noindex ?? false)
+  const [faviconMediaId, setFaviconMediaId] = useState<number | null>(
+    initial?.site.faviconMediaId ?? null,
+  )
+  const [googleSiteVerification, setGoogleSiteVerification] = useState(
+    initial?.site.googleSiteVerification ?? '',
+  )
+  const [headHtml, setHeadHtml] = useState(initial?.site.headHtml ?? '')
+  const [bodyEndHtml, setBodyEndHtml] = useState(initial?.site.bodyEndHtml ?? '')
+  const [robotsExtra, setRobotsExtra] = useState(initial?.site.robotsExtra ?? '')
+  const [notFoundPageId, setNotFoundPageId] = useState(String(initial?.site.notFoundPageId ?? ''))
+  const [maintenance, setMaintenance] = useState(initial?.site.maintenance ?? false)
+  const [maintenanceMessage, setMaintenanceMessage] = useState(
+    initial?.site.maintenanceMessage ?? '',
+  )
   const [theme, setTheme] = useState<ThemeName>(initial?.site.theme ?? 'default')
   const [name, setName] = useState(initial?.organization.name ?? '')
   const [url, setUrl] = useState(initial?.organization.url ?? '')
@@ -87,6 +104,15 @@ function SettingsForms() {
             logoMediaId,
             ogImageMediaId,
             homePostTypeSlug: homePostTypeSlug || null,
+            noindex: siteNoindex,
+            faviconMediaId,
+            googleSiteVerification,
+            headHtml: headHtml.trim() ? headHtml : null,
+            bodyEndHtml: bodyEndHtml.trim() ? bodyEndHtml : null,
+            robotsExtra: robotsExtra.trim() ? robotsExtra : null,
+            notFoundPageId: notFoundPageId ? Number(notFoundPageId) : null,
+            maintenance,
+            maintenanceMessage,
             theme,
           },
         }),
@@ -224,6 +250,105 @@ function SettingsForms() {
           <p className="mt-1 text-xs text-neutral-500">
             ページ・投稿・一覧で OG 画像を設定していないときに使われます。
           </p>
+        </div>
+        <div>
+          <MediaField label="ファビコン" value={faviconMediaId} onChange={setFaviconMediaId} />
+          <p className="mt-1 text-xs text-neutral-500">
+            全ページに &lt;link rel="icon"&gt; を出力します。正方形の PNG/ICO 画像を推奨します。
+          </p>
+        </div>
+        <Field
+          label="Google サイト検証"
+          hint="Search Console の HTML タグ認証で使う content 値です (google-site-verification=... の ... 部分)。"
+        >
+          <input
+            className={inputClass}
+            value={googleSiteVerification}
+            onChange={(event) => setGoogleSiteVerification(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="カスタム head"
+          hint="&lt;/head&gt; の直前にそのまま出力されます。GA・GTM 等のスニペット用。管理者のみ編集できます。"
+        >
+          <textarea
+            className={`${inputClass} font-mono text-xs`}
+            rows={6}
+            value={headHtml}
+            onChange={(event) => setHeadHtml(event.target.value)}
+          />
+        </Field>
+        <Field label="カスタム body 末尾" hint="&lt;/body&gt; の直前にそのまま出力されます。">
+          <textarea
+            className={`${inputClass} font-mono text-xs`}
+            rows={6}
+            value={bodyEndHtml}
+            onChange={(event) => setBodyEndHtml(event.target.value)}
+          />
+        </Field>
+        <Field
+          label="robots.txt 追加ルール"
+          hint="既定のルール (Disallow: /admin 等) と Sitemap 行の間にそのまま出力されます。"
+        >
+          <textarea
+            className={`${inputClass} font-mono text-xs`}
+            rows={5}
+            value={robotsExtra}
+            placeholder={'User-agent: *\nDisallow: /private/'}
+            onChange={(event) => setRobotsExtra(event.target.value)}
+          />
+        </Field>
+        <label className="flex items-start gap-2 text-sm font-medium text-neutral-800">
+          <input
+            type="checkbox"
+            checked={siteNoindex}
+            onChange={(event) => setSiteNoindex(event.target.checked)}
+          />
+          サイト全体を検索エンジンに登録しない
+        </label>
+        <p className="-mt-3 text-xs text-neutral-500">
+          準備中・ステージングサイト向け。全ページに noindex を出力し、サイトマップは空になります
+          (robots.txt でのクロール拒否は行いません)。
+        </p>
+        <Field
+          label="カスタム 404 ページ"
+          hint="存在しない URL へのアクセスで、標準メッセージの代わりにこのページの本文を表示します (ステータスは 404 のまま)。"
+        >
+          <select
+            className={inputClass}
+            value={notFoundPageId}
+            onChange={(event) => setNotFoundPageId(event.target.value)}
+          >
+            <option value="">標準 (なし)</option>
+            {(pages.data?.items ?? []).map((page) => (
+              <option key={page.id} value={page.id}>
+                {page.title} (/{page.path})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="space-y-3 border border-neutral-200 bg-neutral-50 p-4">
+          <label className="flex items-start gap-2 text-sm font-medium text-neutral-800">
+            <input
+              type="checkbox"
+              checked={maintenance}
+              onChange={(event) => setMaintenance(event.target.checked)}
+            />
+            メンテナンスモード
+          </label>
+          <p className="text-xs text-neutral-500">
+            有効にすると公開サイトは 503
+            のメンテナンスページになります。ログイン中の管理者はそのまま閲覧でき、
+            robots.txt・サイトマップ・プレビューは通常どおり動作します。
+          </p>
+          <Field label="メンテナンスメッセージ" hint="空の場合は既定の文言を表示します。">
+            <textarea
+              className={inputClass}
+              rows={3}
+              value={maintenanceMessage}
+              onChange={(event) => setMaintenanceMessage(event.target.value)}
+            />
+          </Field>
         </div>
         <div className="flex justify-end border-t border-neutral-200 pt-5">
           <Button type="submit" disabled={saveSite.isPending}>

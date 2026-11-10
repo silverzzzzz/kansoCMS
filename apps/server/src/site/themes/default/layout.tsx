@@ -1,6 +1,6 @@
 import { raw } from 'hono/html'
 import { Head } from '../../head.tsx'
-import { AccentStyle, FooterExtras } from '../chrome.tsx'
+import { AccentStyle, BodyEndExtras, FooterExtras, SiteHeadExtras, SiteNav } from '../chrome.tsx'
 import type { LayoutProps } from '../types.ts'
 
 /**
@@ -14,6 +14,7 @@ export function Layout({
   search,
   scripts = [],
   themeSettings,
+  extras,
   children,
 }: LayoutProps) {
   return (
@@ -27,6 +28,7 @@ export function Layout({
           {scripts.map((src) => (
             <script src={src} async defer></script>
           ))}
+          <SiteHeadExtras extras={extras} />
         </head>
         <body class="theme-default">
           <header class="site-header">
@@ -34,9 +36,7 @@ export function Layout({
               {meta.siteName}
             </a>
             <nav class="site-nav">
-              {nav.map((item) => (
-                <a href={item.href}>{item.label}</a>
-              ))}
+              <SiteNav items={nav} />
             </nav>
             {/* biome-ignore lint/a11y/useSemanticElements: Keep the GET form itself as the search landmark. */}
             <form class="site-search" role="search" action="/search" method="get">
@@ -60,6 +60,7 @@ export function Layout({
               © {new Date().getFullYear()} {meta.siteName}
             </small>
           </footer>
+          <BodyEndExtras extras={extras} />
         </body>
       </html>
     </>

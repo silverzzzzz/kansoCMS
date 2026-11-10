@@ -103,9 +103,11 @@ export function searchService(db: Db) {
       LEFT JOIN posts o ON s.kind = 'post' AND o.id = s.ref_id
       LEFT JOIN post_types t ON t.id = o.post_type_id
       WHERE ((s.kind = 'page' AND p.status = 'published'
-        AND p.published_at IS NOT NULL AND p.published_at <= ${now})
+        AND p.published_at IS NOT NULL AND p.published_at <= ${now} AND p.noindex = 0
+        AND p.deleted_at IS NULL)
         OR (s.kind = 'post' AND o.status = 'published'
-        AND o.published_at IS NOT NULL AND o.published_at <= ${now}))
+        AND o.published_at IS NOT NULL AND o.published_at <= ${now} AND o.noindex = 0
+        AND o.deleted_at IS NULL))
       AND ${query}`
     const order = match
       ? sql`bm25(search_index), published_at DESC`

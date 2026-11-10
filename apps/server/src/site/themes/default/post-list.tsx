@@ -7,6 +7,7 @@ function pageHref(basePath: string, page: number): string {
 export function PostList({
   heading,
   description,
+  avatar,
   items,
   pagination,
   formatDate,
@@ -14,8 +15,13 @@ export function PostList({
 }: PostListProps) {
   return (
     <section class="post-list">
-      <h1>{heading}</h1>
-      {description && <p>{description}</p>}
+      <div class="post-list-heading">
+        {avatar && <img class="author-avatar" src={avatar.url} alt={avatar.alt ?? ''} />}
+        <div>
+          <h1>{heading}</h1>
+          {description && <p>{description}</p>}
+        </div>
+      </div>
       {items.map((item) => (
         <article class="post-summary">
           <h2>

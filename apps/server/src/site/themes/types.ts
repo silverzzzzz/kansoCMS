@@ -1,11 +1,14 @@
 import type { Kanso } from '@kanso/core'
 import type { PageMeta } from '@kanso/seo'
-import type { SectionField, SectionValues, ThemeName } from '@kanso/shared'
+import type { SectionField, SectionValues, ThemeName, TocItem } from '@kanso/shared'
 import type { Child, FC } from 'hono/jsx'
+import type { SiteExtras } from '../context.ts'
 
 export interface NavItem {
   label: string
   href: string
+  /** One level of dropdown children (menu builder). */
+  children?: { label: string; href: string }[]
 }
 
 export interface LayoutProps {
@@ -16,6 +19,8 @@ export interface LayoutProps {
   scripts?: string[]
   /** Theme-wide settings validated against the theme's settingsFields. */
   themeSettings?: SectionValues
+  /** Site-wide favicon / verification meta / raw-HTML injections. */
+  extras?: SiteExtras
   children: Child
 }
 
@@ -30,6 +35,8 @@ export interface PostSummaryItem {
 export interface PostListProps {
   heading: string
   description?: string | null
+  /** Author avatar on author archives. */
+  avatar?: { url: string; alt: string | null } | null
   items: PostSummaryItem[]
   pagination: { page: number; totalPages: number; basePath: string }
   formatDate: (date: Date) => string
@@ -38,11 +45,28 @@ export interface PostListProps {
 
 type Post = Awaited<ReturnType<Kanso['posts']['getWithRelations']>>
 
+/** A custom field prepared for render; `image` / `posts` hold resolved data. */
+export interface PostFieldItem {
+  name: string
+  label: string
+  type: SectionField['type']
+  value: SectionValues[string]
+  image?: SectionImageData | null
+  posts?: SectionPostsData | null
+}
+
 export interface PostArticleProps {
   post: Post
   bodyHtml: string
   typeSlug: string
   formatDate: (date: Date) => string
+  /** Custom field values defined by the post type, in definition order. */
+  fields?: PostFieldItem[]
+  /** h2/h3 anchors extracted from the body; rendered when ≥2 items. */
+  toc?: TocItem[]
+  /** Same-category (or same-tag) published posts, newest first. */
+  related?: PostSummaryItem[]
+  labels?: { toc: string; related: string }
 }
 
 export interface SectionImageData {

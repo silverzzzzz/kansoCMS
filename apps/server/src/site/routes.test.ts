@@ -2,6 +2,7 @@ import { type Kanso, KansoError } from '@kanso/core'
 import {
   DEFAULT_SUBMISSION_MESSAGES,
   type RichTextDoc,
+  type SectionField,
   type SubmissionMessages,
   type SubmissionValues,
   submissionSchemaFor,
@@ -62,6 +63,56 @@ const testPage = {
   updatedAt: new Date('2026-09-15T00:00:00Z'),
 }
 
+const testPostType = {
+  id: 3,
+  slug: 'blog',
+  name: 'Blog',
+  description: null as string | null,
+  hasCategories: true,
+  hasTags: true,
+  noindex: false,
+  fieldsJson: null as SectionField[] | null,
+  sortOrder: 0,
+  createdAt: new Date('2026-09-15T00:00:00Z'),
+  updatedAt: new Date('2026-09-15T00:00:00Z'),
+}
+
+/** Hydrated post row as returned by `posts.findPublished`. */
+const testPost = {
+  id: 9,
+  postTypeId: 3,
+  title: 'Hello world',
+  slug: 'hello',
+  bodyJson: null as RichTextDoc | null,
+  bodyHtml: '<p>Post body.</p>',
+  excerpt: 'An excerpt.',
+  status: 'published' as const,
+  publishedAt: new Date('2026-09-16T00:00:00Z'),
+  pinned: false,
+  fieldsJson: null as Record<string, unknown> | null,
+  coverMediaId: null as number | null,
+  authorId: null as number | null,
+  seoTitle: null,
+  seoDescription: null,
+  noindex: false,
+  canonicalUrl: null,
+  ogMediaId: null as number | null,
+  deletedAt: null as Date | null,
+  createdAt: new Date('2026-09-15T00:00:00Z'),
+  updatedAt: new Date('2026-09-16T00:00:00Z'),
+  categories: [] as { id: number; slug: string; name: string }[],
+  tags: [] as { id: number; slug: string; name: string }[],
+  authorName: null as string | null,
+  authorSlug: null as string | null,
+  coverMedia: null as {
+    url: string
+    alt: string | null
+    width: number | null
+    height: number | null
+  } | null,
+  ogMediaUrl: null as string | null,
+}
+
 function validateSubmission(
   form: Pick<typeof testForm, 'fieldsJson'>,
   raw: Record<string, unknown>,
@@ -89,6 +140,38 @@ function testSetup(
     siteDescription?: string
     siteOgImageMediaId?: number
     siteLogoMediaId?: number
+    siteNoindex?: boolean
+    faviconMediaId?: number
+    googleSiteVerification?: string
+    headHtml?: string | null
+    bodyEndHtml?: string | null
+    robotsExtra?: string | null
+    notFoundPageId?: number | null
+    maintenance?: boolean
+    maintenanceMessage?: string
+    sessionUser?: { id: number; name: string } | null
+    /** Row returned for `findPublishedByPath('home')`; undefined means no home page. */
+    home?: typeof testPage
+    postType?: typeof testPostType
+    postTypes?: (typeof testPostType)[]
+    /** Hydrated post returned for `findPublished(type.id, 'hello')`. */
+    post?: typeof testPost
+    sitemapPages?: { path: string; updatedAt: Date }[]
+    sitemapPosts?: { postTypeId: number; slug: string; updatedAt: Date }[]
+    categoryArchives?: { postTypeId: number; slug: string; updatedAt: Date }[]
+    tagArchives?: { postTypeId: number; slug: string; updatedAt: Date }[]
+    authorArchives?: { postTypeId: number; slug: string | null; updatedAt: Date }[]
+    related?: { items: (typeof testPost)[] }
+    author?: {
+      id: number
+      name: string
+      slug: string
+      bio: string | null
+      avatar: { url: string; alt: string | null } | null
+    } | null
+    headerMenu?: {
+      itemsJson: { label: string; href: string; children: { label: string; href: string }[] }[]
+    } | null
     organization?: {
       name?: string
       logoMediaId?: number | null
@@ -96,6 +179,8 @@ function testSetup(
     }
     ancestors?: { id: number; parentId: number | null; path: string; title: string }[]
     redirect?: { to: string; status: 301 | 302 } | null
+    shareTarget?: { targetType: 'page' | 'post'; targetId: number }
+    custom404?: typeof testPage
     turnstileSiteKey?: string
     turnstileSecretKey?: string
   } = {},
@@ -115,6 +200,15 @@ function testSetup(
         logoMediaId: options.siteLogoMediaId ?? null,
         ogImageMediaId: options.siteOgImageMediaId ?? null,
         homePostTypeSlug: null,
+        noindex: options.siteNoindex ?? false,
+        faviconMediaId: options.faviconMediaId ?? null,
+        googleSiteVerification: options.googleSiteVerification ?? '',
+        headHtml: options.headHtml ?? null,
+        bodyEndHtml: options.bodyEndHtml ?? null,
+        robotsExtra: options.robotsExtra ?? null,
+        notFoundPageId: options.notFoundPageId ?? null,
+        maintenance: options.maintenance ?? false,
+        maintenanceMessage: options.maintenanceMessage ?? '',
         theme: options.theme,
       }),
       organization: vi.fn().mockResolvedValue({
@@ -135,12 +229,21 @@ function testSetup(
     },
     pages: {
       listPublishedTopLevel: vi.fn().mockResolvedValue([]),
+      get: vi.fn().mockResolvedValue(page),
       findPublishedByPath: vi
         .fn()
         .mockImplementation((path: string) =>
-          Promise.resolve(path === page.path ? page : undefined),
+          Promise.resolve(path === 'home' ? options.home : path === page.path ? page : undefined),
         ),
       listPublishedAncestors: vi.fn().mockResolvedValue(options.ancestors ?? []),
+      listPublishedForSitemap: vi.fn().mockResolvedValue(options.sitemapPages ?? []),
+      findPublishedById: vi
+        .fn()
+        .mockImplementation((id: number) =>
+          Promise.resolve(
+            id === options.notFoundPageId && options.custom404 ? options.custom404 : undefined,
+          ),
+        ),
     },
     media: {
       find: vi
@@ -148,11 +251,54 @@ function testSetup(
         .mockImplementation((id: number) => Promise.resolve({ id, url: `/media/${id}.png` })),
     },
     postTypes: {
-      list: vi.fn().mockResolvedValue([]),
-      findBySlug: vi.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue(options.postTypes ?? []),
+      findBySlug: vi
+        .fn()
+        .mockImplementation((slug: string) =>
+          Promise.resolve(options.postType?.slug === slug ? options.postType : undefined),
+        ),
+    },
+    menus: {
+      findBySlug: vi.fn().mockResolvedValue(options.headerMenu ?? null),
+    },
+    posts: {
+      listPublished: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+      listRelated: vi.fn().mockResolvedValue(options.related ?? { items: [] }),
+      listPublishedForSitemap: vi.fn().mockResolvedValue(options.sitemapPosts ?? []),
+      listAuthorsForSitemap: vi.fn().mockResolvedValue(options.authorArchives ?? []),
+      findPublished: vi
+        .fn()
+        .mockImplementation((_typeId: number, slug: string) =>
+          Promise.resolve(options.post?.slug === slug ? options.post : undefined),
+        ),
+    },
+    taxonomies: {
+      listCategoryArchivesForSitemap: vi.fn().mockResolvedValue(options.categoryArchives ?? []),
+      listTagArchivesForSitemap: vi.fn().mockResolvedValue(options.tagArchives ?? []),
     },
     redirects: { findByPath },
     search: { search },
+    auth: {
+      getSessionUser: vi.fn().mockResolvedValue(options.sessionUser ?? null),
+      findAuthorBySlug: vi
+        .fn()
+        .mockImplementation((slug: string) =>
+          Promise.resolve(options.author?.slug === slug ? options.author : null),
+        ),
+    },
+    analytics: {
+      recordView: vi.fn().mockResolvedValue(undefined),
+      summary: vi.fn().mockResolvedValue({ daily: [], top: [] }),
+    },
+    shareLinks: {
+      resolve: vi
+        .fn()
+        .mockImplementation(() =>
+          options.shareTarget
+            ? Promise.resolve(options.shareTarget)
+            : Promise.reject(KansoError.notFound('Share link')),
+        ),
+    },
     forms: {
       findBySlug: vi
         .fn()
@@ -179,7 +325,7 @@ function testSetup(
     passThroughOnException: vi.fn(),
     props: {},
   }
-  return { app, createSubmission, findByPath, search, env, executionCtx }
+  return { app, createSubmission, findByPath, search, env, executionCtx, kanso }
 }
 
 describe('site page metadata', () => {
@@ -514,7 +660,7 @@ describe('site search', () => {
       const html = await response.text()
       expect(response.status).toBe(200)
       expect(html).toContain('role="search" action="/search" method="get"')
-      expect(html).toContain('name="robots" content="noindex, nofollow"')
+      expect(html).toContain('name="robots" content="noindex, follow"')
       expect(html).toContain('rel="canonical" href="https://example.com/search"')
       expect(html).not.toContain('No results.')
       expect(html).not.toContain('application/ld+json')
@@ -673,5 +819,588 @@ describe('site themes', () => {
     expect(html).toContain('class="theme-paper"')
     expect(html).toContain('site-header--paper')
     expect(html).toContain('role="search" action="/search"')
+  })
+})
+
+describe('noindex output', () => {
+  it('emits noindex, follow for a page the user marked noindex', async () => {
+    const { app, env, executionCtx } = testSetup({ page: { ...testPage, noindex: true } })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(html).toContain('name="robots" content="noindex, follow"')
+    expect(html).not.toContain('nofollow')
+  })
+
+  it('emits noindex on every page when site noindex is on', async () => {
+    const { app, env, executionCtx } = testSetup({ siteNoindex: true })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(html).toContain('name="robots" content="noindex, follow"')
+  })
+
+  it('emits noindex, follow on a noindexed post type archive', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: { ...testPostType, noindex: true },
+    })
+    const response = await app.request('/blog', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('name="robots" content="noindex, follow"')
+  })
+
+  it('emits no robots meta on an indexable archive', async () => {
+    const { app, env, executionCtx } = testSetup({ postType: testPostType })
+    const response = await app.request('/blog', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).not.toContain('name="robots"')
+  })
+})
+
+describe('sitemap.xml', () => {
+  const sitemapOptions = {
+    postTypes: [testPostType],
+    sitemapPages: [
+      { path: 'home', updatedAt: new Date('2026-09-01T00:00:00Z') },
+      { path: 'about', updatedAt: new Date('2026-09-02T00:00:00Z') },
+    ],
+    sitemapPosts: [{ postTypeId: 3, slug: 'hello', updatedAt: new Date('2026-09-10T00:00:00Z') }],
+    categoryArchives: [
+      { postTypeId: 3, slug: 'tech', updatedAt: new Date('2026-09-05T00:00:00Z') },
+    ],
+    tagArchives: [{ postTypeId: 3, slug: 'web', updatedAt: new Date('2026-09-06T00:00:00Z') }],
+  }
+
+  it('lists indexable pages, archives and posts with lastmod', async () => {
+    const { app, env, executionCtx } = testSetup({
+      ...sitemapOptions,
+      home: { ...testPage, path: 'home', updatedAt: new Date('2026-09-01T00:00:00Z') },
+    })
+    const response = await app.request('/sitemap.xml', undefined, env, executionCtx)
+    const xml = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toContain('application/xml')
+    expect(xml).toContain(
+      '<url><loc>https://example.com/</loc><lastmod>2026-09-01T00:00:00.000Z</lastmod></url>',
+    )
+    expect(xml).toContain('<loc>https://example.com/about</loc>')
+    expect(xml).toContain(
+      '<url><loc>https://example.com/blog</loc><lastmod>2026-09-10T00:00:00.000Z</lastmod></url>',
+    )
+    expect(xml).toContain('<loc>https://example.com/blog/category/tech</loc>')
+    expect(xml).toContain('<loc>https://example.com/blog/tag/web</loc>')
+    expect(xml).toContain('<loc>https://example.com/blog/hello</loc>')
+  })
+
+  it('omits / when the home page is noindexed', async () => {
+    const { app, env, executionCtx } = testSetup({
+      ...sitemapOptions,
+      home: { ...testPage, path: 'home', noindex: true },
+    })
+    const response = await app.request('/sitemap.xml', undefined, env, executionCtx)
+    const xml = await response.text()
+
+    expect(xml).not.toContain('<loc>https://example.com/</loc>')
+    expect(xml).toContain('<loc>https://example.com/about</loc>')
+    expect(xml).toContain('<loc>https://example.com/blog</loc>')
+  })
+
+  it('omits noindexed post type archives but keeps their posts', async () => {
+    const { app, env, executionCtx } = testSetup({
+      ...sitemapOptions,
+      postTypes: [{ ...testPostType, noindex: true }],
+    })
+    const response = await app.request('/sitemap.xml', undefined, env, executionCtx)
+    const xml = await response.text()
+
+    expect(xml).not.toContain('<loc>https://example.com/blog</loc>')
+    expect(xml).not.toContain('/category/tech')
+    expect(xml).not.toContain('/tag/web')
+    expect(xml).toContain('<loc>https://example.com/blog/hello</loc>')
+  })
+
+  it('returns an empty urlset when the site is noindexed', async () => {
+    const { app, env, executionCtx } = testSetup({ ...sitemapOptions, siteNoindex: true })
+    const response = await app.request('/sitemap.xml', undefined, env, executionCtx)
+    const xml = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(xml).not.toContain('<loc>')
+  })
+})
+
+describe('header menu', () => {
+  it('renders the header menu items with dropdown children instead of the generated nav', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      postTypes: [testPostType],
+      headerMenu: {
+        itemsJson: [
+          { label: 'Docs', href: '/docs', children: [{ label: 'API', href: '/docs/api' }] },
+          { label: 'GitHub', href: 'https://github.com/example/repo', children: [] },
+        ],
+      },
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('href="/docs"')
+    expect(html).toContain('site-nav-children')
+    expect(html).toContain('href="/docs/api"')
+    expect(html).toContain('href="https://github.com/example/repo"')
+    expect(html).not.toContain('>Blog</a>')
+  })
+
+  it('falls back to the generated nav without a header menu', async () => {
+    const { app, env, executionCtx } = testSetup({ postTypes: [testPostType] })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('>Blog</a>')
+    expect(html).not.toContain('site-nav-children')
+  })
+})
+
+describe('feed.xml', () => {
+  it('marks feeds noindex via X-Robots-Tag', async () => {
+    const { app, env, executionCtx } = testSetup({ postType: testPostType })
+    const response = await app.request('/blog/feed.xml', undefined, env, executionCtx)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-robots-tag')).toBe('noindex')
+    expect(response.headers.get('content-type')).toContain('application/atom+xml')
+  })
+})
+
+describe('site extras', () => {
+  it('emits the favicon link when faviconMediaId is set', async () => {
+    const { app, env, executionCtx } = testSetup({ faviconMediaId: 5 })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<link rel="icon" href="/media/5.png"/>')
+  })
+
+  it('emits the google-site-verification meta tag', async () => {
+    const { app, env, executionCtx } = testSetup({ googleSiteVerification: 'abc123token' })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta name="google-site-verification" content="abc123token"/>')
+  })
+
+  it('injects headHtml before </head> and bodyEndHtml before </body>', async () => {
+    const { app, env, executionCtx } = testSetup({
+      headHtml: '<meta name="x-head-check" content="1"/>',
+      bodyEndHtml: '<div id="foot-inject"></div>',
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<meta name="x-head-check" content="1"/></head>')
+    expect(html).toContain('<div id="foot-inject"></div></body>')
+  })
+
+  it('emits no extras when nothing is configured', async () => {
+    const { app, env, executionCtx } = testSetup()
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).not.toContain('rel="icon"')
+    expect(html).not.toContain('google-site-verification')
+  })
+})
+
+describe('robots.txt', () => {
+  it('appends robotsExtra between the default rules and the Sitemap line', async () => {
+    const { app, env, executionCtx } = testSetup({
+      robotsExtra: 'Disallow: /private/\n\n\nDisallow: /tmp/\n',
+    })
+    const response = await app.request('/robots.txt', undefined, env, executionCtx)
+    const body = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(body).toBe(
+      [
+        'User-agent: *',
+        'Disallow: /admin',
+        'Disallow: /api',
+        'Disallow: /preview',
+        '',
+        'Disallow: /private/',
+        '',
+        'Disallow: /tmp/',
+        '',
+        'Sitemap: https://example.com/sitemap.xml',
+      ].join('\n'),
+    )
+  })
+})
+
+describe('custom 404', () => {
+  const notFoundPage = {
+    ...testPage,
+    id: 7,
+    title: 'Oops, nothing here',
+    bodyHtml: '<p>Sorry, that page is gone.</p>',
+  }
+
+  it('renders the configured published page body with a 404 status', async () => {
+    const { app, env, executionCtx } = testSetup({
+      notFoundPageId: 7,
+      custom404: notFoundPage,
+    })
+    const response = await app.request('/missing-path', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(html).toContain('Oops, nothing here')
+    expect(html).toContain('Sorry, that page is gone.')
+    expect(html).toContain('noindex')
+  })
+
+  it('falls back to the standard 404 when unset', async () => {
+    const { app, env, executionCtx } = testSetup()
+    const response = await app.request('/missing-path', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(html).toContain('<h1>404</h1>')
+  })
+
+  it('falls back to the standard 404 when the configured page is not public', async () => {
+    const { app, env, executionCtx } = testSetup({ notFoundPageId: 7, custom404: undefined })
+    const response = await app.request('/missing-path', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(404)
+    expect(html).toContain('<h1>404</h1>')
+    expect(html).not.toContain('Sorry, that page is gone.')
+  })
+})
+
+describe('maintenance mode', () => {
+  it('returns a themed 503 page for anonymous GETs', async () => {
+    const { app, env, executionCtx } = testSetup({
+      maintenance: true,
+      maintenanceMessage: 'Back at noon.',
+    })
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(503)
+    expect(response.headers.get('retry-after')).toBeNull()
+    expect(html).toContain('Back at noon.')
+    expect(html).toContain('noindex')
+  })
+
+  it('lets signed-in staff browse normally', async () => {
+    const { app, env, executionCtx } = testSetup({
+      maintenance: true,
+      sessionUser: { id: 7, name: 'Editor' },
+    })
+    const response = await app.request(
+      '/contact',
+      { headers: { cookie: 'kanso_session=test-token' } },
+      env,
+      executionCtx,
+    )
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('Write to us.')
+  })
+
+  it('keeps robots.txt and sitemap.xml reachable', async () => {
+    const { app, env, executionCtx } = testSetup({ maintenance: true })
+    const robots = await app.request('/robots.txt', undefined, env, executionCtx)
+    const sitemap = await app.request('/sitemap.xml', undefined, env, executionCtx)
+
+    expect(robots.status).toBe(200)
+    expect(sitemap.status).toBe(200)
+  })
+
+  it('does not block non-GET requests', async () => {
+    const { app, env, executionCtx } = testSetup({ maintenance: true })
+    const response = await app.request(
+      '/forms/contact-form/submissions',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Taro' }),
+      },
+      env,
+      executionCtx,
+    )
+
+    expect(response.status).not.toBe(503)
+  })
+})
+
+describe('pageview analytics', () => {
+  async function flush() {
+    // Let the waitUntil'd async work (settings.site() → recordView) settle.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  it('records a view for a 200 HTML GET', async () => {
+    const { app, env, executionCtx, kanso } = testSetup()
+    const response = await app.request('/contact', undefined, env, executionCtx)
+    await flush()
+
+    expect(response.status).toBe(200)
+    expect(kanso.analytics.recordView).toHaveBeenCalledWith('/contact', 'UTC')
+  })
+
+  it('skips excluded paths, non-200 responses and bot user agents', async () => {
+    const { app, env, executionCtx, kanso } = testSetup()
+    await app.request('/search?q=hello', undefined, env, executionCtx)
+    await app.request('/missing-path', undefined, env, executionCtx)
+    await app.request(
+      '/contact',
+      { headers: { 'user-agent': 'Mozilla/5.0 (compatible; Googlebot/2.1)' } },
+      env,
+      executionCtx,
+    )
+    await flush()
+
+    expect(kanso.analytics.recordView).not.toHaveBeenCalled()
+  })
+})
+
+describe('draft share preview', () => {
+  it('renders a shared draft page without a session', async () => {
+    const { app, env, executionCtx } = testSetup({
+      shareTarget: { targetType: 'page', targetId: 1 },
+    })
+    const response = await app.request('/preview/share/raw-token', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow')
+    expect(html).toContain('noindex')
+    expect(html).toContain('nofollow')
+    expect(html).toContain('Write to us.')
+  })
+
+  it('returns 404 for an unknown or expired token', async () => {
+    const { app, env, executionCtx } = testSetup()
+    const response = await app.request('/preview/share/gone', undefined, env, executionCtx)
+
+    expect(response.status).toBe(404)
+  })
+})
+
+describe('custom post fields', () => {
+  const fieldDefs: SectionField[] = [
+    { type: 'text', name: 'venue', label: '会場', maxLength: 200 },
+    { type: 'url', name: 'ticket', label: 'チケット' },
+    { type: 'checkbox', name: 'online', label: 'オンライン', default: false },
+    { type: 'image', name: 'map', label: '地図' },
+  ]
+
+  it('renders defined values as a dl under the post body', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: { ...testPostType, fieldsJson: fieldDefs },
+      post: {
+        ...testPost,
+        fieldsJson: {
+          venue: 'Hall A',
+          ticket: 'https://tickets.example.com',
+          online: true,
+          map: 42,
+        },
+      },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<dl class="post-fields">')
+    expect(html).toContain('<dt>会場</dt>')
+    expect(html).toContain('<dd>Hall A</dd>')
+    expect(html).toContain('<dt>オンライン</dt>')
+    expect(html).toContain('<a href="https://tickets.example.com">https://tickets.example.com</a>')
+    // `image` fields resolve media ids to URLs.
+    expect(html).toContain('src="/media/42.png"')
+  })
+
+  it('skips empty values and renders nothing when values are unset', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: { ...testPostType, fieldsJson: fieldDefs },
+      post: { ...testPost, fieldsJson: null },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).not.toContain('post-fields')
+  })
+
+  it('renders posts-type fields as a list of published post links', async () => {
+    const { app, env, executionCtx, kanso } = testSetup({
+      postType: {
+        ...testPostType,
+        fieldsJson: [{ type: 'posts', name: 'related', label: '関連記事' }],
+      },
+      post: {
+        ...testPost,
+        fieldsJson: { related: { postTypeSlug: 'blog', limit: 5 } },
+      },
+    })
+    // The field resolves via postTypes.findBySlug + posts.listPublished.
+    vi.mocked(kanso.posts.listPublished).mockResolvedValue({
+      items: [{ id: 10, title: 'Related post', slug: 'related-post' }],
+      total: 1,
+    } as never)
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<dt>関連記事</dt>')
+    expect(html).toContain('<a href="/blog/related-post">Related post</a>')
+  })
+})
+
+describe('author archive and article extras (T56)', () => {
+  const author = {
+    id: 4,
+    name: 'Taro',
+    slug: 'taro',
+    bio: 'Writes about kansoCMS.',
+    avatar: { url: '/media/avatar.png', alt: 'Taro' },
+  }
+
+  it('links the byline author name to the author archive', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      post: { ...testPost, authorName: 'Taro', authorSlug: 'taro' },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('<a class="post-author" href="/blog/author/taro">Taro</a>')
+  })
+
+  it('renders the author archive with bio, avatar and posts', async () => {
+    const { app, env, executionCtx, kanso } = testSetup({ postType: testPostType, author })
+    vi.mocked(kanso.posts.listPublished).mockResolvedValue({
+      items: [{ id: 9, title: 'Hello world', slug: 'hello', publishedAt: new Date(), excerpt: '' }],
+      total: 1,
+    } as never)
+    const response = await app.request('/blog/author/taro', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(kanso.posts.listPublished).toHaveBeenCalledWith(
+      expect.objectContaining({ postTypeId: testPostType.id, authorId: author.id }),
+    )
+    expect(html).toContain('Taro – Blog')
+    expect(html).toContain('Writes about kansoCMS.')
+    expect(html).toContain('author-avatar')
+    expect(html).toContain('<a href="/blog/hello">Hello world</a>')
+  })
+
+  it('returns 404 for an unknown author slug', async () => {
+    const { app, env, executionCtx } = testSetup({ postType: testPostType, author: null })
+    const response = await app.request('/blog/author/nobody', undefined, env, executionCtx)
+    expect(response.status).toBe(404)
+  })
+
+  it('adds heading ids and renders a table of contents for 2+ headings', async () => {
+    const bodyJson: RichTextDoc = {
+      type: 'doc',
+      content: [
+        { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'First' }] },
+        { type: 'paragraph', content: [{ type: 'text', text: 'Body.' }] },
+        {
+          type: 'heading',
+          attrs: { level: 3 },
+          content: [{ type: 'text', text: 'Second' }],
+        },
+      ],
+    }
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      post: {
+        ...testPost,
+        bodyJson,
+        bodyHtml: '<h2>First</h2><p>Body.</p><h3>Second</h3>',
+      },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('class="toc"')
+    expect(html).toContain('href="#h-1"')
+    expect(html).toContain('<h2 id="h-1">First</h2>')
+    expect(html).toContain('<h3 id="h-2">Second</h3>')
+  })
+
+  it('hides the table of contents when there is only one heading', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      post: {
+        ...testPost,
+        bodyJson: {
+          type: 'doc',
+          content: [
+            { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Only' }] },
+          ],
+        },
+        bodyHtml: '<h2>Only</h2>',
+      },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).not.toContain('class="toc"')
+    expect(html).toContain('<h2 id="h-1">Only</h2>')
+  })
+
+  it('renders related posts from the service result', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      post: { ...testPost, categories: [{ id: 5, slug: 'news', name: 'News' }] },
+      related: {
+        items: [{ ...testPost, id: 11, slug: 'cousin', title: 'Cousin post' }],
+      },
+    })
+    const response = await app.request('/blog/hello', undefined, env, executionCtx)
+    const html = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(html).toContain('related-posts')
+    expect(html).toContain('<a href="/blog/cousin">Cousin post</a>')
+  })
+
+  it('includes author archives in the sitemap', async () => {
+    const { app, env, executionCtx } = testSetup({
+      postType: testPostType,
+      postTypes: [testPostType],
+      authorArchives: [
+        { postTypeId: testPostType.id, slug: 'taro', updatedAt: new Date('2026-09-20') },
+      ],
+    })
+    const response = await app.request('/sitemap.xml', undefined, env, executionCtx)
+    const xml = await response.text()
+
+    expect(response.status).toBe(200)
+    expect(xml).toContain('https://example.com/blog/author/taro')
   })
 })

@@ -16,6 +16,11 @@ import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
 import { RevisionList } from '../../../components/content/RevisionList.tsx'
+import { ShareLinks } from '../../../components/content/ShareLinks.tsx'
+import {
+  defaultSettings,
+  SectionSettingsForm,
+} from '../../../components/customize/SectionSettingsForm.tsx'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { TagInput } from '../../../components/TagInput.tsx'
@@ -113,6 +118,8 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
     canonicalUrl: item.canonicalUrl ?? '',
   }))
   const [coverMediaId, setCoverMediaId] = useState<number | null>(item.coverMediaId)
+  const [pinned, setPinned] = useState(item.pinned)
+  const [fields, setFields] = useState<Record<string, unknown> | null>(null)
   const [categoryIds, setCategoryIds] = useState<number[]>(item.categoryIds)
   const [selectedTags, setSelectedTags] = useState<TagItem[]>(() =>
     (allTags.data?.items ?? []).filter((tag) => item.tagIds.includes(tag.id)),
@@ -136,6 +143,8 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
             noindex: content.noindex,
             canonicalUrl: content.canonicalUrl.trim() || null,
             coverMediaId,
+            pinned,
+            fields: fields ?? item.fieldsJson ?? {},
             categoryIds,
             tagIds: selectedTags.map((tag) => tag.id),
           },
@@ -147,14 +156,23 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
     },
   })
   const remove = useMutation({
-    mutationFn: () => unwrap(api.posts[':id'].$delete({ param: { id: String(id) } })),
+    mutationFn: () => unwrap(api.posts[':id'].$delete({ param: { id: String(id) }, query: {} })),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['posts'] })
       await navigate({ to: '/posts', search: { type: type?.slug } })
     },
   })
+  const duplicate = useMutation({
+    mutationFn: () => unwrap(api.posts[':id'].duplicate.$post({ param: { id: String(id) } })),
+    onSuccess: async ({ item }) => {
+      await queryClient.invalidateQueries({ queryKey: ['posts'] })
+      await navigate({ to: '/posts/$id', params: { id: String(item.id) } })
+    },
+  })
   const errors = fieldErrors(save.error)
   if (!type) return <p>読み込み中…</p>
+  const fieldDefs = type.fieldsJson ?? []
+  const fieldValues = fields ?? { ...defaultSettings(fieldDefs), ...(item.fieldsJson ?? {}) }
   const categoryRows = flattenPageTree(
     (categories.data?.items ?? []).map((category) => ({ ...category, title: category.name })),
   )
@@ -182,6 +200,14 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
                 サイトで見る
               </a>
             )}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={duplicate.isPending}
+              onClick={() => duplicate.mutate()}
+            >
+              複製
+            </Button>
             <Button type="button" variant="danger" onClick={() => setConfirmOpen(true)}>
               削除
             </Button>
@@ -207,9 +233,23 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
         pending={save.isPending}
         errors={errors}
         editorKey={`post-${id}`}
+        publicPath={type ? `/${type.slug}/${content.slug}` : undefined}
       >
         <section className="grid gap-6 border border-neutral-200 bg-white p-5 sm:grid-cols-2">
           <MediaField label="カバー画像" value={coverMediaId} onChange={setCoverMediaId} />
+          <div>
+            <label className="flex items-start gap-2 py-2 text-sm font-medium text-neutral-800">
+              <input
+                type="checkbox"
+                checked={pinned}
+                onChange={(event) => setPinned(event.target.checked)}
+              />
+              一覧の先頭に固定
+            </label>
+            <p className="text-xs text-neutral-500">
+              アーカイブやホームの一覧で、公開日時より先に表示されます。
+            </p>
+          </div>
           {type.hasCategories && (
             <fieldset>
               <legend className="text-sm font-medium">カテゴリ</legend>
@@ -243,11 +283,22 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
             </div>
           )}
         </section>
+        {fieldDefs.length > 0 && (
+          <section className="border border-neutral-200 bg-white p-5">
+            <h2 className="mb-4 text-sm font-medium">カスタムフィールド</h2>
+            <SectionSettingsForm
+              fields={fieldDefs}
+              values={fieldValues}
+              onChange={(name, value) => setFields({ ...fieldValues, [name]: value })}
+            />
+          </section>
+        )}
       </ContentForm>
+      <ShareLinks kind="post" id={id} />
       <ConfirmDialog
         open={confirmOpen}
-        title="投稿を削除"
-        description="この投稿を削除します。"
+        title="投稿をゴミ箱へ移動"
+        description="この投稿をゴミ箱へ移動します。ゴミ箱から復元できます。"
         pending={remove.isPending}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => remove.mutate()}

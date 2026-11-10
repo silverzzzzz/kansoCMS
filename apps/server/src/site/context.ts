@@ -1,6 +1,6 @@
 import type { Kanso } from '@kanso/core'
 import { absoluteUrl, buildTitle, type PageMeta, type SiteContext } from '@kanso/seo'
-import { type SectionValues, sectionValuesSchemaFor } from '@kanso/shared'
+import { HEADER_MENU_SLUG, type SectionValues, sectionValuesSchemaFor } from '@kanso/shared'
 import { resolveMessages, type SiteMessages } from '../i18n.ts'
 import { formatDate } from './format.ts'
 import { resolveTheme } from './themes/index.ts'
@@ -22,9 +22,19 @@ export interface SiteRequestContext {
   themeSettings: SectionValues
   messages: SiteMessages
   search: Pick<SiteMessages['search'], 'label' | 'placeholder' | 'button'>
+  /** Admin-controlled extras emitted by every layout (favicon, verification, raw HTML). */
+  siteExtras: SiteExtras
   /** Build PageMeta with site-level defaults applied. */
   meta: (overrides: MetaOverrides) => PageMeta
   formatDate: (date: Date) => string
+}
+
+/** Site-wide head/body injections resolved once per request. */
+export interface SiteExtras {
+  faviconUrl: string | null
+  googleSiteVerification: string
+  headHtml: string | null
+  bodyEndHtml: string | null
 }
 
 export type MetaOverrides = Omit<Partial<PageMeta>, 'title'> & {
@@ -35,18 +45,21 @@ export type MetaOverrides = Omit<Partial<PageMeta>, 'title'> & {
 }
 
 export async function loadSiteContext(kanso: Kanso, origin: string): Promise<SiteRequestContext> {
-  const [settings, organization, allThemeSettings, topPages, postTypes] = await Promise.all([
-    kanso.settings.site(),
-    kanso.settings.organization(),
-    kanso.settings.theme(),
-    kanso.pages.listPublishedTopLevel(),
-    kanso.postTypes.list(),
-  ])
+  const [settings, organization, allThemeSettings, topPages, postTypes, headerMenu] =
+    await Promise.all([
+      kanso.settings.site(),
+      kanso.settings.organization(),
+      kanso.settings.theme(),
+      kanso.pages.listPublishedTopLevel(),
+      kanso.postTypes.list(),
+      kanso.menus.findBySlug(HEADER_MENU_SLUG),
+    ])
 
   const orgLogoId = organization.logoMediaId ?? settings.logoMediaId
-  const [ogMedia, orgLogoMedia] = await Promise.all([
+  const [ogMedia, orgLogoMedia, faviconMedia] = await Promise.all([
     settings.ogImageMediaId ? kanso.media.find(settings.ogImageMediaId) : null,
     orgLogoId ? kanso.media.find(orgLogoId) : null,
+    settings.faviconMediaId ? kanso.media.find(settings.faviconMediaId) : null,
   ])
   const defaultOgImage = ogMedia ? absoluteUrl(origin, ogMedia.url) : null
   const orgLogoUrl = orgLogoMedia ? absoluteUrl(origin, orgLogoMedia.url) : null
@@ -59,12 +72,21 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
     organization: organization.name ? { ...organization, logoUrl: orgLogoUrl } : undefined,
   }
 
-  const nav: NavItem[] = [
-    ...topPages
-      .filter((p) => p.path !== 'home')
-      .map((p) => ({ label: p.title, href: `/${p.path}` })),
-    ...postTypes.map((type) => ({ label: type.name, href: `/${type.slug}` })),
-  ]
+  // A `header` menu overrides the generated navigation; without it the nav is
+  // built from top-level pages and post types.
+  const nav: NavItem[] =
+    headerMenu !== null
+      ? headerMenu.itemsJson.map((item) => ({
+          label: item.label,
+          href: item.href,
+          children: item.children.length > 0 ? item.children : undefined,
+        }))
+      : [
+          ...topPages
+            .filter((p) => p.path !== 'home')
+            .map((p) => ({ label: p.title, href: `/${p.path}` })),
+          ...postTypes.map((type) => ({ label: type.name, href: `/${type.slug}` })),
+        ]
 
   const messages = resolveMessages(settings.locale)
   const theme = resolveTheme(settings.theme)
@@ -86,6 +108,12 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
       placeholder: messages.search.placeholder,
       button: messages.search.button,
     },
+    siteExtras: {
+      faviconUrl: faviconMedia ? faviconMedia.url : null,
+      googleSiteVerification: settings.googleSiteVerification,
+      headHtml: settings.headHtml,
+      bodyEndHtml: settings.bodyEndHtml,
+    },
     formatDate: (date) =>
       formatDate(date, { locale: settings.locale, timeZone: settings.timezone }),
     meta: ({ title, path, ogImage, ...overrides }) => ({
@@ -98,8 +126,9 @@ export async function loadSiteContext(kanso: Kanso, origin: string): Promise<Sit
       ogType: 'website',
       ogImage: ogImage ?? defaultOgImage,
       twitterSite: organization.twitterHandle ? `@${organization.twitterHandle}` : null,
-      noindex: false,
       ...overrides,
+      // Site-wide noindex cannot be overridden back; per-content flags still apply when off.
+      noindex: settings.noindex || (overrides.noindex ?? false),
     }),
   }
 }

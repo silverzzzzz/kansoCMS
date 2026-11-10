@@ -8,14 +8,18 @@ import { toAdminHref } from '../routing.ts'
 
 const navigation = [
   { to: '/', label: 'ダッシュボード', exact: true },
+  { to: '/activity', label: 'アクティビティ' },
+  { to: '/analytics', label: 'アクセス解析' },
   { to: '/pages', label: '固定ページ' },
   { to: '/customize', label: 'カスタマイズ' },
+  { to: '/menus', label: 'メニュー' },
   { to: '/posts', label: '投稿' },
   { to: '/post-types', label: '投稿タイプ' },
   { to: '/tags', label: 'タグ' },
   { to: '/media', label: 'メディア' },
   { to: '/forms', label: 'フォーム' },
   { to: '/redirects', label: 'リダイレクト' },
+  { to: '/tools', label: 'ツール' },
 ] as const
 
 export const Route = createFileRoute('/_auth')({
@@ -142,14 +146,18 @@ function AuthLayout() {
 type NavLinkProps = {
   to:
     | '/'
+    | '/activity'
+    | '/analytics'
     | '/pages'
     | '/customize'
+    | '/menus'
     | '/posts'
     | '/post-types'
     | '/tags'
     | '/media'
     | '/forms'
     | '/redirects'
+    | '/tools'
     | '/settings'
     | '/api-keys'
     | '/account'

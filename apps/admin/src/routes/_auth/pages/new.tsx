@@ -1,9 +1,10 @@
+import type { PageSection } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError, fieldErrors } from '../../../api/errors.ts'
-import { pagesListQuery } from '../../../api/queries.ts'
+import { pagesListQuery, sectionCatalogQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ContentForm, emptyContent } from '../../../components/content/ContentForm.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
@@ -12,7 +13,11 @@ import { fromDateTimeLocal } from '../../../lib/datetime.ts'
 import { flattenPageTree } from '../../../lib/page-tree.ts'
 
 export const Route = createFileRoute('/_auth/pages/new')({
-  loader: ({ context }) => context.queryClient.ensureQueryData(pagesListQuery({ perPage: '100' })),
+  loader: ({ context }) =>
+    Promise.all([
+      context.queryClient.ensureQueryData(pagesListQuery({ perPage: '100' })),
+      context.queryClient.ensureQueryData(sectionCatalogQuery),
+    ]),
   component: NewPage,
 })
 
@@ -20,9 +25,12 @@ function NewPage() {
   const queryClient = useQueryClient()
   const navigate = useNavigate({ from: '/pages/new' })
   const pages = useQuery(pagesListQuery({ perPage: '100' }))
+  const catalog = useQuery(sectionCatalogQuery)
   const [content, setContent] = useState(emptyContent)
   const [parentId, setParentId] = useState<number | null>(null)
   const [sortOrder, setSortOrder] = useState(0)
+  const [templateId, setTemplateId] = useState('richtext')
+  const [sections, setSections] = useState<PageSection[] | null>(null)
   const save = useMutation({
     mutationFn: () =>
       unwrap(
@@ -41,6 +49,7 @@ function NewPage() {
             canonicalUrl: content.canonicalUrl.trim() || null,
             parentId,
             sortOrder,
+            sections,
           },
         }),
       ),
@@ -50,6 +59,19 @@ function NewPage() {
     },
   })
   const errors = fieldErrors(save.error)
+  const parent = pages.data?.items.find((page) => page.id === parentId)
+  const templates = catalog.data?.templates ?? []
+  const sectionLabel = (type: string) =>
+    catalog.data?.items.find((item) => item.type === type)?.label ?? type
+  const chooseTemplate = (id: string) => {
+    setTemplateId(id)
+    const template = templates.find((item) => item.id === id)
+    setSections(
+      template
+        ? template.sections.map((section) => ({ ...section, id: crypto.randomUUID() }))
+        : null,
+    )
+  }
 
   return (
     <div>
@@ -72,8 +94,31 @@ function NewPage() {
         errors={errors}
         autoSlug
         editorKey="new-page"
+        publicPath={parent ? `/${parent.path}/${content.slug}` : `/${content.slug}`}
       >
         <div className="grid gap-5 border border-neutral-200 bg-white p-5 sm:grid-cols-2">
+          <Field label="テンプレート">
+            <select
+              className={inputClass}
+              value={templateId}
+              onChange={(event) => chooseTemplate(event.target.value)}
+            >
+              <option value="richtext">リッチテキスト（セクションなし）</option>
+              {templates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name} — {template.description}
+                </option>
+              ))}
+            </select>
+          </Field>
+          {sections && (
+            <div className="sm:col-span-2">
+              <p className="text-xs text-neutral-500">
+                セクション構成: {sections.map((section) => sectionLabel(section.type)).join(' / ')}
+                。作成後はカスタマイズ画面で内容を編集できます。
+              </p>
+            </div>
+          )}
           <Field label="親ページ" error={errors.parentId}>
             <select
               className={inputClass}

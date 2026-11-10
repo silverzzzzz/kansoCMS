@@ -5,6 +5,7 @@ import { Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
+import { logActivity } from './activity.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
 const uploadMediaSchema = z.object({
@@ -46,6 +47,12 @@ export const media = new Hono<AppEnv>()
         filename: input.file.name,
         alt: input.alt ?? null,
       })
+      await logActivity(c, {
+        action: 'create',
+        targetType: 'media',
+        targetId: item.id,
+        summary: `メディア「${item.filename}」をアップロード`,
+      })
       return c.json({ item }, 201)
     },
   )
@@ -61,10 +68,23 @@ export const media = new Hono<AppEnv>()
         c.req.valid('param').id,
         c.req.valid('json').alt,
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'media',
+        targetId: item.id,
+        summary: `メディア「${item.filename}」を更新`,
+      })
       return c.json({ item })
     },
   )
   .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
-    await c.var.kanso.media.delete(c.req.valid('param').id)
+    const id = c.req.valid('param').id
+    await c.var.kanso.media.delete(id)
+    await logActivity(c, {
+      action: 'delete',
+      targetType: 'media',
+      targetId: id,
+      summary: `メディア #${id} を削除`,
+    })
     return c.json({ ok: true })
   })

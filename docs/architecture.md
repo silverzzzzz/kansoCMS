@@ -170,7 +170,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `sessions` | id, user_id, expires_at, created_at | Cookie は `HttpOnly; Secure; SameSite=Lax` |
 | `api_keys` | id, name, key_hash, scope (`read`/`write`), last_used_at | headless 用。`X-API-KEY` |
 | `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, sections_json, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`)。`sections_json` 非 null のページは本文の代わりにセクション列を描画 (Phase 4) |
-| `post_types` | id, slug (uniq), name, description, has_categories, has_tags, sort_order | "ブログの種類" (`blog`, `news`, `works` …) |
+| `post_types` | id, slug (uniq), name, description, has_categories, has_tags, noindex, sort_order | "ブログの種類" (`blog`, `news`, `works` …)。`noindex` はアーカイブ URL のみに効く |
 | `posts` | id, post_type_id, slug, title, body_json, body_html, search_text, excerpt, cover_media_id, author_id, status, published_at, seo_*, timestamps | uniq (`post_type_id`, `slug`) |
 | `categories` | id, post_type_id, slug, name, parent_id, sort_order | 投稿タイプごとに独立。uniq (`post_type_id`, `slug`) |
 | `tags` | id, slug (uniq), name | 全タイプ共通 |
@@ -178,7 +178,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
-| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / ogImageMediaId / homePostTypeSlug / theme: default / paper)、`organization` (name / url / logoMediaId / twitterHandle / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
+| `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / ogImageMediaId / homePostTypeSlug / noindex / theme: default / paper)、`organization` (name / url / logoMediaId / twitterHandle / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
@@ -210,7 +210,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
 | `GET /:type/category/:slug`, `GET /:type/tag/:slug` | `site` — 絞込一覧 | 公開 |
-| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は `/` + index 可の公開ページ + 全投稿タイプ + index 可の公開投稿。feed は Atom 最新 20 件 | 公開 |
+| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable` | 公開 |
 | `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 (ユーザー 0 人のときだけ) |
@@ -255,6 +255,8 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - `WebSite` をコンテンツページ、`Organization` は `settings.organization.name` がある場合に出力。`Organization` の `logo` は `organization.logoMediaId` (未選択ならサイトロゴ) をメディアから解決する。固定ページは `WebPage`、一覧は `CollectionPage`、投稿は `BlogPosting`、ホーム以外は `BreadcrumbList` (固定ページでは公開済みの祖先ページを `pages.listPublishedAncestors()` が挟む。非公開の祖先で連鎖を打ち切る)。検索ページは JSON-LD なし。
 - `organization.twitterHandle` があると全ページに `<meta name="twitter:site" content="@…">` を出す (`@` は保存時に除く)。`twitter:card` は `og:image` 有無で `summary_large_image` / `summary`。
 - `canonical` は `canonical_url` が設定されていればそれ、なければ自 URL (`SITE_URL` 基準)。プレビューでは常に自 URL + `noindex`。
+- robots meta は `<Head>` が `PageMeta.noindex` を見て出す。値は `noindex, follow` (ユーザー指定・システム全般) か `noindex, nofollow` (ドラフトプレビュー `meta.nofollow`) で、noindex は 3 階層で制御する (Phase 8): コンテンツ (`pages.noindex` / `posts.noindex`)、投稿タイプのアーカイブ (`post_types.noindex` — `/type`・`/type/category/*`・`/type/tag/*` のみ。`/` に表示されるホーム一覧と投稿自体は対象外)、サイト全体 (`site.noindex` — `ctx.meta()` が全ページに強制)。noindex のコンテンツは sitemap とサイト内 `/search` 結果からも外れる。
+- `sitemap.xml` は index 可能な公開 URL を網羅する: `/` (`home` ページが noindex なら除外)、公開・index 可の固定ページ、index 可タイプのアーカイブ (`/{type}`、`/{type}/category/{slug}`、`/{type}/tag/{slug}`。公開・index 可投稿を持つもののみ、taxonomies の `list*ArchivesForSitemap()`)、公開・index 可の投稿。`lastmod` はコンテンツの `updated_at` (一覧系は最新投稿の値)。`site.noindex` なら空の `urlset` を返す。`?page=2` 以降と `changefreq`/`priority` は出さない (Google が無視するため)。
 - ページネーションは `rel=prev/next` を出し、2 ページ目以降も自分自身を canonical にする。
 - `bodyHtml` の `data-kanso-form` プレースホルダは `site/forms.tsx` の `prepareForms()` が描画時に解決し、Turnstile ON のフォームがあるページだけ `<head>` に `challenges.cloudflare.com/turnstile/v0/api.js` を `async defer` で入れる。
 - `apps/server/src/i18n.ts` は `SiteMessages` と `en` / `ja` カタログを定義し、`resolveMessages(locale)` が BCP 47 の primary subtag を見て `ja`、それ以外や不正値を `en` に解決する。`loadSiteContext()` は `messages` を付加し、テーマコンポーネントには必要な slice だけを渡す (`PostList` は pagination、`KansoForm` は form)。検証文言は `submissionSchemaFor(fields, messages)` へ流れ、HTML フォームと公開 JSON API の `details[].message` が同じローカライズ文言を共有する一方、`KansoError.message` は英語のまま維持する。
@@ -341,6 +343,9 @@ pnpm deploy                                                 # admin build → se
 | 5. サンプルサイト | **done (2026-11-08)** | 会社・店舗向けのサンプル一式をセットアップ時 (既定オン) / 設定画面から投入、編集していない部分を一括削除。D1 クエリ上限に収まる一括書き込み ([tasks/phase-5.md](tasks/phase-5.md)) | セットアップ直後から編集できるサイトが公開され、不要なら片付けられる |
 | 6. パスキー認証 | **done (2026-11-08)** | パスワードを廃止し、パスキー (WebAuthn) だけでセットアップ・ログイン。アカウント画面でのパスキー管理、`pnpm passkey:link` による復旧 ([tasks/phase-6.md](tasks/phase-6.md)) | パスワードなしで管理画面を運用でき、パスキーを失っても復旧できる |
 | 7. SEO 強化 | **done (2026-11-11)** | サイト既定 OG 画像 (`site.ogImageMediaId` + `ctx.meta` フォールバック)、`og:locale` の `language_TERRITORY` 正規化 (`toOgLocale`)、パンくずの祖先ページ、組織ロゴのメディア選択 + サイトロゴへのフォールバック、`twitter:site` ([tasks/phase-7.md](tasks/phase-7.md)) | SNS シェアと検索結果の見え方が揃う |
+| 8. サイトマップ・noindex | **done (2026-11-11)** | sitemap をアーカイブ (タイプ・カテゴリ・タグ) と `lastmod` まで拡充、`post_types.noindex` (アーカイブのみ) / `site.noindex` の 3 階層 noindex、`noindex, follow` vs `noindex, nofollow` の区別、サイト内検索からの除外、feed の `X-Robots-Tag` ([tasks/phase-8.md](tasks/phase-8.md)) | index 可能な URL が漏れなく sitemap に載り、どのレベルでも noindex が一貫して効く |
+| 9. 編集体験と運用 | **done (2026-11-11)** | 予約公開 UI (`status=scheduled` 仮想フィルタ)、メニュービルダー (`menus` 表 + `header` slug でナビ差替)、ゴミ箱 (`deleted_at` + partial unique index + 復元)、favicon/検証タグ/カスタム head・body、`robotsExtra`、リダイレクト CSV インポート (RFC4180、部分成功)、SEO チェックリスト + SERP プレビュー、複製 (`-copy` slug) + 下書き共有リンク (SHA-256・7日)、ピン留め (`posts.pinned`)、カスタム 404 (`site.notFoundPageId`)、メンテナンスモード (公開 GET 503・セッション/robots/sitemap/preview バイパス) ([tasks/phase-9.md](tasks/phase-9.md)) | 競合 CMS の運用導線を揃える |
+| 10. 構造化と分析 | **done (2026-11-11)** | 軽量アクセス解析 (`pageview_daily` 日次集計・Cookie/JS 不使用・`executionCtx` で非同期記録)、投稿タイプ別カスタムフィールド (field DSL・`<dl>` 描画)、ページテンプレート (section プリセット)、AI アシスト (Workers AI・抜粋/説明文/alt 生成)、著者アーカイブ (`/{type}/author/{slug}`) + プロフィール編集 + 関連記事 + 目次 (h2/h3 自動 ID)、JSON エクスポート/インポート (slug upsert・冪等・メディアはメタのみ)、アクティビティログ (`activity_log`・2,000 件上限・全変更系ハンドラ計測) ([tasks/phase-10.md](tasks/phase-10.md)) | 構造化コンテンツとサイト内分析を持つ CMS になる |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を

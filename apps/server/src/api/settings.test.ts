@@ -16,7 +16,7 @@ function testApp() {
       c.set('principal', {
         kind: 'session',
         token: 'test-token',
-        user: { id: 1, email: 'admin@example.com', name: 'Admin', role: 'admin' },
+        user: { id: 1, email: 'admin@example.com', name: 'Admin', slug: 'admin', role: 'admin' },
       })
       await next()
     })

@@ -1,3 +1,5 @@
+import type { SectionField } from '@kanso/shared'
+import { PostFieldsEditor } from './PostFieldsEditor.tsx'
 import { Button, Field, inputClass } from './ui.tsx'
 
 export function PostTypeForm(props: {
@@ -6,6 +8,8 @@ export function PostTypeForm(props: {
   description: string
   hasCategories: boolean
   hasTags: boolean
+  noindex: boolean
+  fields: SectionField[]
   sortOrder: number
   errors: Record<string, string>
   pending: boolean
@@ -14,6 +18,8 @@ export function PostTypeForm(props: {
   onDescription: (value: string) => void
   onCategories: (value: boolean) => void
   onTags: (value: boolean) => void
+  onNoindex: (value: boolean) => void
+  onFields: (value: SectionField[]) => void
   onSortOrder: (value: number) => void
   onSubmit: () => void
 }) {
@@ -68,7 +74,20 @@ export function PostTypeForm(props: {
           />
           タグを使う
         </label>
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={props.noindex}
+            onChange={(event) => props.onNoindex(event.target.checked)}
+          />
+          アーカイブを検索エンジンに登録しない
+        </label>
       </div>
+      <p className="text-xs text-neutral-500">
+        一覧ページ (/{props.slug || 'スラッグ'} とカテゴリ・タグの一覧)
+        に適用します。投稿自体は投稿ごとの SEO 設定で制御します。
+      </p>
+      <PostFieldsEditor fields={props.fields} onChange={props.onFields} />
       <Field label="表示順" error={props.errors.sortOrder}>
         <input
           className={`${inputClass} max-w-xs`}

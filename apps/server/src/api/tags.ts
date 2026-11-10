@@ -3,6 +3,7 @@ import { createTagSchema, updateTagSchema } from '@kanso/shared'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
+import { logActivity } from './activity.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
 const tagListQuerySchema = z.object({
@@ -15,6 +16,12 @@ export const tags = new Hono<AppEnv>()
   })
   .post('/', zValidator('json', createTagSchema, validationHook), async (c) => {
     const item = await c.var.kanso.taxonomies.createTag(c.req.valid('json'))
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'tag',
+      targetId: item.id,
+      summary: `タグ「${item.name}」を作成`,
+    })
     return c.json({ item }, 201)
   })
   .patch(
@@ -26,10 +33,23 @@ export const tags = new Hono<AppEnv>()
         c.req.valid('param').id,
         c.req.valid('json'),
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'tag',
+        targetId: item.id,
+        summary: `タグ「${item.name}」を更新`,
+      })
       return c.json({ item })
     },
   )
   .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
-    await c.var.kanso.taxonomies.deleteTag(c.req.valid('param').id)
+    const id = c.req.valid('param').id
+    await c.var.kanso.taxonomies.deleteTag(id)
+    await logActivity(c, {
+      action: 'delete',
+      targetType: 'tag',
+      targetId: id,
+      summary: `タグ #${id} を削除`,
+    })
     return c.json({ ok: true })
   })

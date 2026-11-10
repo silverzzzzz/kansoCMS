@@ -6,7 +6,7 @@ import type {
 } from '@kanso/shared'
 import { isReservedSlug, sectionsPlainText } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
-import { and, asc, count, eq, isNull, lte, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { media, pages, postTypes } from '../db/schema/index.ts'
@@ -15,6 +15,25 @@ import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
 import { redirectsService } from './redirects.ts'
 import { revisionsService } from './revisions.ts'
+import { shareLinksService } from './share-links.ts'
+
+const TITLE_MAX_LENGTH = 200
+const SLUG_MAX_LENGTH = 120
+/** `(コピー)` suffix stays under the 200-char title limit. */
+export function copyTitle(title: string): string {
+  const suffix = ' (コピー)'
+  const base =
+    title.length > TITLE_MAX_LENGTH - suffix.length
+      ? title.slice(0, TITLE_MAX_LENGTH - suffix.length)
+      : title
+  return `${base}${suffix}`
+}
+
+/** `-copy` / `-copy2` … suffixes stay under the 120-char slug limit. */
+export function copySlug(slug: string, n: number): string {
+  const suffix = n === 1 ? '-copy' : `-copy${n}`
+  return `${slug.slice(0, SLUG_MAX_LENGTH - suffix.length)}${suffix}`
+}
 
 type RenderContext = { allowRawHtml: boolean }
 type UpdateContext = RenderContext & { userId: number | null }
@@ -72,18 +91,25 @@ export function pageInsertValues(
 
 /** Predicate for "visible to the public right now". Shared by all public reads. */
 export function publishedNow(now = new Date()) {
-  return and(eq(pages.status, 'published'), lte(pages.publishedAt, now))
+  return and(eq(pages.status, 'published'), lte(pages.publishedAt, now), isNull(pages.deletedAt))
 }
 
 export function pagesService(db: Db) {
   const redirects = redirectsService(db)
   const revisions = revisionsService(db)
+  const shareLinks = shareLinksService(db)
 
   async function list(query: ListQuery) {
     const page = query.page ?? 1
     const perPage = query.perPage ?? 20
-    const conditions: SQL[] = []
-    if (query.status) conditions.push(eq(pages.status, query.status))
+    const conditions: SQL[] = [
+      query.trashed === 'true' ? isNotNull(pages.deletedAt) : isNull(pages.deletedAt),
+    ]
+    if (query.status === 'scheduled') {
+      conditions.push(eq(pages.status, 'published'), gt(pages.publishedAt, new Date()))
+    } else if (query.status) {
+      conditions.push(eq(pages.status, query.status))
+    }
     if (query.q) conditions.push(searchTitle(query.q))
     const where = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -101,6 +127,13 @@ export function pagesService(db: Db) {
   }
 
   async function get(id: number) {
+    const page = await getAny(id)
+    if (page.deletedAt !== null) throw KansoError.notFound('Page')
+    return page
+  }
+
+  /** Fetch including trashed rows; used by trash/restore internals. */
+  async function getAny(id: number) {
     const page = await db.query.pages.findFirst({
       where: eq(pages.id, id),
       columns: { searchText: false },
@@ -119,7 +152,7 @@ export function pagesService(db: Db) {
     if (postType) throw KansoError.conflict('Slug is used by a post type')
 
     const page = await db.query.pages.findFirst({
-      where: and(eq(pages.path, slug), isNull(pages.parentId)),
+      where: and(eq(pages.path, slug), isNull(pages.parentId), isNull(pages.deletedAt)),
       columns: { id: true },
     })
     if (page && page.id !== excludePageId) throw KansoError.conflict('Page path already exists')
@@ -130,7 +163,9 @@ export function pagesService(db: Db) {
     const parent =
       input.parentId === undefined || input.parentId === null
         ? null
-        : await db.query.pages.findFirst({ where: eq(pages.id, input.parentId) })
+        : await db.query.pages.findFirst({
+            where: and(eq(pages.id, input.parentId), isNull(pages.deletedAt)),
+          })
     if (input.parentId !== undefined && input.parentId !== null && !parent) {
       throw KansoError.validation('Parent page does not exist')
     }
@@ -138,7 +173,7 @@ export function pagesService(db: Db) {
 
     const path = parent ? `${parent.path}/${input.slug}` : input.slug
     const duplicate = await db.query.pages.findFirst({
-      where: eq(pages.path, path),
+      where: and(eq(pages.path, path), isNull(pages.deletedAt)),
       columns: { id: true },
     })
     if (duplicate) throw KansoError.conflict('Page path already exists')
@@ -183,6 +218,7 @@ export function pagesService(db: Db) {
         status: pages.status,
       })
       .from(pages)
+      .where(isNull(pages.deletedAt))
 
     const parentId = input.parentId === undefined ? current.parentId : input.parentId
     if (parentId !== null && !allPages.some((page) => page.id === parentId)) {
@@ -282,21 +318,33 @@ export function pagesService(db: Db) {
     }
   }
 
-  async function deletePage(id: number): Promise<void> {
-    const current = await get(id)
+  /**
+   * Hard delete: reparent children (live and trashed) to the deleted page's
+   * parent and recompute live paths. Trashed descendants keep their stale
+   * paths; a restore recomputes them anyway.
+   */
+  async function purgePage(id: number): Promise<void> {
+    const current = await getAny(id)
     const allPages = await db
-      .select({ id: pages.id, slug: pages.slug, parentId: pages.parentId, path: pages.path })
+      .select({
+        id: pages.id,
+        slug: pages.slug,
+        parentId: pages.parentId,
+        path: pages.path,
+        deletedAt: pages.deletedAt,
+      })
       .from(pages)
     const originalParents = new Map(allPages.map((page) => [page.id, page.parentId]))
     const remaining = allPages
       .filter((page) => page.id !== id)
       .map((page) => (page.parentId === id ? { ...page, parentId: current.parentId } : page))
+    const live = remaining.filter((page) => page.deletedAt === null)
     if (current.parentId === null) {
-      for (const page of remaining.filter((page) => originalParents.get(page.id) === id)) {
+      for (const page of live.filter((page) => originalParents.get(page.id) === id)) {
         await assertTopLevelSlugAvailable(page.slug, page.id)
       }
     }
-    const paths = computePaths(remaining)
+    const paths = computePaths(live)
     if (new Set(paths.values()).size !== paths.size) {
       throw KansoError.conflict('Page path already exists')
     }
@@ -304,12 +352,17 @@ export function pagesService(db: Db) {
     const updates = remaining
       .filter(
         (page) =>
-          originalParents.get(page.id) !== page.parentId || paths.get(page.id) !== page.path,
+          originalParents.get(page.id) !== page.parentId ||
+          (page.deletedAt === null && paths.get(page.id) !== page.path),
       )
       .map((page) =>
         db
           .update(pages)
-          .set({ parentId: page.parentId, path: paths.get(page.id), updatedAt: new Date() })
+          .set({
+            parentId: page.parentId,
+            ...(page.deletedAt === null ? { path: paths.get(page.id) } : {}),
+            updatedAt: new Date(),
+          })
           .where(eq(pages.id, page.id)),
       )
 
@@ -318,10 +371,98 @@ export function pagesService(db: Db) {
         db.delete(pages).where(eq(pages.id, id)),
         ...updates,
         revisions.deleteStatement('page', id),
+        shareLinks.deleteForTargetStatement('page', id),
       ])
     } catch (error) {
       throwPageConflict(error)
     }
+  }
+
+  /**
+   * `DELETE /pages/:id` trashes; a second delete or `?force=true` purges.
+   * Trashing cascades to live descendants via the materialized path prefix.
+   */
+  async function deletePage(id: number, options?: { force?: boolean }): Promise<void> {
+    const current = await getAny(id)
+    if (options?.force || current.deletedAt !== null) return purgePage(id)
+    const now = new Date()
+    await db.batch([
+      db.update(pages).set({ deletedAt: now, updatedAt: now }).where(eq(pages.id, id)),
+      db
+        .update(pages)
+        .set({ deletedAt: now, updatedAt: now })
+        .where(and(like(pages.path, `${current.path}/%`), isNull(pages.deletedAt))),
+    ])
+  }
+
+  /** Restore a trashed page. Descendants stay trashed and restore individually. */
+  async function restorePage(id: number) {
+    const current = await getAny(id)
+    if (current.deletedAt === null) throw KansoError.validation('Page is not in the trash')
+
+    const parent =
+      current.parentId === null
+        ? null
+        : await db.query.pages.findFirst({ where: eq(pages.id, current.parentId) })
+    if (current.parentId !== null && !parent) {
+      throw KansoError.validation('Parent page does not exist')
+    }
+    if (parent && parent.deletedAt !== null) {
+      throw KansoError.validation('Restore the parent page first')
+    }
+
+    if (parent === null) await assertTopLevelSlugAvailable(current.slug, id)
+    const path = parent ? `${parent.path}/${current.slug}` : current.slug
+    const duplicate = await db.query.pages.findFirst({
+      where: and(eq(pages.path, path), isNull(pages.deletedAt)),
+      columns: { id: true },
+    })
+    if (duplicate && duplicate.id !== id) throw KansoError.conflict('Page path already exists')
+
+    try {
+      await db
+        .update(pages)
+        .set({ deletedAt: null, path, updatedAt: new Date() })
+        .where(eq(pages.id, id))
+      return get(id)
+    } catch (error) {
+      throwPageConflict(error)
+    }
+  }
+
+  /**
+   * Copy a page as a draft under the same parent. The slug gains `-copy`
+   * (`-copy2`, … on collision); the title gains ` (コピー)`.
+   */
+  async function duplicate(id: number, context: RenderContext) {
+    const current = await get(id)
+    for (let n = 1; n <= 10; n++) {
+      try {
+        return await create(
+          {
+            title: copyTitle(current.title),
+            slug: copySlug(current.slug, n),
+            parentId: current.parentId,
+            sortOrder: current.sortOrder,
+            bodyJson: current.bodyJson ?? undefined,
+            sections: current.sectionsJson ?? null,
+            excerpt: current.excerpt,
+            status: 'draft',
+            publishedAt: null,
+            seoTitle: current.seoTitle,
+            seoDescription: current.seoDescription,
+            ogMediaId: current.ogMediaId,
+            noindex: current.noindex,
+            canonicalUrl: current.canonicalUrl,
+          },
+          context,
+        )
+      } catch (error) {
+        if (error instanceof KansoError && error.code === 'conflict' && n < 10) continue
+        throw error
+      }
+    }
+    throw KansoError.conflict('Could not find a free slug')
   }
 
   async function restoreRevision(id: number, revisionId: number, context: UpdateContext) {
@@ -359,6 +500,14 @@ export function pagesService(db: Db) {
     async findPublishedByPath(path: string) {
       return db.query.pages.findFirst({
         where: and(eq(pages.path, path), publishedNow()),
+        columns: { searchText: false },
+      })
+    },
+
+    /** Public: a published page by id (e.g. the configured custom 404). */
+    async findPublishedById(id: number) {
+      return db.query.pages.findFirst({
+        where: and(eq(pages.id, id), publishedNow()),
         columns: { searchText: false },
       })
     },
@@ -409,6 +558,8 @@ export function pagesService(db: Db) {
     get,
     create,
     update,
+    duplicate,
+    restore: restorePage,
     restoreRevision,
     delete: deletePage,
   }

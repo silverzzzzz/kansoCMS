@@ -14,6 +14,7 @@ import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
 import { RevisionList } from '../../../components/content/RevisionList.tsx'
+import { ShareLinks } from '../../../components/content/ShareLinks.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { Alert, Button, Field, inputClass } from '../../../components/ui.tsx'
 import { fromDateTimeLocal, toDateTimeLocal } from '../../../lib/datetime.ts'
@@ -148,10 +149,17 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
     },
   })
   const remove = useMutation({
-    mutationFn: () => unwrap(api.pages[':id'].$delete({ param: { id: String(id) } })),
+    mutationFn: () => unwrap(api.pages[':id'].$delete({ param: { id: String(id) }, query: {} })),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['pages'] })
       await navigate({ to: '/pages' })
+    },
+  })
+  const duplicate = useMutation({
+    mutationFn: () => unwrap(api.pages[':id'].duplicate.$post({ param: { id: String(id) } })),
+    onSuccess: async ({ item }) => {
+      await queryClient.invalidateQueries({ queryKey: ['pages'] })
+      await navigate({ to: '/pages/$id', params: { id: String(item.id) } })
     },
   })
   const errors = fieldErrors(save.error)
@@ -181,6 +189,14 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
                 サイトで見る
               </a>
             )}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={duplicate.isPending}
+              onClick={() => duplicate.mutate()}
+            >
+              複製
+            </Button>
             <Button type="button" variant="danger" onClick={() => setConfirmOpen(true)}>
               削除
             </Button>
@@ -206,6 +222,7 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
         pending={save.isPending}
         errors={errors}
         editorKey={`page-${id}`}
+        publicPath={`/${item.path}`}
       >
         <div className="grid gap-5 border border-neutral-200 bg-white p-5 sm:grid-cols-2">
           <Field label="親ページ" error={errors.parentId}>
@@ -236,10 +253,11 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
           </Field>
         </div>
       </ContentForm>
+      <ShareLinks kind="page" id={id} />
       <ConfirmDialog
         open={confirmOpen}
-        title="固定ページを削除"
-        description="このページを削除します。子ページがある場合は親ページへ昇格します。"
+        title="固定ページをゴミ箱へ移動"
+        description="このページをゴミ箱へ移動します。子ページも一緒に移動し、ゴミ箱から復元できます。"
         pending={remove.isPending}
         onClose={() => setConfirmOpen(false)}
         onConfirm={() => remove.mutate()}

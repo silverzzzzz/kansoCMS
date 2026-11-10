@@ -1,6 +1,16 @@
 import type { Kanso } from '@kanso/core'
-import { type PageSection, type SectionValues, sectionValuesSchemaFor } from '@kanso/shared'
-import type { SectionDefinition, SectionResolvedData, Theme } from './themes/types.ts'
+import {
+  type PageSection,
+  type SectionField,
+  type SectionValues,
+  sectionValuesSchemaFor,
+} from '@kanso/shared'
+import type {
+  PostFieldItem,
+  SectionDefinition,
+  SectionResolvedData,
+  Theme,
+} from './themes/types.ts'
 
 export interface PreparedSection {
   /** Editor-assigned section id. */
@@ -34,7 +44,7 @@ export async function prepareSections(
         console.warn(`sections: skipping "${section.type}" (${section.id}): invalid settings`)
         return null
       }
-      const data = await resolveData(kanso, definition, parsed.data)
+      const data = await resolveData(kanso, definition.fields, parsed.data)
       return {
         id: section.id,
         type: section.type,
@@ -49,11 +59,11 @@ export async function prepareSections(
 
 async function resolveData(
   kanso: Kanso,
-  definition: SectionDefinition,
+  fields: SectionField[],
   values: SectionValues,
 ): Promise<SectionResolvedData> {
   const data: SectionResolvedData = { images: {}, posts: {} }
-  for (const field of definition.fields) {
+  for (const field of fields) {
     if (field.type === 'image') {
       const mediaId = values[field.name]
       const item = typeof mediaId === 'number' ? await kanso.media.find(mediaId) : null
@@ -86,6 +96,31 @@ async function resolveData(
     }
   }
   return data
+}
+
+/**
+ * Prepare a post's custom field values (post type `fields_json` definitions)
+ * for the synchronous JSX render, resolving `image` / `posts` fields the same
+ * way sections do. Definition changes are tolerated: stored values failing the
+ * current schema render as-is instead of failing the page.
+ */
+export async function preparePostFields(
+  kanso: Kanso,
+  defs: SectionField[] | null | undefined,
+  stored: SectionValues | null,
+): Promise<PostFieldItem[]> {
+  if (!defs || defs.length === 0) return []
+  const parsed = sectionValuesSchemaFor(defs).safeParse(stored ?? {})
+  const values: SectionValues = parsed.success ? parsed.data : (stored ?? {})
+  const data = await resolveData(kanso, defs, values)
+  return defs.map((def) => ({
+    name: def.name,
+    label: def.label,
+    type: def.type,
+    value: values[def.name] ?? null,
+    image: def.type === 'image' ? (data.images[def.name] ?? null) : undefined,
+    posts: def.type === 'posts' ? (data.posts[def.name] ?? null) : undefined,
+  }))
 }
 
 export function SectionsBody({

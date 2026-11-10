@@ -31,7 +31,7 @@ const manifest: StarterManifest = {
   siteDescription: null,
 }
 
-const adminUser = { id: 1, email: 'admin@example.com', name: 'Admin', role: 'admin' as const }
+const adminUser = { id: 1, email: 'admin@example.com', name: 'Admin', slug: 'admin', role: 'admin' as const }
 
 function sessionFor(role: 'admin' | 'editor'): Principal {
   return { kind: 'session', token: 'test-token', user: { ...adminUser, role } } as Principal
@@ -55,7 +55,7 @@ function testApp(options: { role?: 'admin' | 'editor'; manifest?: StarterManifes
     starter: {
       remove: vi.fn().mockResolvedValue({
         removed: { pages: 3, posts: 3, postTypes: 1, categories: 2, tags: 0, forms: 1, media: 5 },
-        kept: [{ kind: 'page', id: 12, title: 'ホーム', reason: 'edited' }],
+        kept: [{ kind: 'page', id: 12, title: 'ホ�Eム', reason: 'edited' }],
       }),
     },
   })
@@ -123,7 +123,7 @@ describe('starter API', () => {
     expect(response.status).toBe(200)
     expect(await response.json()).toEqual({
       removed: { pages: 3, posts: 3, postTypes: 1, categories: 2, tags: 0, forms: 1, media: 5 },
-      kept: [{ kind: 'page', id: 12, title: 'ホーム', reason: 'edited' }],
+      kept: [{ kind: 'page', id: 12, title: 'ホ�Eム', reason: 'edited' }],
     })
     expect(kanso.starter.remove).toHaveBeenCalled()
   })

@@ -14,6 +14,24 @@ export const siteSettingsSchema = z.object({
   ogImageMediaId: z.number().int().positive().nullable().default(null),
   /** Post type shown on `/` when no `home` page exists. */
   homePostTypeSlug: z.string().nullable().default(null),
+  /** Emits `noindex, follow` on every public page and empties the sitemap (staging/pre-launch). */
+  noindex: z.boolean().default(false),
+  /** Favicon from the media library; emits `<link rel="icon">` on every page. */
+  faviconMediaId: z.number().int().positive().nullable().default(null),
+  /** Content value of `<meta name="google-site-verification">` (Search Console). */
+  googleSiteVerification: z.string().trim().max(200).default(''),
+  /** Raw HTML injected at the end of `<head>` on every public page (admin-only). */
+  headHtml: z.string().max(16_000).nullable().default(null),
+  /** Raw HTML injected just before `</body>` on every public page (admin-only). */
+  bodyEndHtml: z.string().max(16_000).nullable().default(null),
+  /** Extra robots.txt rules appended before the `Sitemap:` line (admin-only). */
+  robotsExtra: z.string().max(4096).nullable().default(null),
+  /** Published page rendered as the custom 404 body; null = built-in message. */
+  notFoundPageId: z.number().int().positive().nullable().default(null),
+  /** Maintenance mode: public GETs return 503; signed-in users still see the site. */
+  maintenance: z.boolean().default(false),
+  /** Message shown on the maintenance page (plain text). */
+  maintenanceMessage: z.string().trim().max(500).default(''),
   theme: themeNameSchema.default('default'),
 })
 export type SiteSettings = z.infer<typeof siteSettingsSchema>

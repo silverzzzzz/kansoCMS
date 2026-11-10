@@ -6,7 +6,13 @@ import type { Principal } from '../middleware/auth.ts'
 import { onError } from '../middleware/error.ts'
 import { auth } from './auth.ts'
 
-const user = { id: 7, email: 'editor@example.com', name: 'Editor', role: 'editor' as const }
+const user = {
+  id: 7,
+  email: 'editor@example.com',
+  name: 'Editor',
+  slug: 'editor',
+  role: 'editor' as const,
+}
 const rp = { id: 'localhost', origin: 'http://localhost', name: 'kansoCMS' }
 const passkey = {
   id: 3,
@@ -37,6 +43,11 @@ function testApp(principal?: Principal) {
     auth: {
       createSession: vi.fn().mockResolvedValue({ token: 'new-session' }),
       deleteSession: vi.fn().mockResolvedValue(undefined),
+      getProfile: vi.fn().mockResolvedValue({ slug: 'editor', bio: 'Hello', avatarMediaId: null }),
+      updateProfile: vi.fn().mockImplementation((_id: number, input: unknown) => {
+        const profile = { slug: 'editor', bio: 'Hello', avatarMediaId: null }
+        return Promise.resolve({ ...profile, ...(input as object) })
+      }),
     },
     passkeys: {
       loginOptions: vi.fn().mockResolvedValue({ challenge: 'login' }),
@@ -184,6 +195,49 @@ describe('own passkeys', () => {
     )
     expect(response.status).toBe(403)
     expect(kanso.passkeys.remove).not.toHaveBeenCalled()
+  })
+})
+
+describe('author profile', () => {
+  it('returns and updates the session user profile', async () => {
+    const { app, kanso } = testApp(session)
+
+    const got = await app.request('/api/v1/auth/profile')
+    expect(got.status).toBe(200)
+    expect(await got.json()).toEqual({
+      profile: { slug: 'editor', bio: 'Hello', avatarMediaId: null },
+    })
+    expect(kanso.auth.getProfile).toHaveBeenCalledWith(7)
+
+    const updated = await app.request(
+      '/api/v1/auth/profile',
+      json('PATCH', { slug: 'taro-editor', bio: 'New bio', avatarMediaId: 5 }),
+    )
+    expect(updated.status).toBe(200)
+    expect(kanso.auth.updateProfile).toHaveBeenCalledWith(7, {
+      slug: 'taro-editor',
+      bio: 'New bio',
+      avatarMediaId: 5,
+    })
+  })
+
+  it('rejects an invalid slug format', async () => {
+    const { app, kanso } = testApp(session)
+    const response = await app.request(
+      '/api/v1/auth/profile',
+      json('PATCH', { slug: 'Not A Slug!' }),
+    )
+    expect(response.status).toBe(400)
+    expect(kanso.auth.updateProfile).not.toHaveBeenCalled()
+  })
+
+  it('needs a session, not an API key', async () => {
+    const { app, kanso } = testApp(apiKey)
+    expect((await app.request('/api/v1/auth/profile')).status).toBe(403)
+    expect((await app.request('/api/v1/auth/profile', json('PATCH', { slug: 'x' }))).status).toBe(
+      403,
+    )
+    expect(kanso.auth.updateProfile).not.toHaveBeenCalled()
   })
 })
 

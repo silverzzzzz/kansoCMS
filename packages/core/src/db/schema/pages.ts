@@ -1,5 +1,13 @@
 import type { PageSection } from '@kanso/shared'
-import { type AnySQLiteColumn, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { isNull } from 'drizzle-orm'
+import {
+  type AnySQLiteColumn,
+  index,
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core'
 import { contentColumns, seoColumns, timestamps } from './_columns.ts'
 import { media } from './media.ts'
 
@@ -13,7 +21,7 @@ export const pages = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     slug: text('slug').notNull(),
-    path: text('path').notNull().unique(),
+    path: text('path').notNull(),
     parentId: integer('parent_id').references((): AnySQLiteColumn => pages.id, {
       onDelete: 'set null',
     }),
@@ -24,5 +32,9 @@ export const pages = sqliteTable(
     ogMediaId: integer('og_media_id').references(() => media.id, { onDelete: 'set null' }),
     ...timestamps,
   },
-  (t) => [index('pages_status_published_idx').on(t.status, t.publishedAt)],
+  (t) => [
+    // Partial unique: a trashed page keeps its path without blocking a replacement.
+    uniqueIndex('pages_path_uq').on(t.path).where(isNull(t.deletedAt)),
+    index('pages_status_published_idx').on(t.status, t.publishedAt),
+  ],
 )

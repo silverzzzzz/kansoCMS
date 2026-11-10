@@ -1,3 +1,4 @@
+import type { SectionField } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -29,6 +30,8 @@ function EditPostTypePage() {
   const [description, setDescription] = useState(item?.description ?? '')
   const [hasCategories, setHasCategories] = useState(item?.hasCategories ?? true)
   const [hasTags, setHasTags] = useState(item?.hasTags ?? true)
+  const [noindex, setNoindex] = useState(item?.noindex ?? false)
+  const [fields, setFields] = useState<SectionField[]>(item?.fieldsJson ?? [])
   const [sortOrder, setSortOrder] = useState(item?.sortOrder ?? 0)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const save = useMutation({
@@ -42,6 +45,8 @@ function EditPostTypePage() {
             description: description.trim() || null,
             hasCategories,
             hasTags,
+            noindex,
+            fields,
             sortOrder,
           },
         }),
@@ -85,6 +90,8 @@ function EditPostTypePage() {
         description={description}
         hasCategories={hasCategories}
         hasTags={hasTags}
+        noindex={noindex}
+        fields={fields}
         sortOrder={sortOrder}
         errors={errors}
         pending={save.isPending}
@@ -93,6 +100,8 @@ function EditPostTypePage() {
         onDescription={setDescription}
         onCategories={setHasCategories}
         onTags={setHasTags}
+        onNoindex={setNoindex}
+        onFields={setFields}
         onSortOrder={setSortOrder}
         onSubmit={() => save.mutate()}
       />

@@ -1,3 +1,5 @@
+import type { SectionField, SectionValues } from '@kanso/shared'
+import { isNull } from 'drizzle-orm'
 import {
   type AnySQLiteColumn,
   index,
@@ -19,6 +21,10 @@ export const postTypes = sqliteTable('post_types', {
   description: text('description'),
   hasCategories: integer('has_categories', { mode: 'boolean' }).notNull().default(true),
   hasTags: integer('has_tags', { mode: 'boolean' }).notNull().default(true),
+  /** Archive URLs only (`/type`, `/type/category/*`, `/type/tag/*`); posts keep their own flag. */
+  noindex: integer('noindex', { mode: 'boolean' }).notNull().default(false),
+  /** Custom field definitions (the section field DSL); posts store values in `fields_json`. */
+  fieldsJson: text('fields_json', { mode: 'json' }).$type<SectionField[]>(),
   sortOrder: integer('sort_order').notNull().default(0),
   ...timestamps,
 })
@@ -33,13 +39,17 @@ export const posts = sqliteTable(
     slug: text('slug').notNull(),
     coverMediaId: integer('cover_media_id').references(() => media.id, { onDelete: 'set null' }),
     authorId: integer('author_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Sticky posts sort before others in archive lists. */
+    pinned: integer('pinned', { mode: 'boolean' }).notNull().default(false),
+    /** Custom field values, validated against `post_types.fields_json` at write time. */
+    fieldsJson: text('fields_json', { mode: 'json' }).$type<SectionValues>(),
     ...contentColumns,
     ...seoColumns,
     ogMediaId: integer('og_media_id').references(() => media.id, { onDelete: 'set null' }),
     ...timestamps,
   },
   (t) => [
-    uniqueIndex('posts_type_slug_uq').on(t.postTypeId, t.slug),
+    uniqueIndex('posts_type_slug_uq').on(t.postTypeId, t.slug).where(isNull(t.deletedAt)),
     index('posts_type_status_published_idx').on(t.postTypeId, t.status, t.publishedAt),
   ],
 )

@@ -14,6 +14,7 @@ import type { AppEnv } from '../env.ts'
 import { requireRole } from '../middleware/auth.ts'
 import { secret } from '../secrets.ts'
 import { themeSettingsFieldsByTheme } from '../site/themes/sections-meta.ts'
+import { logActivity } from './activity.ts'
 import { validationHook } from './validate.ts'
 
 export const settings = new Hono<AppEnv>()
@@ -37,6 +38,12 @@ export const settings = new Hono<AppEnv>()
       siteSettingsSchema,
       c.req.valid('json'),
     )
+    await logActivity(c, {
+      action: 'update',
+      targetType: 'settings',
+      targetId: SETTINGS_KEYS.site,
+      summary: 'サイト設定を更新',
+    })
     return c.json({ site })
   })
   .put(
@@ -48,6 +55,12 @@ export const settings = new Hono<AppEnv>()
         organizationSettingsSchema,
         c.req.valid('json'),
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'settings',
+        targetId: SETTINGS_KEYS.organization,
+        summary: '組織設定を更新',
+      })
       return c.json({ organization })
     },
   )
@@ -57,6 +70,12 @@ export const settings = new Hono<AppEnv>()
       formsSettingsSchema,
       c.req.valid('json'),
     )
+    await logActivity(c, {
+      action: 'update',
+      targetType: 'settings',
+      targetId: SETTINGS_KEYS.forms,
+      summary: 'フォーム設定を更新',
+    })
     return c.json({ forms })
   })
   .get('/theme', async (c) => {
@@ -89,5 +108,11 @@ export const settings = new Hono<AppEnv>()
     }
     if (details.length > 0) throw KansoError.validation('Invalid theme settings', details)
     const theme = await c.var.kanso.settings.updateTheme(input)
+    await logActivity(c, {
+      action: 'update',
+      targetType: 'settings',
+      targetId: 'theme',
+      summary: 'テーマ設定を更新',
+    })
     return c.json({ theme })
   })

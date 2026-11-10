@@ -6,6 +6,10 @@ import { ApiError, fieldErrors } from '../../../api/errors.ts'
 import { categoriesQuery, postTypesQuery, type TagItem, tagsQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ContentForm, emptyContent } from '../../../components/content/ContentForm.tsx'
+import {
+  defaultSettings,
+  SectionSettingsForm,
+} from '../../../components/customize/SectionSettingsForm.tsx'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { TagInput } from '../../../components/TagInput.tsx'
@@ -40,7 +44,9 @@ function NewPostPage() {
   const type = types.data?.items.find((item) => item.slug === typeSlug)
   const categories = useQuery({ ...categoriesQuery(type?.id ?? 0), enabled: Boolean(type) })
   const [content, setContent] = useState(emptyContent)
+  const [fields, setFields] = useState<Record<string, unknown> | null>(null)
   const [coverMediaId, setCoverMediaId] = useState<number | null>(null)
+  const [pinned, setPinned] = useState(false)
   const [categoryIds, setCategoryIds] = useState<number[]>([])
   const [selectedTags, setSelectedTags] = useState<TagItem[]>([])
   const save = useMutation({
@@ -62,6 +68,8 @@ function NewPostPage() {
             noindex: content.noindex,
             canonicalUrl: content.canonicalUrl.trim() || null,
             coverMediaId,
+            pinned,
+            fields: fields ?? {},
             categoryIds,
             tagIds: selectedTags.map((tag) => tag.id),
           },
@@ -75,6 +83,8 @@ function NewPostPage() {
   })
   const errors = fieldErrors(save.error)
   if (!type) return <p>読み込み中…</p>
+  const fieldDefs = type.fieldsJson ?? []
+  const fieldValues = fields ?? defaultSettings(fieldDefs)
   const categoryRows = flattenPageTree(
     (categories.data?.items ?? []).map((item) => ({ ...item, title: item.name })),
   )
@@ -99,9 +109,23 @@ function NewPostPage() {
         errors={errors}
         autoSlug
         editorKey="new-post"
+        publicPath={`/${type.slug}/${content.slug}`}
       >
         <section className="grid gap-6 border border-neutral-200 bg-white p-5 sm:grid-cols-2">
           <MediaField label="カバー画像" value={coverMediaId} onChange={setCoverMediaId} />
+          <div>
+            <label className="flex items-start gap-2 py-2 text-sm font-medium text-neutral-800">
+              <input
+                type="checkbox"
+                checked={pinned}
+                onChange={(event) => setPinned(event.target.checked)}
+              />
+              一覧の先頭に固定
+            </label>
+            <p className="text-xs text-neutral-500">
+              アーカイブやホームの一覧で、公開日時より先に表示されます。
+            </p>
+          </div>
           {type.hasCategories && (
             <fieldset>
               <legend className="text-sm font-medium">カテゴリ</legend>
@@ -135,6 +159,16 @@ function NewPostPage() {
             </div>
           )}
         </section>
+        {fieldDefs.length > 0 && (
+          <section className="border border-neutral-200 bg-white p-5">
+            <h2 className="mb-4 text-sm font-medium">カスタムフィールド</h2>
+            <SectionSettingsForm
+              fields={fieldDefs}
+              values={fieldValues}
+              onChange={(name, value) => setFields({ ...fieldValues, [name]: value })}
+            />
+          </section>
+        )}
       </ContentForm>
     </div>
   )

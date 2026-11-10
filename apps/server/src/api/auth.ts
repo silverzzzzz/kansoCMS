@@ -8,12 +8,14 @@ import {
   renamePasskeySchema,
   SESSION_COOKIE,
   SESSION_TTL_SECONDS,
+  updateProfileSchema,
 } from '@kanso/shared'
 import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
 import type { AppEnv } from '../env.ts'
 import { requireAuth, requireSession, sessionUser } from '../middleware/auth.ts'
+import { logActivity } from './activity.ts'
 import { relyingParty } from './relying-party.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
@@ -50,8 +52,25 @@ export const auth = new Hono<AppEnv>()
   )
   .post('/passkey', zValidator('json', passkeyLoginSchema, validationHook), async (c) => {
     const { credential } = c.req.valid('json')
-    const user = await c.var.kanso.passkeys.finishLogin(credential, relyingParty(c))
+    const user = await c.var.kanso.passkeys
+      .finishLogin(credential, relyingParty(c))
+      .catch(async (err) => {
+        await logActivity(c, {
+          actor: 'anonymous',
+          action: 'login_failed',
+          targetType: 'auth',
+          summary: 'パスキー認証に失敗',
+        })
+        throw err
+      })
     await startSession(c, user.id)
+    await logActivity(c, {
+      actor: user.name || user.email,
+      userId: user.id,
+      action: 'login',
+      targetType: 'auth',
+      summary: 'パスキーでログイン',
+    })
     return c.json({ user })
   })
   .post(
@@ -71,6 +90,13 @@ export const auth = new Hono<AppEnv>()
       passkeyName,
     )
     await startSession(c, user.id)
+    await logActivity(c, {
+      actor: user.name || user.email,
+      userId: user.id,
+      action: 'create',
+      targetType: 'passkey',
+      summary: 'パスキーリンクでパスキーを登録',
+    })
     return c.json({ user })
   })
   .post('/logout', requireAuth(), async (c) => {
@@ -79,6 +105,11 @@ export const auth = new Hono<AppEnv>()
 
     await c.var.kanso.auth.deleteSession(principal.token)
     deleteCookie(c, SESSION_COOKIE, cookieOptions(c))
+    await logActivity(c, {
+      action: 'logout',
+      targetType: 'auth',
+      summary: 'ログアウト',
+    })
     return c.json({ ok: true })
   })
   .get('/me', requireAuth('read'), (c) => {
@@ -96,6 +127,24 @@ export const auth = new Hono<AppEnv>()
       },
     })
   })
+  .get('/profile', requireSession, async (c) =>
+    c.json({ profile: await c.var.kanso.auth.getProfile(sessionUser(c).id) }),
+  )
+  .patch(
+    '/profile',
+    requireSession,
+    zValidator('json', updateProfileSchema, validationHook),
+    async (c) => {
+      const profile = await c.var.kanso.auth.updateProfile(sessionUser(c).id, c.req.valid('json'))
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'user',
+        targetId: sessionUser(c).id,
+        summary: 'プロフィールを更新',
+      })
+      return c.json({ profile })
+    },
+  )
   .get('/passkeys', requireSession, async (c) =>
     c.json({ items: await c.var.kanso.passkeys.list(sessionUser(c).id) }),
   )
@@ -119,6 +168,12 @@ export const auth = new Hono<AppEnv>()
         relyingParty(c),
         name,
       )
+      await logActivity(c, {
+        action: 'create',
+        targetType: 'passkey',
+        targetId: item.id,
+        summary: `パスキー「${item.name}」を登録`,
+      })
       return c.json({ item }, 201)
     },
   )
@@ -133,6 +188,12 @@ export const auth = new Hono<AppEnv>()
         c.req.valid('param').id,
         c.req.valid('json').name,
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'passkey',
+        targetId: item.id,
+        summary: `パスキー「${item.name}」をリネーム`,
+      })
       return c.json({ item })
     },
   )
@@ -141,7 +202,14 @@ export const auth = new Hono<AppEnv>()
     requireSession,
     zValidator('param', idParamSchema, validationHook),
     async (c) => {
-      await c.var.kanso.passkeys.remove(sessionUser(c).id, c.req.valid('param').id)
+      const id = c.req.valid('param').id
+      await c.var.kanso.passkeys.remove(sessionUser(c).id, id)
+      await logActivity(c, {
+        action: 'delete',
+        targetType: 'passkey',
+        targetId: id,
+        summary: `パスキー #${id} を削除`,
+      })
       return c.json({ ok: true })
     },
   )

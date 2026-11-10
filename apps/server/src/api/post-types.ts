@@ -9,6 +9,7 @@ import {
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
+import { logActivity } from './activity.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
 const typeIdParamSchema = z.object({ typeId: idSchema })
@@ -18,6 +19,12 @@ export const postTypes = new Hono<AppEnv>()
   .get('/', async (c) => c.json({ items: await c.var.kanso.postTypes.list() }))
   .post('/', zValidator('json', createPostTypeSchema, validationHook), async (c) => {
     const item = await c.var.kanso.postTypes.create(c.req.valid('json'))
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'post_type',
+      targetId: item.id,
+      summary: `投稿タイプ「${item.name}」を作成`,
+    })
     return c.json({ item }, 201)
   })
   .get('/:typeId/categories', zValidator('param', typeIdParamSchema, validationHook), async (c) => {
@@ -33,6 +40,12 @@ export const postTypes = new Hono<AppEnv>()
         c.req.valid('param').typeId,
         c.req.valid('json'),
       )
+      await logActivity(c, {
+        action: 'create',
+        targetType: 'category',
+        targetId: item.id,
+        summary: `カテゴリ「${item.name}」を作成`,
+      })
       return c.json({ item }, 201)
     },
   )
@@ -47,6 +60,12 @@ export const postTypes = new Hono<AppEnv>()
         param.id,
         c.req.valid('json'),
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'category',
+        targetId: item.id,
+        summary: `カテゴリ「${item.name}」を更新`,
+      })
       return c.json({ item })
     },
   )
@@ -56,6 +75,12 @@ export const postTypes = new Hono<AppEnv>()
     async (c) => {
       const param = c.req.valid('param')
       await c.var.kanso.taxonomies.deleteCategory(param.typeId, param.id)
+      await logActivity(c, {
+        action: 'delete',
+        targetType: 'category',
+        targetId: param.id,
+        summary: `カテゴリ #${param.id} を削除`,
+      })
       return c.json({ ok: true })
     },
   )
@@ -69,11 +94,23 @@ export const postTypes = new Hono<AppEnv>()
     async (c) => {
       const id = c.req.valid('param').id
       const item = await c.var.kanso.postTypes.update(id, c.req.valid('json'))
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'post_type',
+        targetId: id,
+        summary: `投稿タイプ「${item.name}」を更新`,
+      })
       return c.json({ item })
     },
   )
   .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
     const id = c.req.valid('param').id
     await c.var.kanso.postTypes.delete(id)
+    await logActivity(c, {
+      action: 'delete',
+      targetType: 'post_type',
+      targetId: id,
+      summary: `投稿タイプ #${id} を削除`,
+    })
     return c.json({ ok: true })
   })

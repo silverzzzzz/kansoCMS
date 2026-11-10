@@ -5,6 +5,7 @@ import { ApiError } from '../../api/errors.ts'
 import { type MediaItem, mediaListQuery } from '../../api/queries.ts'
 import { unwrap } from '../../api/request.ts'
 import { ConfirmDialog } from '../ConfirmDialog.tsx'
+import { AiSuggestButton } from '../content/AiSuggestButton.tsx'
 import { Pagination } from '../Pagination.tsx'
 import { Alert, Button, EmptyState, inputClass } from '../ui.tsx'
 
@@ -115,6 +116,13 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
                     onChange={(event) => setAlt(event.target.value)}
                   />
                 </label>
+                <div className="mt-2">
+                  <AiSuggestButton
+                    kind="alt"
+                    text={`${item.filename} (${item.mime})`}
+                    onResult={setAlt}
+                  />
+                </div>
                 <div className="mt-2 flex gap-1">
                   <Button type="submit" size="small" disabled={saveAlt.isPending}>
                     保存

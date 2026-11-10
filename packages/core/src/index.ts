@@ -3,10 +3,13 @@
 // `ApiType` import — can type-check core without Workers globals.
 import type { D1Database, R2Bucket } from '@cloudflare/workers-types'
 import { createDb } from './db/client.ts'
+import { activityService } from './services/activity.ts'
+import { analyticsService } from './services/analytics.ts'
 import { authService } from './services/auth.ts'
 import { cacheVersionService } from './services/cache-version.ts'
 import { formsService } from './services/forms.ts'
 import { mediaService } from './services/media.ts'
+import { menusService } from './services/menus.ts'
 import { pagesService } from './services/pages.ts'
 import { passkeyService } from './services/passkeys.ts'
 import { postTypesService } from './services/post-types.ts'
@@ -15,8 +18,10 @@ import { redirectsService } from './services/redirects.ts'
 import { revisionsService } from './services/revisions.ts'
 import { searchService } from './services/search.ts'
 import { settingsService } from './services/settings.ts'
+import { shareLinksService } from './services/share-links.ts'
 import { starterService } from './services/starter.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
+import { transferService } from './services/transfer.ts'
 
 export {
   effectiveExcerpt,
@@ -31,6 +36,7 @@ export {
   type SubmissionNotification,
   type SubmissionNotificationInput,
 } from './mail/notification.ts'
+export { analyticsDayKey, BOT_UA_PATTERN } from './services/analytics.ts'
 
 export interface KansoBindings {
   db: D1Database
@@ -46,10 +52,13 @@ export function createKanso(bindings: KansoBindings) {
   return {
     db,
     bucket: bindings.media,
+    activity: activityService(db),
+    analytics: analyticsService(db),
     auth: authService(db),
     cacheVersion: cacheVersionService(db),
     forms: formsService(db),
     media: mediaService(db, bindings.media),
+    menus: menusService(db),
     settings: settingsService(db),
     pages: pagesService(db),
     passkeys: passkeyService(db),
@@ -58,8 +67,10 @@ export function createKanso(bindings: KansoBindings) {
     redirects: redirectsService(db),
     revisions: revisionsService(db),
     search: searchService(db),
+    shareLinks: shareLinksService(db),
     starter: starterService(db, bindings.media),
     taxonomies: taxonomiesService(db),
+    transfer: transferService(db),
   }
 }
 
@@ -67,6 +78,7 @@ export type Kanso = ReturnType<typeof createKanso>
 
 export type { Db } from './db/client.ts'
 export { KansoError, type KansoErrorCode } from './errors.ts'
+export type { ActivityEntry } from './services/activity.ts'
 export type { PasskeyService, RelyingParty } from './services/passkeys.ts'
 export type { PostContentInput } from './services/posts.ts'
 export type {

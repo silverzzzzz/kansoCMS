@@ -20,6 +20,8 @@ export function postTypeInsertValues(input: CreatePostTypeInput) {
     description: input.description ?? null,
     hasCategories: input.hasCategories ?? true,
     hasTags: input.hasTags ?? true,
+    noindex: input.noindex ?? false,
+    fieldsJson: input.fields ?? null,
     sortOrder: input.sortOrder ?? 0,
   } satisfies typeof postTypes.$inferInsert
 }
@@ -45,7 +47,7 @@ export function postTypesService(db: Db) {
     if (isReservedSlug(slug)) throw KansoError.validation('Post type slug is reserved')
 
     const page = await db.query.pages.findFirst({
-      where: and(eq(pages.path, slug), isNull(pages.parentId)),
+      where: and(eq(pages.path, slug), isNull(pages.parentId), isNull(pages.deletedAt)),
       columns: { id: true },
     })
     if (page) throw KansoError.conflict('Slug is used by a page')
@@ -81,6 +83,8 @@ export function postTypesService(db: Db) {
     if (input.description !== undefined) values.description = input.description
     if (input.hasCategories !== undefined) values.hasCategories = input.hasCategories
     if (input.hasTags !== undefined) values.hasTags = input.hasTags
+    if (input.noindex !== undefined) values.noindex = input.noindex
+    if (input.fields !== undefined) values.fieldsJson = input.fields
     if (input.sortOrder !== undefined) values.sortOrder = input.sortOrder
 
     try {
@@ -93,7 +97,11 @@ export function postTypesService(db: Db) {
 
   async function deletePostType(id: number): Promise<void> {
     await get(id)
-    const [result] = await db.select({ value: count() }).from(posts).where(eq(posts.postTypeId, id))
+    // Only live posts block deletion; trashed ones are purged with the type (FK cascade).
+    const [result] = await db
+      .select({ value: count() })
+      .from(posts)
+      .where(and(eq(posts.postTypeId, id), isNull(posts.deletedAt)))
     if ((result?.value ?? 0) > 0) throw KansoError.conflict('Post type still has posts')
     await db.delete(postTypes).where(eq(postTypes.id, id))
   }

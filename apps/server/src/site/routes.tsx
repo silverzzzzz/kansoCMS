@@ -1,4 +1,4 @@
-import { KansoError } from '@kanso/core'
+import { BOT_UA_PATTERN, KansoError } from '@kanso/core'
 import {
   absoluteUrl,
   buildBreadcrumb,
@@ -6,8 +6,11 @@ import {
   buildOrganization,
   buildWebSite,
 } from '@kanso/seo'
-import { POSTS_PER_PAGE, SEARCH_PER_PAGE } from '@kanso/shared'
+import { POSTS_PER_PAGE, SEARCH_PER_PAGE, SESSION_COOKIE } from '@kanso/shared'
 import { type Context, Hono } from 'hono'
+import { getCookie } from 'hono/cookie'
+import { createMiddleware } from 'hono/factory'
+import { raw } from 'hono/html'
 import type { AppEnv } from '../env.ts'
 import { parseBody } from '../forms/body.ts'
 import { submitForm } from '../forms/submit.ts'
@@ -15,10 +18,11 @@ import { resolveMessages } from '../i18n.ts'
 import { siteCache } from '../middleware/cache.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { feedResponse, robotsResponse, sitemapResponse } from './feeds.ts'
-import { draftValues, type FormState, formSlugsIn } from './forms.tsx'
+import { draftValues, type FormState, formSlugsIn, prepareForms } from './forms.tsx'
 import { preview } from './preview.tsx'
 import { renderPage, renderPost } from './render.tsx'
 import { SearchResults } from './search.tsx'
+import { prepareSections, SectionsBody } from './sections.tsx'
 
 type PostType = Awaited<ReturnType<AppEnv['Variables']['kanso']['postTypes']['get']>>
 type ArchiveTerm = { kind: 'category' | 'tag'; id: number; slug: string; name: string }
@@ -35,8 +39,72 @@ export const site = new Hono<AppEnv>()
 
 site.route('/preview', preview)
 site.use('*', siteCache)
+
+/**
+ * Cookie-less pageview counting (T52). Runs after the handler: only 200 HTML
+ * responses to GET requests count, so previews (mounted above), feeds, the
+ * maintenance 503 and errors are naturally excluded. The write is deferred
+ * to `waitUntil` and can never fail the request.
+ */
+const ANALYTICS_EXCLUDED = /^\/(search|preview|sitemap\.xml|robots\.txt|feed\.xml)/
+site.use(
+  '*',
+  createMiddleware<AppEnv>(async (c, next) => {
+    await next()
+    if (c.req.method !== 'GET' || c.res.status !== 200) return
+    if (!c.res.headers.get('content-type')?.includes('text/html')) return
+    const path = c.req.path
+    if (ANALYTICS_EXCLUDED.test(path)) return
+    if (BOT_UA_PATTERN.test(c.req.header('user-agent') ?? '')) return
+    const work = (async () => {
+      const { timezone } = await c.var.kanso.settings.site()
+      await c.var.kanso.analytics.recordView(path, timezone)
+    })().catch(() => {})
+    try {
+      c.executionCtx.waitUntil(work)
+    } catch {
+      // No ExecutionContext (non-Workers runtime): the write still proceeds.
+    }
+  }),
+)
+
 site.get('/sitemap.xml', sitemapResponse)
 site.get('/robots.txt', robotsResponse)
+
+/**
+ * Maintenance mode: every public GET/HEAD below this middleware returns 503
+ * with a themed page. Preview routes (mounted above), robots.txt and
+ * sitemap.xml stay reachable so crawlers keep sane signals; signed-in staff
+ * bypass to keep working. No Retry-After — the return time is unknown.
+ */
+site.use(
+  '*',
+  createMiddleware<AppEnv>(async (c, next) => {
+    if (c.req.method !== 'GET' && c.req.method !== 'HEAD') return next()
+    const settings = await c.var.kanso.settings.site()
+    if (!settings.maintenance) return next()
+    const token = getCookie(c, SESSION_COOKIE)
+    if (token && (await c.var.kanso.auth.getSessionUser(token))) return next()
+
+    const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
+    const meta = ctx.meta({ title: ctx.site.name, path: c.req.path, noindex: true })
+    return c.html(
+      <ctx.theme.Layout
+        meta={meta}
+        nav={ctx.nav}
+        search={ctx.search}
+        themeSettings={ctx.themeSettings}
+        extras={ctx.siteExtras}
+      >
+        <section class="page">
+          <h1>{ctx.site.name}</h1>
+          <p>{settings.maintenanceMessage || ctx.messages.notFound.body}</p>
+        </section>
+      </ctx.theme.Layout>,
+      503,
+    )
+  }),
+)
 
 site.get('/', async (c) => {
   const [ctx, home] = await Promise.all([
@@ -60,6 +128,7 @@ site.get('/', async (c) => {
       nav={ctx.nav}
       search={ctx.search}
       themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
     >
       <section class="page">
         <h1>{ctx.site.name}</h1>
@@ -136,6 +205,11 @@ site.get('/:path{.+}', async (c) => {
       `/${type.slug}/tag/${tag.slug}`,
       { kind: 'tag', ...tag },
     )
+  }
+  if (segments.length === 3 && segments[1] === 'author') {
+    const author = await c.var.kanso.auth.findAuthorBySlug(segments[2] ?? '')
+    if (!author) return missing(c, path)
+    return renderAuthorArchive(c, await loadSiteContext(c.var.kanso, c.env.SITE_URL), type, author)
   }
   return missing(c, path)
 })
@@ -263,6 +337,8 @@ async function renderArchive(
     title: heading,
     path: canonicalPath,
     description,
+    // `/` keeps indexing even when its home post type's archives are noindexed.
+    noindex: !isHome && type.noindex,
     prev: page > 1 ? absoluteUrl(ctx.origin, pagePath(basePath, page - 1)) : null,
     next: page < totalPages ? absoluteUrl(ctx.origin, pagePath(basePath, page + 1)) : null,
     feed,
@@ -286,6 +362,7 @@ async function renderArchive(
       nav={ctx.nav}
       search={ctx.search}
       themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
     >
       <ctx.theme.PostList
         heading={heading}
@@ -302,20 +379,117 @@ async function renderArchive(
   )
 }
 
+type Author = NonNullable<
+  Awaited<ReturnType<AppEnv['Variables']['kanso']['auth']['findAuthorBySlug']>>
+>
+
+/** `/{type}/author/{slug}` — profile header (avatar + bio) over the author's published posts. */
+async function renderAuthorArchive(
+  c: Context<AppEnv>,
+  ctx: SiteRequestContext,
+  type: PostType,
+  author: Author,
+) {
+  const page = normalizedPage(c)
+  if (page instanceof Response) return page
+  const basePath = `/${type.slug}/author/${author.slug}`
+  const result = await c.var.kanso.posts.listPublished({
+    postTypeId: type.id,
+    authorId: author.id,
+    page,
+    perPage: POSTS_PER_PAGE,
+  })
+  const totalPages = Math.max(1, Math.ceil(result.total / POSTS_PER_PAGE))
+  if (page > totalPages) return notFound(c)
+
+  const heading = ctx.messages.archive.authorHeading(author.name, type.name)
+  const canonicalPath = pagePath(basePath, page)
+  const meta = ctx.meta({
+    title: heading,
+    path: canonicalPath,
+    description: author.bio ?? type.description ?? ctx.site.description ?? '',
+    noindex: type.noindex,
+    prev: page > 1 ? absoluteUrl(ctx.origin, pagePath(basePath, page - 1)) : null,
+    next: page < totalPages ? absoluteUrl(ctx.origin, pagePath(basePath, page + 1)) : null,
+    feed: {
+      href: absoluteUrl(ctx.origin, `/${type.slug}/feed.xml`),
+      title: `${type.name} | ${ctx.site.name}`,
+    },
+  })
+  const jsonLd = [
+    buildOrganization(ctx.site),
+    buildWebSite(ctx.site),
+    buildCollectionPage(ctx.site, {
+      url: meta.canonical,
+      title: heading,
+      description: meta.description,
+    }),
+    buildBreadcrumb([
+      { name: ctx.site.name, url: `${ctx.origin}/` },
+      { name: type.name, url: absoluteUrl(ctx.origin, `/${type.slug}`) },
+      { name: author.name, url: meta.canonical },
+    ]),
+  ]
+
+  return c.html(
+    <ctx.theme.Layout
+      meta={meta}
+      jsonLd={jsonLd}
+      nav={ctx.nav}
+      search={ctx.search}
+      themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
+    >
+      <ctx.theme.PostList
+        heading={heading}
+        description={author.bio}
+        avatar={author.avatar}
+        items={result.items.map((post) => ({
+          ...post,
+          href: `/${type.slug}/${post.slug}`,
+        }))}
+        pagination={{ page, totalPages, basePath }}
+        formatDate={ctx.formatDate}
+        messages={ctx.messages.pagination}
+      />
+    </ctx.theme.Layout>,
+  )
+}
+
 async function notFound(c: Context<AppEnv>) {
   const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
   const meta = ctx.meta({ title: ctx.messages.notFound.title, path: c.req.path, noindex: true })
+  const { notFoundPageId } = await c.var.kanso.settings.site()
+  const custom = notFoundPageId ? await c.var.kanso.pages.findPublishedById(notFoundPageId) : null
+  let body = (
+    <section class="page">
+      <h1>404</h1>
+      <p>{ctx.messages.notFound.body}</p>
+    </section>
+  )
+  if (custom) {
+    if (custom.sectionsJson) {
+      const sections = await prepareSections(c.var.kanso, ctx.theme, custom.sectionsJson)
+      body = <SectionsBody sections={sections} formatDate={ctx.formatDate} />
+    } else {
+      const prepared = await prepareForms(c, custom.bodyHtml, '/404', undefined, ctx.messages.form)
+      body = (
+        <article class="page">
+          <h1>{custom.title}</h1>
+          {raw(prepared.html)}
+        </article>
+      )
+    }
+  }
   return c.html(
     <ctx.theme.Layout
       meta={meta}
       nav={ctx.nav}
       search={ctx.search}
       themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
     >
-      <section class="page">
-        <h1>404</h1>
-        <p>{ctx.messages.notFound.body}</p>
-      </section>
+      {body}
     </ctx.theme.Layout>,
     404,
   )

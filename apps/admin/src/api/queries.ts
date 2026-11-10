@@ -1,4 +1,4 @@
-import type { ContentStatus, PublicUser } from '@kanso/shared'
+import type { PublicUser } from '@kanso/shared'
 import { queryOptions } from '@tanstack/react-query'
 import { api } from './client.ts'
 import { unwrap } from './request.ts'
@@ -7,7 +7,8 @@ export type ListParams = {
   page?: string
   perPage?: string
   q?: string
-  status?: ContentStatus
+  status?: 'draft' | 'published' | 'scheduled'
+  trashed?: 'true'
 }
 
 export type PostsListParams = ListParams & { type?: string }
@@ -61,6 +62,14 @@ async function getRedirects(q?: string) {
   return unwrap(api.redirects.$get({ query: q ? { q } : {} }))
 }
 
+async function getMenus() {
+  return unwrap(api.menus.$get())
+}
+
+async function getMenu(id: number) {
+  return unwrap(api.menus[':id'].$get({ param: { id: String(id) } }))
+}
+
 async function getMedia(params: ListParams) {
   const query = { page: params.page, perPage: params.perPage, q: params.q }
   return unwrap(api.media.$get({ query }))
@@ -110,6 +119,10 @@ async function getPasskeys() {
   return unwrap(api.auth.passkeys.$get())
 }
 
+async function getAnalyticsSummary(days: number) {
+  return unwrap(api.analytics.summary.$get({ query: { days: String(days) } }))
+}
+
 export type StarterStatus = Awaited<ReturnType<typeof getStarter>>
 
 export type PageItem = Awaited<ReturnType<typeof getPage>>['item']
@@ -121,6 +134,8 @@ export type PostItem = Awaited<ReturnType<typeof getPost>>['item']
 export type PostRevisionItem = Awaited<ReturnType<typeof getPostRevisions>>['items'][number]
 export type TagItem = Awaited<ReturnType<typeof getTags>>['items'][number]
 export type RedirectItem = Awaited<ReturnType<typeof getRedirects>>['items'][number]
+export type MenuListItem = Awaited<ReturnType<typeof getMenus>>['items'][number]
+export type MenuItem = Awaited<ReturnType<typeof getMenu>>['item']
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>['items'][number]
 export type FormListItem = Awaited<ReturnType<typeof getForms>>['items'][number]
 export type FormItem = Awaited<ReturnType<typeof getForm>>['item']
@@ -194,6 +209,17 @@ export const redirectsQuery = (q?: string) =>
     queryFn: () => getRedirects(q),
   })
 
+export const menusListQuery = queryOptions({
+  queryKey: ['menus', 'list'] as const,
+  queryFn: getMenus,
+})
+
+export const menuQuery = (id: number) =>
+  queryOptions({
+    queryKey: ['menus', 'detail', id] as const,
+    queryFn: () => getMenu(id),
+  })
+
 export const mediaListQuery = (params: ListParams) =>
   queryOptions({
     queryKey: ['media', 'list', params] as const,
@@ -204,6 +230,12 @@ export const settingsQuery = queryOptions({
   queryKey: ['settings'] as const,
   queryFn: getSettings,
 })
+
+export const analyticsSummaryQuery = (days: number) =>
+  queryOptions({
+    queryKey: ['analytics', 'summary', days] as const,
+    queryFn: () => getAnalyticsSummary(days),
+  })
 
 export const sectionCatalogQuery = queryOptions({
   queryKey: ['site', 'sections'] as const,
@@ -224,6 +256,12 @@ export const starterQuery = queryOptions({
 export const passkeysQuery = queryOptions({
   queryKey: ['auth', 'passkeys'] as const,
   queryFn: getPasskeys,
+})
+
+/** The signed-in user's author profile (slug / bio / avatar). */
+export const profileQuery = queryOptions({
+  queryKey: ['auth', 'profile'] as const,
+  queryFn: () => unwrap(api.auth.profile.$get()).then((data) => data.profile),
 })
 
 export const formsListQuery = queryOptions({

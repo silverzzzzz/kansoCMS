@@ -7,6 +7,7 @@ export interface PostType {
   description: string | null
   hasCategories: boolean
   hasTags: boolean
+  noindex: boolean
   sortOrder: number
   createdAt: string
   updatedAt: string

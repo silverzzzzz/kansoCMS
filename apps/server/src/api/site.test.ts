@@ -33,6 +33,23 @@ describe('section catalog API', () => {
     expect(body.items.map((item) => item.type)).toContain('post_list')
   })
 
+  it('lists page templates whose sections match the catalog', async () => {
+    const response = await testApp().request('/api/v1/site/sections', undefined, {} as Bindings)
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      templates: { id: string; name: string; sections: { type: string }[] }[]
+      items: { type: string }[]
+    }
+    expect(body.templates.length).toBeGreaterThanOrEqual(3)
+    const knownTypes = new Set(body.items.map((item) => item.type))
+    for (const template of body.templates) {
+      for (const section of template.sections) {
+        expect(knownTypes.has(section.type)).toBe(true)
+      }
+    }
+    expect(body.templates.map((template) => template.id)).toContain('landing')
+  })
+
   it('serves another theme by query and 404s unknown names', async () => {
     const app = testApp()
     const paper = await app.request('/api/v1/site/sections?theme=paper', undefined, {} as Bindings)

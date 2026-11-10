@@ -10,6 +10,7 @@ import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
 import { turnstileConfig } from '../forms/turnstile.ts'
+import { logActivity } from './activity.ts'
 import { idParamSchema, validationHook } from './validate.ts'
 
 const submissionParamSchema = z.object({ id: idSchema, submissionId: idSchema })
@@ -26,6 +27,12 @@ export const forms = new Hono<AppEnv>()
   })
   .post('/', zValidator('json', createFormSchema, validationHook), async (c) => {
     const item = await c.var.kanso.forms.create(c.req.valid('json'), await formContext(c))
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'form',
+      targetId: item.id,
+      summary: `フォーム「${item.name}」を作成`,
+    })
     return c.json({ item }, 201)
   })
   .get(
@@ -88,6 +95,12 @@ export const forms = new Hono<AppEnv>()
     async (c) => {
       const { id, submissionId } = c.req.valid('param')
       await c.var.kanso.forms.submissions.delete(id, submissionId)
+      await logActivity(c, {
+        action: 'delete',
+        targetType: 'form',
+        targetId: submissionId,
+        summary: `フォーム #${id} の送信 #${submissionId} を削除`,
+      })
       return c.json({ ok: true })
     },
   )
@@ -104,10 +117,23 @@ export const forms = new Hono<AppEnv>()
         c.req.valid('json'),
         await formContext(c),
       )
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'form',
+        targetId: item.id,
+        summary: `フォーム「${item.name}」を更新`,
+      })
       return c.json({ item })
     },
   )
   .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
-    await c.var.kanso.forms.delete(c.req.valid('param').id)
+    const id = c.req.valid('param').id
+    await c.var.kanso.forms.delete(id)
+    await logActivity(c, {
+      action: 'delete',
+      targetType: 'form',
+      targetId: id,
+      summary: `フォーム #${id} を削除`,
+    })
     return c.json({ ok: true })
   })

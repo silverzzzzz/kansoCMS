@@ -18,7 +18,14 @@ const content = {
 describe('revision snapshot schemas', () => {
   it('round-trips page and post snapshots', () => {
     const page = { ...content, parentId: null, sortOrder: 0 }
-    const post = { ...content, coverMediaId: null, categoryIds: [1], tagIds: [2] }
+    const post = {
+      ...content,
+      coverMediaId: null,
+      pinned: false,
+      categoryIds: [1],
+      tagIds: [2],
+      fields: { venue: 'Hall A' },
+    }
 
     expect(pageRevisionSnapshotSchema.parse(page)).toEqual(page)
     expect(postRevisionSnapshotSchema.parse(post)).toEqual(post)
@@ -33,8 +40,10 @@ describe('revision snapshot schemas', () => {
     const { title: _postTitle, ...postWithoutTitle } = {
       ...content,
       coverMediaId: null,
+      pinned: false,
       categoryIds: [],
       tagIds: [],
+      fields: {},
     }
 
     expect(pageRevisionSnapshotSchema.safeParse(pageWithoutTitle).success).toBe(false)

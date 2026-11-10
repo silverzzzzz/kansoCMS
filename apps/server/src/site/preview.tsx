@@ -21,6 +21,23 @@ const draftPageSchema = z.object({
 
 export const preview = new Hono<AppEnv>()
   .use('*', authenticate)
+  /**
+   * Login-free draft preview via an issued share link. Registered before
+   * `/:kind/:id` so `share` is never parsed as a content kind. `preview: true`
+   * already emits noindex + nofollow; no-store keeps drafts out of caches.
+   */
+  .get('/share/:token', async (c) => {
+    const { targetType, targetId } = await c.var.kanso.shareLinks.resolve(c.req.param('token'))
+    c.header('cache-control', 'no-store')
+    c.header('x-robots-tag', 'noindex, nofollow')
+
+    if (targetType === 'page') {
+      return renderPage(c, await c.var.kanso.pages.get(targetId), { preview: true })
+    }
+    const post = await c.var.kanso.posts.getWithRelations(targetId)
+    const type = await c.var.kanso.postTypes.get(post.postTypeId)
+    return renderPost(c, post, type, { preview: true })
+  })
   .get('/:kind/:id', zValidator('param', previewParamSchema, validationHook), async (c) => {
     if (c.var.principal?.kind !== 'session') throw KansoError.unauthorized()
     const { kind, id } = c.req.valid('param')
@@ -46,9 +63,15 @@ export const preview = new Hono<AppEnv>()
       : null
     const draftTheme = draftParsed?.success ? draftParsed.data : ctx.themeSettings
     const prepared = await prepareSections(c.var.kanso, ctx.theme, sections)
-    const meta = ctx.meta({ title: title || null, path: '/', noindex: true })
+    const meta = ctx.meta({ title: title || null, path: '/', noindex: true, nofollow: true })
     return c.html(
-      <ctx.theme.Layout meta={meta} nav={ctx.nav} search={ctx.search} themeSettings={draftTheme}>
+      <ctx.theme.Layout
+        meta={meta}
+        nav={ctx.nav}
+        search={ctx.search}
+        themeSettings={draftTheme}
+        extras={ctx.siteExtras}
+      >
         <SectionsBody sections={prepared} formatDate={ctx.formatDate} />
       </ctx.theme.Layout>,
     )

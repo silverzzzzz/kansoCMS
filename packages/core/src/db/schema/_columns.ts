@@ -31,4 +31,6 @@ export const contentColumns = {
   excerpt: text('excerpt'),
   status: text('status', { enum: CONTENT_STATUSES }).notNull().default('draft'),
   publishedAt: integer('published_at', { mode: 'timestamp' }),
+  /** Soft delete (trash). NULL = live; unique indexes on paths/slugs exclude trashed rows. */
+  deletedAt: integer('deleted_at', { mode: 'timestamp' }),
 }

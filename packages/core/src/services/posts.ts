@@ -3,10 +3,27 @@ import {
   type ListQuery,
   mediaUrl,
   type PostRevisionSnapshot,
+  type SectionField,
+  type SectionValues,
+  sectionValuesSchemaFor,
   type UpdatePostInput,
 } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
-import { and, asc, count, desc, eq, exists, inArray, lte, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  sql,
+} from 'drizzle-orm'
 import { EMPTY_DOCUMENT, effectiveExcerpt, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import {
@@ -21,8 +38,10 @@ import {
 } from '../db/schema/index.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
+import { copySlug, copyTitle } from './pages.ts'
 import { redirectsService } from './redirects.ts'
 import { revisionsService } from './revisions.ts'
+import { shareLinksService } from './share-links.ts'
 
 type RenderContext = { allowRawHtml: boolean }
 type CreateContext = RenderContext & { authorId: number | null }
@@ -39,6 +58,29 @@ function searchTitle(query: string): SQL {
 
 function uniqueIds(ids: number[] | undefined): number[] | undefined {
   return ids ? [...new Set(ids)] : undefined
+}
+
+/** Validate custom field values against the post type's field definitions (section field DSL). */
+export function parsePostFields(
+  defs: SectionField[] | null | undefined,
+  raw: Record<string, unknown> | undefined,
+): SectionValues | null {
+  if (!defs || defs.length === 0) return null
+  const defined = Object.fromEntries(
+    Object.entries(raw ?? {}).filter(([key]) => defs.some((def) => def.name === key)),
+  )
+  const result = sectionValuesSchemaFor(defs).safeParse(defined)
+  if (!result.success) {
+    throw KansoError.validation(
+      'Invalid custom fields',
+      result.error.issues.map((issue) => ({
+        path: issue.path.map(String).join('.'),
+        message: issue.message,
+      })),
+    )
+  }
+  // Defined values win after validation; extra keys pass through untouched.
+  return { ...((raw ?? {}) as SectionValues), ...result.data }
 }
 
 function throwPostConflict(error: unknown): never {
@@ -75,6 +117,7 @@ export function postInsertValues(
     excerpt: input.excerpt?.trim() ? input.excerpt : null,
     status,
     publishedAt,
+    pinned: input.pinned ?? false,
     seoTitle: input.seoTitle ?? null,
     seoDescription: input.seoDescription ?? null,
     ogMediaId: input.ogMediaId ?? null,
@@ -85,14 +128,24 @@ export function postInsertValues(
 
 /** Predicate for posts visible to the public right now. */
 export function postsPublishedNow(now = new Date()) {
-  const condition = and(eq(posts.status, 'published'), lte(posts.publishedAt, now))
+  const condition = and(
+    eq(posts.status, 'published'),
+    lte(posts.publishedAt, now),
+    isNull(posts.deletedAt),
+  )
   if (!condition) throw new Error('Published post predicate could not be built')
   return condition
+}
+
+/** Public list ordering: sticky posts first, then newest published. */
+export function postsListOrder() {
+  return [desc(posts.pinned), desc(posts.publishedAt), desc(posts.id)]
 }
 
 export function postsService(db: Db) {
   const redirects = redirectsService(db)
   const revisions = revisionsService(db)
+  const shareLinks = shareLinksService(db)
 
   async function hydrate(row: Omit<typeof posts.$inferSelect, 'searchText'>) {
     const [categoryRows, tagRows, author, cover, ogMedia] = await Promise.all([
@@ -112,7 +165,7 @@ export function postsService(db: Db) {
         ? Promise.resolve(null)
         : db.query.users.findFirst({
             where: eq(users.id, row.authorId),
-            columns: { name: true },
+            columns: { name: true, slug: true },
           }),
       row.coverMediaId === null
         ? Promise.resolve(null)
@@ -130,6 +183,7 @@ export function postsService(db: Db) {
       categories: categoryRows,
       tags: tagRows,
       authorName: author?.name ?? null,
+      authorSlug: author?.slug ?? null,
       coverMedia: cover
         ? {
             url: mediaUrl(cover.r2Key),
@@ -155,7 +209,7 @@ export function postsService(db: Db) {
       where: eq(posts.id, id),
       columns: { searchText: false },
     })
-    if (!post) throw KansoError.notFound('Post')
+    if (!post || post.deletedAt !== null) throw KansoError.notFound('Post')
     return hydrate(post)
   }
 
@@ -165,8 +219,10 @@ export function postsService(db: Db) {
     perPage: number
     categoryId?: number
     tagId?: number
+    authorId?: number
   }) {
     const conditions: SQL[] = [eq(posts.postTypeId, input.postTypeId), postsPublishedNow()]
+    if (input.authorId !== undefined) conditions.push(eq(posts.authorId, input.authorId))
     if (input.categoryId !== undefined) {
       conditions.push(
         exists(
@@ -196,7 +252,7 @@ export function postsService(db: Db) {
     const [items, totals] = await Promise.all([
       db.query.posts.findMany({
         where,
-        orderBy: [desc(posts.publishedAt), desc(posts.id)],
+        orderBy: postsListOrder(),
         limit: input.perPage,
         offset: (input.page - 1) * input.perPage,
         columns: { bodyHtml: false, searchText: false },
@@ -212,6 +268,76 @@ export function postsService(db: Db) {
     }
   }
 
+  /**
+   * Same-type published posts sharing a category (falling back to a shared
+   * tag), newest first. Returns [] when the post has neither taxonomy.
+   */
+  async function listRelated(input: {
+    postTypeId: number
+    excludeId: number
+    categoryIds: number[]
+    tagIds: number[]
+    limit?: number
+  }) {
+    const limit = input.limit ?? 4
+    const linkFor = (ids: number[], kind: 'category' | 'tag') =>
+      kind === 'category'
+        ? exists(
+            db
+              .select({ value: sql<number>`1` })
+              .from(postCategories)
+              .where(
+                and(eq(postCategories.postId, posts.id), inArray(postCategories.categoryId, ids)),
+              ),
+          )
+        : exists(
+            db
+              .select({ value: sql<number>`1` })
+              .from(postTags)
+              .where(and(eq(postTags.postId, posts.id), inArray(postTags.tagId, ids))),
+          )
+
+    const condition =
+      input.categoryIds.length > 0
+        ? linkFor(input.categoryIds, 'category')
+        : input.tagIds.length > 0
+          ? linkFor(input.tagIds, 'tag')
+          : null
+    if (!condition) return { items: [] }
+
+    const items = await db.query.posts.findMany({
+      where: and(
+        eq(posts.postTypeId, input.postTypeId),
+        ne(posts.id, input.excludeId),
+        postsPublishedNow(),
+        condition,
+      ),
+      orderBy: [desc(posts.publishedAt), desc(posts.id)],
+      limit,
+      columns: { bodyHtml: false, searchText: false },
+    })
+    return {
+      items: items.map(({ bodyJson, ...rest }) => ({
+        ...rest,
+        excerpt: effectiveExcerpt({ excerpt: rest.excerpt, bodyJson }),
+      })),
+    }
+  }
+
+  /** `(postTypeId, authorSlug)` pairs with ≥1 published indexable post, newest update. */
+  async function listAuthorsForSitemap() {
+    return db
+      .select({
+        postTypeId: posts.postTypeId,
+        slug: users.slug,
+        updatedAt: sql`max(${posts.updatedAt})`.mapWith(posts.updatedAt),
+      })
+      .from(posts)
+      .innerJoin(users, eq(posts.authorId, users.id))
+      .where(and(postsPublishedNow(), eq(posts.noindex, false), isNotNull(users.slug)))
+      .groupBy(posts.postTypeId, users.slug)
+  }
+
   async function listPublishedForSitemap() {
     return db.query.posts.findMany({
       where: and(postsPublishedNow(), eq(posts.noindex, false)),
@@ -223,9 +349,15 @@ export function postsService(db: Db) {
   async function list(query: PostListQuery) {
     const page = query.page ?? 1
     const perPage = query.perPage ?? 20
-    const conditions: SQL[] = []
+    const conditions: SQL[] = [
+      query.trashed === 'true' ? isNotNull(posts.deletedAt) : isNull(posts.deletedAt),
+    ]
     if (query.postTypeId !== undefined) conditions.push(eq(posts.postTypeId, query.postTypeId))
-    if (query.status) conditions.push(eq(posts.status, query.status))
+    if (query.status === 'scheduled') {
+      conditions.push(eq(posts.status, 'published'), gt(posts.publishedAt, new Date()))
+    } else if (query.status) {
+      conditions.push(eq(posts.status, query.status))
+    }
     if (query.q) conditions.push(searchTitle(query.q))
     const where = conditions.length > 0 ? and(...conditions) : undefined
 
@@ -242,12 +374,19 @@ export function postsService(db: Db) {
     return { items, total: totals[0]?.value ?? 0 }
   }
 
-  async function get(id: number) {
+  /** Fetch including trashed rows; used by trash/restore internals. */
+  async function getAny(id: number) {
     const post = await db.query.posts.findFirst({
       where: eq(posts.id, id),
       columns: { searchText: false },
     })
     if (!post) throw KansoError.notFound('Post')
+    return post
+  }
+
+  async function get(id: number) {
+    const post = await getAny(id)
+    if (post.deletedAt !== null) throw KansoError.notFound('Post')
 
     const [categoryRows, tagRows] = await Promise.all([
       db
@@ -275,11 +414,10 @@ export function postsService(db: Db) {
   }
 
   async function validateAssociations(
-    postTypeId: number,
+    postType: { id: number; hasCategories: boolean; hasTags: boolean },
     categoryIds: number[] | undefined,
     tagIds: number[] | undefined,
   ) {
-    const postType = await getPostTypeForInput(postTypeId)
     if (categoryIds && categoryIds.length > 0 && !postType.hasCategories) {
       throw KansoError.validation('This post type does not support categories')
     }
@@ -302,7 +440,7 @@ export function postsService(db: Db) {
     if (
       categoryIds &&
       (categoryRows.length !== categoryIds.length ||
-        categoryRows.some((category) => category.postTypeId !== postTypeId))
+        categoryRows.some((category) => category.postTypeId !== postType.id))
     ) {
       throw KansoError.validation('Categories must belong to the post type')
     }
@@ -313,7 +451,7 @@ export function postsService(db: Db) {
 
   async function assertSlugAvailable(postTypeId: number, slug: string, excludeId?: number) {
     const duplicate = await db.query.posts.findFirst({
-      where: and(eq(posts.postTypeId, postTypeId), eq(posts.slug, slug)),
+      where: and(eq(posts.postTypeId, postTypeId), eq(posts.slug, slug), isNull(posts.deletedAt)),
       columns: { id: true },
     })
     if (duplicate && duplicate.id !== excludeId) {
@@ -326,14 +464,16 @@ export function postsService(db: Db) {
     const tagIds = uniqueIds(input.tagIds) ?? []
     await assertMediaExists(db, input.coverMediaId)
     await assertMediaExists(db, input.ogMediaId)
-    await validateAssociations(input.postTypeId, categoryIds, tagIds)
+    const postType = await getPostTypeForInput(input.postTypeId)
+    await validateAssociations(postType, categoryIds, tagIds)
     await assertSlugAvailable(input.postTypeId, input.slug)
+    const fieldsJson = parsePostFields(postType.fieldsJson, input.fields)
 
     let postId: number
     try {
       const [created] = await db
         .insert(posts)
-        .values({ postTypeId: input.postTypeId, ...postInsertValues(input, context) })
+        .values({ postTypeId: input.postTypeId, fieldsJson, ...postInsertValues(input, context) })
         .returning({ id: posts.id })
       if (!created) throw new Error('Post insert did not return a row')
       postId = created.id
@@ -360,6 +500,7 @@ export function postsService(db: Db) {
       status: current.status,
       publishedAt: current.publishedAt?.toISOString() ?? null,
       coverMediaId: current.coverMediaId,
+      pinned: current.pinned,
       categoryIds: current.categoryIds,
       tagIds: current.tagIds,
       seoTitle: current.seoTitle,
@@ -367,12 +508,14 @@ export function postsService(db: Db) {
       ogMediaId: current.ogMediaId,
       noindex: current.noindex,
       canonicalUrl: current.canonicalUrl,
+      fields: current.fieldsJson ?? {},
     }
     const categoryIds = uniqueIds(input.categoryIds)
     const tagIds = uniqueIds(input.tagIds)
     await assertMediaExists(db, input.coverMediaId)
     await assertMediaExists(db, input.ogMediaId)
-    await validateAssociations(current.postTypeId, categoryIds, tagIds)
+    const postType = await getPostTypeForInput(current.postTypeId)
+    await validateAssociations(postType, categoryIds, tagIds)
     await assertSlugAvailable(current.postTypeId, input.slug ?? current.slug, id)
 
     const values: Partial<typeof posts.$inferInsert> = { updatedAt: new Date() }
@@ -380,11 +523,15 @@ export function postsService(db: Db) {
     if (input.title !== undefined) values.title = input.title
     if (input.coverMediaId !== undefined) values.coverMediaId = input.coverMediaId
     if (input.status !== undefined) values.status = input.status
+    if (input.pinned !== undefined) values.pinned = input.pinned
     if (input.seoTitle !== undefined) values.seoTitle = input.seoTitle
     if (input.seoDescription !== undefined) values.seoDescription = input.seoDescription
     if (input.ogMediaId !== undefined) values.ogMediaId = input.ogMediaId
     if (input.noindex !== undefined) values.noindex = input.noindex
     if (input.canonicalUrl !== undefined) values.canonicalUrl = input.canonicalUrl
+    if (input.fields !== undefined) {
+      values.fieldsJson = parsePostFields(postType.fieldsJson, input.fields)
+    }
 
     if (input.bodyJson !== undefined) {
       values.bodyJson = input.bodyJson
@@ -422,11 +569,6 @@ export function postsService(db: Db) {
 
     let redirectStatements: ReturnType<typeof redirects.pathChangeStatements> = []
     if (input.slug !== undefined && input.slug !== current.slug && current.status === 'published') {
-      const postType = await db.query.postTypes.findFirst({
-        where: eq(postTypes.id, current.postTypeId),
-        columns: { slug: true },
-      })
-      if (!postType) throw KansoError.notFound('Post type')
       redirectStatements = redirects.pathChangeStatements(
         `${postType.slug}/${current.slug}`,
         `${postType.slug}/${input.slug}`,
@@ -447,12 +589,72 @@ export function postsService(db: Db) {
     }
   }
 
-  async function deletePost(id: number): Promise<void> {
-    await get(id)
-    await db.batch([
-      db.delete(posts).where(eq(posts.id, id)),
-      revisions.deleteStatement('post', id),
-    ])
+  /** `DELETE /posts/:id` trashes; a second delete or `?force=true` purges. */
+  async function deletePost(id: number, options?: { force?: boolean }): Promise<void> {
+    const current = await getAny(id)
+    if (options?.force || current.deletedAt !== null) {
+      await db.batch([
+        db.delete(posts).where(eq(posts.id, id)),
+        revisions.deleteStatement('post', id),
+        shareLinks.deleteForTargetStatement('post', id),
+      ])
+      return
+    }
+    await db
+      .update(posts)
+      .set({ deletedAt: new Date(), updatedAt: new Date() })
+      .where(eq(posts.id, id))
+  }
+
+  /** Restore a trashed post after checking its slug is still free. */
+  async function restorePost(id: number) {
+    const current = await getAny(id)
+    if (current.deletedAt === null) throw KansoError.validation('Post is not in the trash')
+    await assertSlugAvailable(current.postTypeId, current.slug, id)
+    try {
+      await db.update(posts).set({ deletedAt: null, updatedAt: new Date() }).where(eq(posts.id, id))
+      return get(id)
+    } catch (error) {
+      throwPostConflict(error)
+    }
+  }
+
+  /**
+   * Copy a post as a draft in the same post type. The slug gains `-copy`
+   * (`-copy2`, … on collision); the title gains ` (コピー)`; taxonomies,
+   * cover and SEO fields carry over; the duplicating user becomes author.
+   */
+  async function duplicate(id: number, context: CreateContext) {
+    const current = await get(id)
+    for (let n = 1; n <= 10; n++) {
+      try {
+        return await create(
+          {
+            postTypeId: current.postTypeId,
+            title: copyTitle(current.title),
+            slug: copySlug(current.slug, n),
+            status: 'draft',
+            publishedAt: null,
+            bodyJson: current.bodyJson ?? undefined,
+            excerpt: current.excerpt,
+            coverMediaId: current.coverMediaId,
+            categoryIds: current.categoryIds,
+            tagIds: current.tagIds,
+            seoTitle: current.seoTitle,
+            seoDescription: current.seoDescription,
+            ogMediaId: current.ogMediaId,
+            noindex: current.noindex,
+            canonicalUrl: current.canonicalUrl,
+            fields: current.fieldsJson ?? {},
+          },
+          context,
+        )
+      } catch (error) {
+        if (error instanceof KansoError && error.code === 'conflict' && n < 10) continue
+        throw error
+      }
+    }
+    throw KansoError.conflict('Could not find a free slug')
   }
 
   async function restoreRevision(id: number, revisionId: number, context: UpdateContext) {
@@ -510,11 +712,15 @@ export function postsService(db: Db) {
     findPublished,
     getWithRelations,
     listPublished,
+    listRelated,
+    listAuthorsForSitemap,
     listPublishedForSitemap,
     list,
     get,
     create,
     update,
+    duplicate,
+    restore: restorePost,
     restoreRevision,
     delete: deletePost,
   }

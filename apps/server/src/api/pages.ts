@@ -7,8 +7,10 @@ import {
   updatePageSchema,
 } from '@kanso/shared'
 import { type Context, Hono } from 'hono'
+import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
 import { invalidSectionDetails, sectionsMetaByTheme } from '../site/themes/sections-meta.ts'
+import { logActivity } from './activity.ts'
 import { canUseRawHtml, currentUserId } from './principal.ts'
 import { idParamSchema, revisionParamSchema, validationHook } from './validate.ts'
 
@@ -46,6 +48,12 @@ export const pages = new Hono<AppEnv>()
     const item = await c.var.kanso.pages.create(input, {
       allowRawHtml: canUseRawHtml(c.var.principal),
     })
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'page',
+      targetId: item.id,
+      summary: `固定ページ「${item.title}」を作成`,
+    })
     return c.json({ item: toPageItem(item) }, 201)
   })
   .get('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
@@ -73,6 +81,12 @@ export const pages = new Hono<AppEnv>()
         allowRawHtml: canUseRawHtml(c.var.principal),
         userId: currentUserId(c.var.principal),
       })
+      await logActivity(c, {
+        action: 'restore_revision',
+        targetType: 'page',
+        targetId: id,
+        summary: `固定ページ「${item.title}」をリビジョン #${revisionId} へ復元`,
+      })
       return c.json({ item: toPageItem(item) })
     },
   )
@@ -88,11 +102,82 @@ export const pages = new Hono<AppEnv>()
         allowRawHtml: canUseRawHtml(c.var.principal),
         userId: currentUserId(c.var.principal),
       })
+      await logActivity(c, {
+        action: 'update',
+        targetType: 'page',
+        targetId: id,
+        summary: `固定ページ「${item.title}」を更新`,
+      })
       return c.json({ item: toPageItem(item) })
     },
   )
-  .delete('/:id', zValidator('param', idParamSchema, validationHook), async (c) => {
+  .delete(
+    '/:id',
+    zValidator('param', idParamSchema, validationHook),
+    zValidator('query', z.object({ force: z.enum(['true', 'false']).optional() }), validationHook),
+    async (c) => {
+      const id = c.req.valid('param').id
+      const force = c.req.valid('query').force === 'true'
+      await c.var.kanso.pages.delete(id, { force })
+      await logActivity(c, {
+        action: force ? 'purge' : 'trash',
+        targetType: 'page',
+        targetId: id,
+        summary: force ? `固定ページ #${id} を完全削除` : `固定ページ #${id} をゴミ箱へ`,
+      })
+      return c.json({ ok: true })
+    },
+  )
+  .post('/:id/restore', zValidator('param', idParamSchema, validationHook), async (c) => {
+    const item = await c.var.kanso.pages.restore(c.req.valid('param').id)
+    await logActivity(c, {
+      action: 'restore',
+      targetType: 'page',
+      targetId: item.id,
+      summary: `固定ページ「${item.title}」を復元`,
+    })
+    return c.json({ item: toPageItem(item) })
+  })
+  .post('/:id/duplicate', zValidator('param', idParamSchema, validationHook), async (c) => {
+    const item = await c.var.kanso.pages.duplicate(c.req.valid('param').id, {
+      allowRawHtml: canUseRawHtml(c.var.principal),
+    })
+    await logActivity(c, {
+      action: 'duplicate',
+      targetType: 'page',
+      targetId: item.id,
+      summary: `固定ページ「${item.title}」を複製`,
+    })
+    return c.json({ item: toPageItem(item) }, 201)
+  })
+  .get('/:id/share-links', zValidator('param', idParamSchema, validationHook), async (c) => {
     const id = c.req.valid('param').id
-    await c.var.kanso.pages.delete(id)
-    return c.json({ ok: true })
+    await c.var.kanso.pages.get(id)
+    return c.json({ items: await c.var.kanso.shareLinks.listFor('page', id) })
+  })
+  .post('/:id/share-links', zValidator('param', idParamSchema, validationHook), async (c) => {
+    const id = c.req.valid('param').id
+    await c.var.kanso.pages.get(id)
+    const link = await c.var.kanso.shareLinks.create({
+      targetType: 'page',
+      targetId: id,
+      createdBy: currentUserId(c.var.principal),
+    })
+    await logActivity(c, {
+      action: 'create',
+      targetType: 'share_link',
+      targetId: link.id,
+      summary: `固定ページ #${id} の共有リンクを作成`,
+    })
+    const base = c.env.SITE_URL || new URL(c.req.url).origin
+    return c.json(
+      {
+        item: {
+          id: link.id,
+          expiresAt: link.expiresAt,
+          url: new URL(`/preview/share/${link.token}`, base).toString(),
+        },
+      },
+      201,
+    )
   })

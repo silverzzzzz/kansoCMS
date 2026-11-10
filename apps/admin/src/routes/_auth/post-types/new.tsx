@@ -1,4 +1,4 @@
-import { slugify } from '@kanso/shared'
+import { type SectionField, slugify } from '@kanso/shared'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -20,6 +20,8 @@ function NewPostTypePage() {
   const [description, setDescription] = useState('')
   const [hasCategories, setHasCategories] = useState(true)
   const [hasTags, setHasTags] = useState(true)
+  const [noindex, setNoindex] = useState(false)
+  const [fields, setFields] = useState<SectionField[]>([])
   const [sortOrder, setSortOrder] = useState(0)
   const save = useMutation({
     mutationFn: () =>
@@ -31,6 +33,8 @@ function NewPostTypePage() {
             description: description.trim() || null,
             hasCategories,
             hasTags,
+            noindex,
+            fields,
             sortOrder,
           },
         }),
@@ -57,6 +61,8 @@ function NewPostTypePage() {
         description={description}
         hasCategories={hasCategories}
         hasTags={hasTags}
+        noindex={noindex}
+        fields={fields}
         sortOrder={sortOrder}
         errors={errors}
         pending={save.isPending}
@@ -71,6 +77,8 @@ function NewPostTypePage() {
         onDescription={setDescription}
         onCategories={setHasCategories}
         onTags={setHasTags}
+        onNoindex={setNoindex}
+        onFields={setFields}
         onSortOrder={setSortOrder}
         onSubmit={() => save.mutate()}
       />

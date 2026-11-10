@@ -1,5 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { organizationSettingsSchema, SETTINGS_KEYS, themeSettingsSchema } from './settings.ts'
+import {
+  organizationSettingsSchema,
+  SETTINGS_KEYS,
+  siteSettingsSchema,
+  themeSettingsSchema,
+} from './settings.ts'
+
+describe('site settings', () => {
+  it('defaults site-wide noindex to off', () => {
+    expect(siteSettingsSchema.parse({}).noindex).toBe(false)
+    expect(siteSettingsSchema.parse({ noindex: true }).noindex).toBe(true)
+  })
+
+  it('defaults the head/body extras to empty', () => {
+    const site = siteSettingsSchema.parse({})
+    expect(site.faviconMediaId).toBeNull()
+    expect(site.googleSiteVerification).toBe('')
+    expect(site.headHtml).toBeNull()
+    expect(site.bodyEndHtml).toBeNull()
+  })
+
+  it('caps custom head/body HTML at 16KB', () => {
+    const oversized = 'x'.repeat(16_001)
+    expect(siteSettingsSchema.safeParse({ headHtml: oversized }).success).toBe(false)
+    expect(siteSettingsSchema.safeParse({ bodyEndHtml: oversized }).success).toBe(false)
+    expect(siteSettingsSchema.safeParse({ headHtml: 'x'.repeat(16_000) }).success).toBe(true)
+  })
+})
 
 describe('theme settings', () => {
   it('keeps independent settings for arbitrary theme names', () => {

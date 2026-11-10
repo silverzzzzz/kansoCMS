@@ -2,7 +2,11 @@ import { KansoError } from '@kanso/core'
 import { themeNameSchema } from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
-import { sectionsMetaByTheme, themeSettingsFieldsByTheme } from '../site/themes/sections-meta.ts'
+import {
+  pageTemplatesByTheme,
+  sectionsMetaByTheme,
+  themeSettingsFieldsByTheme,
+} from '../site/themes/sections-meta.ts'
 
 /**
  * Read-only site metadata for the admin UI. /sections lists the section
@@ -26,5 +30,10 @@ export const siteInfo = new Hono<AppEnv>().get('/sections', async (c) => {
     description: meta.description ?? null,
     fields: meta.fields,
   }))
-  return c.json({ theme: name, items, settings: themeSettingsFieldsByTheme[name] })
+  return c.json({
+    theme: name,
+    items,
+    settings: themeSettingsFieldsByTheme[name],
+    templates: pageTemplatesByTheme[name],
+  })
 })

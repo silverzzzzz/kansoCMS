@@ -9,6 +9,7 @@ import {
   type RegistrationCredential,
   type SetupInput,
   setupSchema,
+  slugify,
 } from '@kanso/shared'
 import { and, asc, count, eq, lt, sql } from 'drizzle-orm'
 import { z } from 'zod'
@@ -45,6 +46,7 @@ const userColumns = {
   id: users.id,
   email: users.email,
   name: users.name,
+  slug: users.slug,
   role: users.role,
   webauthnUserId: users.webauthnUserId,
 }
@@ -170,10 +172,13 @@ export function passkeyService(db: Db) {
     const verified = await verifyRegistration(credential, expected(rp, row.id))
     const { webauthnUserId, ...setup } = parsed.data
 
+    const authorSlug = slugify(setup.name) || 'user'
     const [, , created] = await db.batch([
+      // Positional values follow the table column order exactly.
       db.insert(users).select(
         sql`select null, ${setup.email}, ${setup.name}, 'admin', ${webauthnUserId},
-            unixepoch(), unixepoch() where not exists (select 1 from ${users})`,
+            ${authorSlug}, null, null, unixepoch(), unixepoch()
+            where not exists (select 1 from ${users})`,
       ),
       db.insert(passkeys).select(
         sql`select null, u.id, ${passkeyColumns(verified, passkeyName ?? DEFAULT_PASSKEY_NAME)}

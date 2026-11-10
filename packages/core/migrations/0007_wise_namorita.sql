@@ -1,0 +1,1 @@
+ALTER TABLE `post_types` ADD `noindex` integer DEFAULT false NOT NULL;

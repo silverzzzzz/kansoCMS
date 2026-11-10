@@ -14,12 +14,18 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as PasskeyLinkRouteImport } from './routes/passkey-link'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as AuthIndexRouteImport } from './routes/_auth/index'
+import { Route as AuthActivityRouteImport } from './routes/_auth/activity'
+import { Route as AuthAnalyticsRouteImport } from './routes/_auth/analytics'
+import { Route as AuthToolsRouteImport } from './routes/_auth/tools'
 import { Route as AuthAccountIndexRouteImport } from './routes/_auth/account/index'
 import { Route as AuthApiKeysIndexRouteImport } from './routes/_auth/api-keys/index'
 import { Route as AuthCustomizeIndexRouteImport } from './routes/_auth/customize/index'
 import { Route as AuthFormsIndexRouteImport } from './routes/_auth/forms/index'
 import { Route as AuthFormsNewRouteImport } from './routes/_auth/forms/new'
 import { Route as AuthMediaIndexRouteImport } from './routes/_auth/media/index'
+import { Route as AuthMenusIndexRouteImport } from './routes/_auth/menus/index'
+import { Route as AuthMenusIdRouteImport } from './routes/_auth/menus/$id'
+import { Route as AuthMenusNewRouteImport } from './routes/_auth/menus/new'
 import { Route as AuthPagesIndexRouteImport } from './routes/_auth/pages/index'
 import { Route as AuthPagesIdRouteImport } from './routes/_auth/pages/$id'
 import { Route as AuthPagesNewRouteImport } from './routes/_auth/pages/new'
@@ -60,6 +66,21 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthActivityRoute = AuthActivityRouteImport.update({
+  id: '/activity',
+  path: '/activity',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthAnalyticsRoute = AuthAnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthToolsRoute = AuthToolsRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthAccountIndexRoute = AuthAccountIndexRouteImport.update({
   id: '/account/',
   path: '/account/',
@@ -88,6 +109,21 @@ const AuthFormsNewRoute = AuthFormsNewRouteImport.update({
 const AuthMediaIndexRoute = AuthMediaIndexRouteImport.update({
   id: '/media/',
   path: '/media/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthMenusIndexRoute = AuthMenusIndexRouteImport.update({
+  id: '/menus/',
+  path: '/menus/',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthMenusIdRoute = AuthMenusIdRouteImport.update({
+  id: '/menus/$id',
+  path: '/menus/$id',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthMenusNewRoute = AuthMenusNewRouteImport.update({
+  id: '/menus/new',
+  path: '/menus/new',
   getParentRoute: () => AuthRoute,
 } as any)
 const AuthPagesIndexRoute = AuthPagesIndexRouteImport.update({
@@ -173,7 +209,12 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
+  '/activity': typeof AuthActivityRoute
+  '/analytics': typeof AuthAnalyticsRoute
+  '/tools': typeof AuthToolsRoute
   '/forms/new': typeof AuthFormsNewRoute
+  '/menus/$id': typeof AuthMenusIdRoute
+  '/menus/new': typeof AuthMenusNewRoute
   '/pages/$id': typeof AuthPagesIdRoute
   '/pages/new': typeof AuthPagesNewRoute
   '/post-types/$id': typeof AuthPostTypesIdRoute
@@ -185,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/customize/': typeof AuthCustomizeIndexRoute
   '/forms/': typeof AuthFormsIndexRoute
   '/media/': typeof AuthMediaIndexRoute
+  '/menus/': typeof AuthMenusIndexRoute
   '/pages/': typeof AuthPagesIndexRoute
   '/post-types/': typeof AuthPostTypesIndexRoute
   '/posts/': typeof AuthPostsIndexRoute
@@ -199,8 +241,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
+  '/activity': typeof AuthActivityRoute
+  '/analytics': typeof AuthAnalyticsRoute
+  '/tools': typeof AuthToolsRoute
   '/': typeof AuthIndexRoute
   '/forms/new': typeof AuthFormsNewRoute
+  '/menus/$id': typeof AuthMenusIdRoute
+  '/menus/new': typeof AuthMenusNewRoute
   '/pages/$id': typeof AuthPagesIdRoute
   '/pages/new': typeof AuthPagesNewRoute
   '/post-types/$id': typeof AuthPostTypesIdRoute
@@ -212,6 +259,7 @@ export interface FileRoutesByTo {
   '/customize': typeof AuthCustomizeIndexRoute
   '/forms': typeof AuthFormsIndexRoute
   '/media': typeof AuthMediaIndexRoute
+  '/menus': typeof AuthMenusIndexRoute
   '/pages': typeof AuthPagesIndexRoute
   '/post-types': typeof AuthPostTypesIndexRoute
   '/posts': typeof AuthPostsIndexRoute
@@ -228,8 +276,13 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/passkey-link': typeof PasskeyLinkRoute
   '/setup': typeof SetupRoute
+  '/_auth/activity': typeof AuthActivityRoute
+  '/_auth/analytics': typeof AuthAnalyticsRoute
+  '/_auth/tools': typeof AuthToolsRoute
   '/_auth/': typeof AuthIndexRoute
   '/_auth/forms/new': typeof AuthFormsNewRoute
+  '/_auth/menus/$id': typeof AuthMenusIdRoute
+  '/_auth/menus/new': typeof AuthMenusNewRoute
   '/_auth/pages/$id': typeof AuthPagesIdRoute
   '/_auth/pages/new': typeof AuthPagesNewRoute
   '/_auth/post-types/$id': typeof AuthPostTypesIdRoute
@@ -241,6 +294,7 @@ export interface FileRoutesById {
   '/_auth/customize/': typeof AuthCustomizeIndexRoute
   '/_auth/forms/': typeof AuthFormsIndexRoute
   '/_auth/media/': typeof AuthMediaIndexRoute
+  '/_auth/menus/': typeof AuthMenusIndexRoute
   '/_auth/pages/': typeof AuthPagesIndexRoute
   '/_auth/post-types/': typeof AuthPostTypesIndexRoute
   '/_auth/posts/': typeof AuthPostsIndexRoute
@@ -258,7 +312,12 @@ export interface FileRouteTypes {
     | '/login'
     | '/passkey-link'
     | '/setup'
+    | '/activity'
+    | '/analytics'
+    | '/tools'
     | '/forms/new'
+    | '/menus/$id'
+    | '/menus/new'
     | '/pages/$id'
     | '/pages/new'
     | '/post-types/$id'
@@ -270,6 +329,7 @@ export interface FileRouteTypes {
     | '/customize/'
     | '/forms/'
     | '/media/'
+    | '/menus/'
     | '/pages/'
     | '/post-types/'
     | '/posts/'
@@ -284,8 +344,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/passkey-link'
     | '/setup'
+    | '/activity'
+    | '/analytics'
+    | '/tools'
     | '/'
     | '/forms/new'
+    | '/menus/$id'
+    | '/menus/new'
     | '/pages/$id'
     | '/pages/new'
     | '/post-types/$id'
@@ -297,6 +362,7 @@ export interface FileRouteTypes {
     | '/customize'
     | '/forms'
     | '/media'
+    | '/menus'
     | '/pages'
     | '/post-types'
     | '/posts'
@@ -312,8 +378,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/passkey-link'
     | '/setup'
+    | '/_auth/activity'
+    | '/_auth/analytics'
+    | '/_auth/tools'
     | '/_auth/'
     | '/_auth/forms/new'
+    | '/_auth/menus/$id'
+    | '/_auth/menus/new'
     | '/_auth/pages/$id'
     | '/_auth/pages/new'
     | '/_auth/post-types/$id'
@@ -325,6 +396,7 @@ export interface FileRouteTypes {
     | '/_auth/customize/'
     | '/_auth/forms/'
     | '/_auth/media/'
+    | '/_auth/menus/'
     | '/_auth/pages/'
     | '/_auth/post-types/'
     | '/_auth/posts/'
@@ -380,6 +452,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/activity': {
+      id: '/_auth/activity'
+      path: '/activity'
+      fullPath: '/activity'
+      preLoaderRoute: typeof AuthActivityRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/analytics': {
+      id: '/_auth/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AuthAnalyticsRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/tools': {
+      id: '/_auth/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof AuthToolsRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/account/': {
       id: '/_auth/account/'
       path: '/account'
@@ -420,6 +513,27 @@ declare module '@tanstack/react-router' {
       path: '/media'
       fullPath: '/media/'
       preLoaderRoute: typeof AuthMediaIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/menus/': {
+      id: '/_auth/menus/'
+      path: '/menus'
+      fullPath: '/menus/'
+      preLoaderRoute: typeof AuthMenusIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/menus/$id': {
+      id: '/_auth/menus/$id'
+      path: '/menus/$id'
+      fullPath: '/menus/$id'
+      preLoaderRoute: typeof AuthMenusIdRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_auth/menus/new': {
+      id: '/_auth/menus/new'
+      path: '/menus/new'
+      fullPath: '/menus/new'
+      preLoaderRoute: typeof AuthMenusNewRouteImport
       parentRoute: typeof AuthRoute
     }
     '/_auth/pages/': {
@@ -531,8 +645,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthRouteChildren {
+  AuthActivityRoute: typeof AuthActivityRoute
+  AuthAnalyticsRoute: typeof AuthAnalyticsRoute
+  AuthToolsRoute: typeof AuthToolsRoute
   AuthIndexRoute: typeof AuthIndexRoute
   AuthFormsNewRoute: typeof AuthFormsNewRoute
+  AuthMenusIdRoute: typeof AuthMenusIdRoute
+  AuthMenusNewRoute: typeof AuthMenusNewRoute
   AuthPagesIdRoute: typeof AuthPagesIdRoute
   AuthPagesNewRoute: typeof AuthPagesNewRoute
   AuthPostTypesIdRoute: typeof AuthPostTypesIdRoute
@@ -544,6 +663,7 @@ interface AuthRouteChildren {
   AuthCustomizeIndexRoute: typeof AuthCustomizeIndexRoute
   AuthFormsIndexRoute: typeof AuthFormsIndexRoute
   AuthMediaIndexRoute: typeof AuthMediaIndexRoute
+  AuthMenusIndexRoute: typeof AuthMenusIndexRoute
   AuthPagesIndexRoute: typeof AuthPagesIndexRoute
   AuthPostTypesIndexRoute: typeof AuthPostTypesIndexRoute
   AuthPostsIndexRoute: typeof AuthPostsIndexRoute
@@ -556,8 +676,13 @@ interface AuthRouteChildren {
 }
 
 const AuthRouteChildren: AuthRouteChildren = {
+  AuthActivityRoute: AuthActivityRoute,
+  AuthAnalyticsRoute: AuthAnalyticsRoute,
+  AuthToolsRoute: AuthToolsRoute,
   AuthIndexRoute: AuthIndexRoute,
   AuthFormsNewRoute: AuthFormsNewRoute,
+  AuthMenusIdRoute: AuthMenusIdRoute,
+  AuthMenusNewRoute: AuthMenusNewRoute,
   AuthPagesIdRoute: AuthPagesIdRoute,
   AuthPagesNewRoute: AuthPagesNewRoute,
   AuthPostTypesIdRoute: AuthPostTypesIdRoute,
@@ -569,6 +694,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthCustomizeIndexRoute: AuthCustomizeIndexRoute,
   AuthFormsIndexRoute: AuthFormsIndexRoute,
   AuthMediaIndexRoute: AuthMediaIndexRoute,
+  AuthMenusIndexRoute: AuthMenusIndexRoute,
   AuthPagesIndexRoute: AuthPagesIndexRoute,
   AuthPostTypesIndexRoute: AuthPostTypesIndexRoute,
   AuthPostsIndexRoute: AuthPostsIndexRoute,

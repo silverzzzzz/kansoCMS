@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { contentFieldsSchema, seoFieldsSchema } from './content.ts'
 import { idSchema, listQuerySchema } from './query.ts'
+import { sectionFieldListSchema } from './sections.ts'
 import { slugSchema } from './slug.ts'
 
 export const postTypeFieldsSchema = z.object({
@@ -9,6 +10,10 @@ export const postTypeFieldsSchema = z.object({
   description: z.string().trim().max(500).nullable(),
   hasCategories: z.boolean(),
   hasTags: z.boolean(),
+  /** Applies to archive URLs only; posts keep their own `noindex`. */
+  noindex: z.boolean(),
+  /** Custom field definitions (Shopify metafields equivalent). */
+  fields: sectionFieldListSchema,
   sortOrder: z.number().int(),
 })
 
@@ -23,6 +28,10 @@ export const postFieldsSchema = contentFieldsSchema.extend(seoFieldsSchema.shape
   coverMediaId: idSchema.nullable(),
   categoryIds: z.array(idSchema).max(50),
   tagIds: z.array(idSchema).max(50),
+  /** Sticky posts sort before others in archive lists. */
+  pinned: z.boolean(),
+  /** Custom field values; validated against the post type's `fields` at write time. */
+  fields: z.record(z.string(), z.unknown()),
 })
 
 export const createPostSchema = postFieldsSchema

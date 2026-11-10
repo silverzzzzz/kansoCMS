@@ -48,7 +48,13 @@ function testSetup() {
       c.set('principal', {
         kind: 'session',
         token: 'test-token',
-        user: { id: 7, email: 'editor@example.com', name: 'Editor', role: 'editor' },
+        user: {
+          id: 7,
+          email: 'editor@example.com',
+          name: 'Editor',
+          slug: 'editor',
+          role: 'editor',
+        },
       })
       await next()
     })
@@ -94,6 +100,83 @@ describe('pages revision API', () => {
   })
 })
 
+describe('pages trash API', () => {
+  function trashSetup() {
+    const list = vi.fn().mockResolvedValue({ items: [page], total: 1 })
+    const deletePage = vi.fn().mockResolvedValue(undefined)
+    const restore = vi.fn().mockResolvedValue({ ...page, deletedAt: null })
+    const kanso: Kanso = Object.assign(Object.create(null), {
+      pages: { list, delete: deletePage, restore },
+    })
+    const app = new Hono<AppEnv>()
+      .use('*', async (c, next) => {
+        c.set('kanso', kanso)
+        c.set('principal', {
+          kind: 'session',
+          token: 'test-token',
+          user: {
+            id: 7,
+            email: 'editor@example.com',
+            name: 'Editor',
+            slug: 'editor',
+            role: 'editor',
+          },
+        })
+        await next()
+      })
+      .onError(onError)
+      .route('/api/v1/pages', pages)
+    return { app, list, deletePage, restore }
+  }
+
+  it('passes trashed=true through to the list query', async () => {
+    const { app, list } = trashSetup()
+    const response = await app.request('/api/v1/pages?trashed=true', undefined, {} as Bindings)
+
+    expect(response.status).toBe(200)
+    expect(list).toHaveBeenCalledWith(expect.objectContaining({ trashed: 'true' }))
+  })
+
+  it('soft deletes by default and purges with force=true', async () => {
+    const { app, deletePage } = trashSetup()
+    const soft = await app.request('/api/v1/pages/4', { method: 'DELETE' }, {} as Bindings)
+    const hard = await app.request(
+      '/api/v1/pages/4?force=true',
+      { method: 'DELETE' },
+      {} as Bindings,
+    )
+
+    expect(soft.status).toBe(200)
+    expect(hard.status).toBe(200)
+    expect(deletePage).toHaveBeenNthCalledWith(1, 4, { force: false })
+    expect(deletePage).toHaveBeenNthCalledWith(2, 4, { force: true })
+  })
+
+  it('rejects an invalid force value', async () => {
+    const { app, deletePage } = trashSetup()
+    const response = await app.request(
+      '/api/v1/pages/4?force=yes',
+      { method: 'DELETE' },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(400)
+    expect(deletePage).not.toHaveBeenCalled()
+  })
+
+  it('restores a trashed page', async () => {
+    const { app, restore } = trashSetup()
+    const response = await app.request(
+      '/api/v1/pages/4/restore',
+      { method: 'POST' },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(200)
+    expect(restore).toHaveBeenCalledWith(4)
+  })
+})
+
 describe('pages sections input', () => {
   function sectionsSetup() {
     const create = vi
@@ -112,7 +195,13 @@ describe('pages sections input', () => {
         c.set('principal', {
           kind: 'session',
           token: 'test-token',
-          user: { id: 7, email: 'editor@example.com', name: 'Editor', role: 'editor' },
+          user: {
+            id: 7,
+            email: 'editor@example.com',
+            name: 'Editor',
+            slug: 'editor',
+            role: 'editor',
+          },
         })
         await next()
       })
@@ -164,5 +253,83 @@ describe('pages sections input', () => {
     expect(paths).toContain('sections.0.type')
     expect(paths.some((path) => path.startsWith('sections.1.settings.heading'))).toBe(true)
     expect(create).not.toHaveBeenCalled()
+  })
+})
+
+describe('pages duplicate & share links API', () => {
+  function shareSetup() {
+    const duplicate = vi.fn().mockResolvedValue({ ...page, id: 12, slug: 'current-copy' })
+    const listFor = vi
+      .fn()
+      .mockResolvedValue([{ id: 'a'.repeat(64), expiresAt: new Date('2026-09-23T00:00:00Z') }])
+    const createLink = vi
+      .fn()
+      .mockResolvedValue({ id: 'b'.repeat(64), token: 'raw-token', expiresAt: new Date() })
+    const get = vi.fn().mockResolvedValue(page)
+    const kanso: Kanso = Object.assign(Object.create(null), {
+      pages: { get, duplicate },
+      shareLinks: { listFor, create: createLink },
+    })
+    const app = new Hono<AppEnv>()
+      .use('*', async (c, next) => {
+        c.set('kanso', kanso)
+        c.set('principal', {
+          kind: 'session',
+          token: 'test-token',
+          user: {
+            id: 7,
+            email: 'editor@example.com',
+            name: 'Editor',
+            slug: 'editor',
+            role: 'editor',
+          },
+        })
+        await next()
+      })
+      .onError(onError)
+      .route('/api/v1/pages', pages)
+    return { app, duplicate, listFor, createLink, get }
+  }
+
+  it('duplicates a page with the caller raw-html permission', async () => {
+    const { app, duplicate } = shareSetup()
+    const response = await app.request(
+      '/api/v1/pages/4/duplicate',
+      { method: 'POST' },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(201)
+    expect(duplicate).toHaveBeenCalledWith(4, { allowRawHtml: false })
+    await expect(response.json()).resolves.toMatchObject({
+      item: { id: 12, slug: 'current-copy' },
+    })
+  })
+
+  it('issues a share link URL against the request origin', async () => {
+    const { app, createLink } = shareSetup()
+    const response = await app.request(
+      '/api/v1/pages/4/share-links',
+      { method: 'POST' },
+      {} as Bindings,
+    )
+
+    expect(response.status).toBe(201)
+    expect(createLink).toHaveBeenCalledWith({ targetType: 'page', targetId: 4, createdBy: 7 })
+    await expect(response.json()).resolves.toMatchObject({
+      item: { url: 'http://localhost/preview/share/raw-token' },
+    })
+  })
+
+  it('lists existing share links for a page', async () => {
+    const { app, listFor, get } = shareSetup()
+    const response = await app.request('/api/v1/pages/4/share-links', undefined, {} as Bindings)
+
+    expect(response.status).toBe(200)
+    expect(get).toHaveBeenCalledWith(4)
+    expect(listFor).toHaveBeenCalledWith('page', 4)
+    await expect(response.json()).resolves.toMatchObject({
+      items: [{ id: 'a'.repeat(64) }],
+    })
   })
 })
