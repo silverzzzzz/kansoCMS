@@ -14,10 +14,10 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Shopify-style customize editor: compose pages from theme sections (hero, text, latest posts, …) with a live preview, plus theme-wide settings (accent color, footer, social links) — no code, no Liquid
 - A starter site for a small business (sectioned home and services pages, about, contact form, news posts, images) installed at setup by default, and removable later without touching what you edited
 - Scheduled publishing, a menu builder, trash with restore, content duplication and expiring draft-share links, pinned posts, a custom 404 page and maintenance mode
-- Per-post-type custom fields, page templates and Workers AI assist (excerpt/SEO text/image alt generation)
+- Per-post-type custom fields, page templates and optional Workers AI assist (excerpt and SEO text from the body, image alt text from the image itself)
 - Author archives with editable profiles, related posts and an automatic table of contents on articles
 - Cookie-less analytics (daily D1 aggregation) and an activity log of every admin mutation
-- Full-site JSON export/import — content moves between installs by slug, media is referenced but not embedded
+- Full-site JSON export/import — content, menus, redirects and form definitions move between installs by slug in requests small enough for the Workers Free plan; media is referenced by key, not embedded
 - One `wrangler deploy`, no servers, no Node runtime in production
 
 Design notes live in [docs/architecture.md](docs/architecture.md) and the per-task decisions in
@@ -47,7 +47,7 @@ docs/       architecture, task board and decisions
 
 ## Requirements
 
-- Node.js 22+
+- Node.js 22.16+ (24 recommended — the test suite runs on Node's built-in SQLite)
 - pnpm 10 (`corepack enable`)
 - A Cloudflare account only when you deploy — local dev runs on `workerd` with emulated D1/R2
 
@@ -113,6 +113,39 @@ passkey screens are tested with Chromium's virtual authenticator. Test pages and
 starter-site test installs and removes the starter site, and skips itself when the database
 already has it installed.
 
+### Unit and integration tests
+
+`pnpm test` needs no Cloudflare account and no running server. Besides plain unit tests it runs
+the services and the whole Worker against a real database: `@kanso/core/testing` puts Node's
+built-in SQLite behind the D1 API with every migration applied, and `apps/server/src/testing.ts`
+drives the real routes and middleware through it. That test database also enforces the D1
+limits local development ignores — 100 bound parameters per statement, 50-byte `LIKE` patterns —
+and counts queries, so a test can assert that a request stays inside the 50 queries a Workers
+Free invocation gets.
+
+### Workers AI (optional)
+
+The "AI で生成" buttons (excerpt, SEO description, image alt text) are off by default and stay
+hidden until the binding exists. To turn them on, uncomment the `ai` binding in
+`apps/server/wrangler.jsonc` and run `pnpm types`. An AI binding always talks to Cloudflare, so
+from then on `pnpm dev` needs `wrangler login` (or `CLOUDFLARE_API_TOKEN`) and every suggestion is
+billed to your account. Alt text is written by a vision model that is shown the stored image
+(up to 4 MB; JPEG, PNG, WebP or GIF) — never guessed from the file name.
+
+### Export and import
+
+**ツール** downloads the site as one JSON file and imports such a file into another install.
+Everything is matched by slug or path, so importing twice changes nothing, and updated pages and
+posts keep their previous version as a revision. Images — covers, OG images, images inside
+sections and custom fields — travel as R2 keys and are linked again when the target site has a
+media row with the same key; otherwise the reference is cleared and listed as a warning. Form
+definitions are included, form submissions are not.
+
+A file is imported as a series of requests (structure, pages, posts, settings), at most 100 pages
+and 100 posts each; the admin UI does the splitting, and `splitBundle` from `@kanso/shared` does
+the same for API clients. Site settings are exported and imported only by an administrator signed
+in to the admin; the sample-content manifest and the cache generation never leave their site.
+
 ### Form notifications (email)
 
 Manage forms under **管理画面 → フォーム**. Each form has its own field definitions and a
@@ -151,7 +184,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/blog` | Post-type archive, 10 per page, `?page=2` … (`page=1` and invalid values redirect to the bare URL) |
 | `/blog/hello-world` | A post: `BlogPosting` + `BreadcrumbList` JSON-LD, `og:type=article`, `rel=alternate` to the feed |
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |
-| `/blog/author/jane` | Author archive — posts by the author, `noindex` unless they have published posts |
+| `/blog/author/jane` | Author archive — exists only for authors with published posts in that post type (404 otherwise) |
 | `/blog/feed.xml` | Atom feed of the 20 latest posts, `X-Robots-Tag: noindex` |
 | `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex |
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |

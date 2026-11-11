@@ -72,6 +72,19 @@ export const sectionsMetaByTheme: Record<ThemeName, Record<string, SectionMeta>>
   paper: standardSectionsMeta,
 }
 
+/**
+ * Field definitions of a section type, looked up across the bundled themes
+ * (which share their type names). Export/import use it to find the image
+ * settings inside sections, so those travel by media key instead of by id.
+ */
+export function sectionFieldsOf(type: string): SectionField[] | undefined {
+  for (const catalog of Object.values(sectionsMetaByTheme)) {
+    const meta = catalog[type]
+    if (meta) return meta.fields
+  }
+  return undefined
+}
+
 /** Theme-wide settings (Shopify's settings_schema counterpart), same field DSL. */
 export const standardThemeSettingsFields: SectionField[] = sectionFieldListSchema.parse([
   {

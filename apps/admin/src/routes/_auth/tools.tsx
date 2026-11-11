@@ -1,3 +1,4 @@
+import { exportBundleSchema, type ImportReport, splitBundle } from '@kanso/shared'
 import { useMutation } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
@@ -11,24 +12,35 @@ export const Route = createFileRoute('/_auth/tools')({
   component: ToolsPage,
 })
 
-type ImportReport = {
-  created: number
-  updated: number
-  skipped: number
-  warnings: string[]
+type Progress = { done: number; total: number }
+
+function emptyReport(): ImportReport {
+  return { created: 0, updated: 0, skipped: 0, warnings: [] }
+}
+
+function addReport(total: ImportReport, part: ImportReport): ImportReport {
+  return {
+    created: total.created + part.created,
+    updated: total.updated + part.updated,
+    skipped: total.skipped + part.skipped,
+    warnings: [...total.warnings, ...part.warnings],
+  }
 }
 
 /** Content portability (T57): JSON export download and slug-upsert import. */
 function ToolsPage() {
+  const { user } = Route.useRouteContext()
+  const isAdmin = user.role === 'admin'
   const fileRef = useRef<HTMLInputElement>(null)
   const [includeSettings, setIncludeSettings] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [report, setReport] = useState<ImportReport | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
 
   const exportBundle = useMutation({
     mutationFn: async () => {
       const data = await unwrap(
-        api.export.$get({ query: includeSettings ? { settings: '1' as const } : {} }),
+        api.export.$get({ query: isAdmin && includeSettings ? { settings: '1' as const } : {} }),
       )
       const day = new Date().toISOString().slice(0, 10)
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -41,20 +53,43 @@ function ToolsPage() {
     },
   })
 
+  /**
+   * A file is imported as a series of requests (structure, then pages, then
+   * posts, then settings), each small enough for one Worker invocation. The
+   * import is an upsert, so a run that stops halfway can simply be repeated.
+   */
   const importBundle = useMutation({
     mutationFn: async (file: File) => {
-      let parsed: unknown
+      let raw: unknown
       try {
-        parsed = JSON.parse(await file.text())
+        raw = JSON.parse(await file.text())
       } catch {
         throw new ApiError(0, 'validation', 'JSON ファイルを読み取れませんでした')
       }
-      return unwrap(api.import.$post({ json: parsed as never }))
+      const parsed = exportBundleSchema.safeParse(raw)
+      if (!parsed.success) {
+        const issue = parsed.error.issues[0]
+        throw new ApiError(
+          0,
+          'validation',
+          `エクスポートファイルの形式が正しくありません (${issue?.path.join('.') ?? ''}: ${issue?.message ?? ''})`,
+        )
+      }
+      const parts = splitBundle(parsed.data)
+      let total = emptyReport()
+      setProgress({ done: 0, total: parts.length })
+      for (const [index, part] of parts.entries()) {
+        const { media: _media, ...body } = part
+        total = addReport(total, await unwrap(api.import.$post({ json: body })))
+        setReport(total)
+        setProgress({ done: index + 1, total: parts.length })
+      }
+      return total
     },
-    onSuccess: (result) => {
-      setReport(result)
+    onSuccess: () => {
       if (fileRef.current) fileRef.current.value = ''
     },
+    onSettled: () => setProgress(null),
   })
 
   const error = exportBundle.error ?? importBundle.error
@@ -68,9 +103,12 @@ function ToolsPage() {
       {error && (
         <div className="mt-6">
           <Alert tone="error">
-            {error instanceof ApiError && error.status !== 0
-              ? error.message
-              : (importError ?? '処理できませんでした')}
+            {error instanceof ApiError ? error.message : '処理できませんでした'}
+            {importBundle.error && report && (
+              <span className="mt-1 block">
+                途中まで取り込み済みです。同じファイルでもう一度実行すると続きから取り込めます。
+              </span>
+            )}
           </Alert>
         </div>
       )}
@@ -78,17 +116,20 @@ function ToolsPage() {
       <section className="mt-8 border border-neutral-200 bg-white p-5">
         <h2 className="text-lg font-semibold">エクスポート</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          投稿タイプ・タクソノミー・固定ページ・投稿・メディア (メタのみ) ・リダイレクト・メニューを
-          JSON でダウンロードします。メディアの実ファイル (R2) は含まれません。
+          投稿タイプ・カテゴリ・タグ・固定ページ・投稿・リダイレクト・メニュー・フォームの定義を
+          JSON でダウンロードします。メディアの実ファイル (R2)
+          とフォームの送信データは含まれません。
         </p>
-        <label className="mt-4 flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={includeSettings}
-            onChange={(event) => setIncludeSettings(event.target.checked)}
-          />
-          サイト設定も含める
-        </label>
+        {isAdmin && (
+          <label className="mt-4 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includeSettings}
+              onChange={(event) => setIncludeSettings(event.target.checked)}
+            />
+            サイト設定も含める
+          </label>
+        )}
         <div className="mt-4">
           <Button
             type="button"
@@ -104,8 +145,10 @@ function ToolsPage() {
       <section className="mt-8 border border-neutral-200 bg-white p-5">
         <h2 className="text-lg font-semibold">インポート</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          エクスポート JSON をアップロードします。同じスラッグ / パスのコンテンツは上書き (upsert)
-          され、2 回実行しても差分は出ません。メディア行が無い参照は null になり警告に出ます。
+          エクスポートした JSON を取り込みます。同じスラッグ / パスのコンテンツは上書きされ、2
+          回実行しても差分は出ません。このサイトにないメディアへの参照は外され、警告に出ます。
+          大きなファイルは自動で分割して送ります。
+          {!isAdmin && ' サイト設定は管理者だけが取り込めます。'}
         </p>
         <form
           className="mt-4 space-y-3"
@@ -122,9 +165,20 @@ function ToolsPage() {
           }}
         >
           <Field label="エクスポート JSON">
-            <input ref={fileRef} type="file" accept="application/json,.json" required />
+            <input
+              ref={fileRef}
+              className="mt-1 block text-sm"
+              type="file"
+              accept="application/json,.json"
+              required
+            />
           </Field>
-          <div className="flex justify-end">
+          <div className="flex items-center justify-end gap-3">
+            {progress && (
+              <span className="text-sm text-neutral-600">
+                {progress.done} / {progress.total}
+              </span>
+            )}
             <Button type="submit" disabled={importBundle.isPending}>
               {importBundle.isPending ? 'インポート中…' : 'インポート'}
             </Button>

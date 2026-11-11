@@ -325,6 +325,7 @@ pnpm deploy                                                 # admin build → se
 
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。
 - `pnpm build`: admin → `apps/server/public/admin/` → server の `vite build` が `public/` ごと client 出力へ同梱。
+- `pnpm test`: Vitest。モックだけでなく実 DB でも動かす。`@kanso/core/testing` が Node 組み込みの SQLite を D1 の API の裏に置き (全マイグレーション適用、バインド変数 100 個・LIKE 50 バイトの制限とクエリ数カウンタ付き)、`apps/server/src/testing.ts` が Worker 全体をその上で動かす。Cloudflare のアカウントも起動中のサーバーも要らない。
 - `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。
 - `.github/workflows/ci.yml`: 2 ジョブ (`gates`: typecheck/check/test/build、`e2e`: Chromium + ローカル D1 で Playwright)。デプロイは CI に含めない。
 - `SITE_URL` (`wrangler.jsonc` の `vars`) は canonical / JSON-LD / sitemap / feed の絶対 URL に使う。本番では実ドメインに書き換える。
@@ -346,6 +347,7 @@ pnpm deploy                                                 # admin build → se
 | 8. サイトマップ・noindex | **done (2026-11-11)** | sitemap をアーカイブ (タイプ・カテゴリ・タグ) と `lastmod` まで拡充、`post_types.noindex` (アーカイブのみ) / `site.noindex` の 3 階層 noindex、`noindex, follow` vs `noindex, nofollow` の区別、サイト内検索からの除外、feed の `X-Robots-Tag` ([tasks/phase-8.md](tasks/phase-8.md)) | index 可能な URL が漏れなく sitemap に載り、どのレベルでも noindex が一貫して効く |
 | 9. 編集体験と運用 | **done (2026-11-11)** | 予約公開 UI (`status=scheduled` 仮想フィルタ)、メニュービルダー (`menus` 表 + `header` slug でナビ差替)、ゴミ箱 (`deleted_at` + partial unique index + 復元)、favicon/検証タグ/カスタム head・body、`robotsExtra`、リダイレクト CSV インポート (RFC4180、部分成功)、SEO チェックリスト + SERP プレビュー、複製 (`-copy` slug) + 下書き共有リンク (SHA-256・7日)、ピン留め (`posts.pinned`)、カスタム 404 (`site.notFoundPageId`)、メンテナンスモード (公開 GET 503・セッション/robots/sitemap/preview バイパス) ([tasks/phase-9.md](tasks/phase-9.md)) | 競合 CMS の運用導線を揃える |
 | 10. 構造化と分析 | **done (2026-11-11)** | 軽量アクセス解析 (`pageview_daily` 日次集計・Cookie/JS 不使用・`executionCtx` で非同期記録)、投稿タイプ別カスタムフィールド (field DSL・`<dl>` 描画)、ページテンプレート (section プリセット)、AI アシスト (Workers AI・抜粋/説明文/alt 生成)、著者アーカイブ (`/{type}/author/{slug}`) + プロフィール編集 + 関連記事 + 目次 (h2/h3 自動 ID)、JSON エクスポート/インポート (slug upsert・冪等・メディアはメタのみ)、アクティビティログ (`activity_log`・2,000 件上限・全変更系ハンドラ計測) ([tasks/phase-10.md](tasks/phase-10.md)) | 構造化コンテンツとサイト内分析を持つ CMS になる |
+| 11. 安定化 | **done (2026-11-12)** | Phase 7〜10 を実サーバーで動かして見つかった不具合の修正: Workers AI を任意設定に (既定では Cloudflare のログインなしで `pnpm dev` と CI が動く)、インポートの一括処理化 (Workers Free の 50 クエリに収まる) と設定の管理者限定、アクセス解析の計測位置、ログイン失敗ログの集約、ゴミ箱の完全削除条件、LIKE 50 バイト制限。実 DB を使うテストの土台 (`@kanso/core/testing`) ([tasks/phase-11.md](tasks/phase-11.md)) | 実サーバーと E2E で全機能が動き、複数行を書く経路がクエリ上限に収まる |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
