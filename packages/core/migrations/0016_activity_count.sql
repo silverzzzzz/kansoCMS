@@ -1,0 +1,1 @@
+ALTER TABLE `activity_log` ADD `count` integer DEFAULT 1 NOT NULL;

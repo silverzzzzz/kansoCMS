@@ -1,9 +1,9 @@
 import type { R2Bucket } from '@cloudflare/workers-types'
 import { MEDIA_EXTENSIONS, MEDIA_MAX_BYTES, type MediaListQuery, mediaUrl } from '@kanso/shared'
-import type { SQL } from 'drizzle-orm'
-import { count, desc, eq, sql } from 'drizzle-orm'
+import { count, desc, eq } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { media } from '../db/schema/index.ts'
+import { contains } from '../db/search.ts'
 import { KansoError } from '../errors.ts'
 import { readImageSize } from '../storage/image-size.ts'
 import { mediaObjectKey } from '../storage/keys.ts'
@@ -13,14 +13,6 @@ type UploadInput = {
   bytes: ArrayBuffer
   filename: string
   alt: string | null
-}
-
-function searchPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, '\\$&')}%`
-}
-
-function searchFilename(query: string): SQL {
-  return sql`${media.filename} like ${searchPattern(query)} escape ${'\\'}`
 }
 
 function withUrl<T extends { r2Key: string }>(item: T): T & { url: string } {
@@ -87,7 +79,7 @@ export function mediaService(db: Db, bucket: R2Bucket) {
   async function list(query: MediaListQuery) {
     const page = query.page ?? 1
     const perPage = query.perPage ?? 20
-    const where = query.q ? searchFilename(query.q) : undefined
+    const where = query.q ? contains(media.filename, query.q) : undefined
     const [items, totals] = await Promise.all([
       db.query.media.findMany({
         where,

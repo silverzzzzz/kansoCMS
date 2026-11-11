@@ -1,9 +1,11 @@
+import { AI_ALT_MAX_BYTES, supportsAiAlt } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { api } from '../../api/client.ts'
 import { ApiError } from '../../api/errors.ts'
 import { type MediaItem, mediaListQuery } from '../../api/queries.ts'
 import { unwrap } from '../../api/request.ts'
+import { suggestAlt } from '../../lib/ai.ts'
 import { ConfirmDialog } from '../ConfirmDialog.tsx'
 import { AiSuggestButton } from '../content/AiSuggestButton.tsx'
 import { Pagination } from '../Pagination.tsx'
@@ -116,13 +118,11 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
                     onChange={(event) => setAlt(event.target.value)}
                   />
                 </label>
-                <div className="mt-2">
-                  <AiSuggestButton
-                    kind="alt"
-                    text={`${item.filename} (${item.mime})`}
-                    onResult={setAlt}
-                  />
-                </div>
+                {supportsAiAlt(item.mime) && item.size <= AI_ALT_MAX_BYTES && (
+                  <div className="mt-2">
+                    <AiSuggestButton request={() => suggestAlt(item.id)} onResult={setAlt} />
+                  </div>
+                )}
                 <div className="mt-2 flex gap-1">
                   <Button type="submit" size="small" disabled={saveAlt.isPending}>
                     保存

@@ -66,7 +66,7 @@ export interface PostArticleProps {
   toc?: TocItem[]
   /** Same-category (or same-tag) published posts, newest first. */
   related?: PostSummaryItem[]
-  labels?: { toc: string; related: string }
+  labels?: { toc: string; related: string; yes: string }
 }
 
 export interface SectionImageData {

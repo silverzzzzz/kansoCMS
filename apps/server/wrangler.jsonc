@@ -31,8 +31,11 @@
     }
   ],
 
-  // Workers AI for the admin "AI で生成" assist (excerpt / SEO description / alt).
-  "ai": { "binding": "AI" },
+  // Optional: Workers AI for the admin "AI で生成" assist (excerpt / SEO description / alt).
+  // Off by default. An AI binding always connects to Cloudflare, so with it enabled
+  // `pnpm dev` needs `wrangler login` (or CLOUDFLARE_API_TOKEN) and requests are billed
+  // to your account. Uncomment to enable:
+  // "ai": { "binding": "AI" },
 
   // Local development emulates delivery; adding "remote": true would send real email.
   "send_email": [{ "name": "EMAIL" }],

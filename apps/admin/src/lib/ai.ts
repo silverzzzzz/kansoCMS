@@ -19,3 +19,9 @@ export async function suggestAi(kind: AiSuggestKind, text: string): Promise<{ te
   const result = await unwrap(api.ai.suggest.$post({ json: { kind, text } }))
   return result as { text: string }
 }
+
+/** Alt text for a stored image; the server shows the image itself to the model. */
+export async function suggestAlt(mediaId: number): Promise<{ text: string }> {
+  const result = await unwrap(api.ai.alt.$post({ json: { mediaId } }))
+  return result as { text: string }
+}

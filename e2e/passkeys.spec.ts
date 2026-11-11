@@ -35,7 +35,7 @@ async function renameNewestPasskey(page: Page, name: string): Promise<void> {
   const rows = page.locator('tbody tr')
   await rows.last().getByRole('button', { name: '名前を変更' }).click()
   await page.getByLabel('パスキーの名前').fill(name)
-  await page.getByRole('button', { name: '保存' }).click()
+  await page.getByRole('button', { name: '保存', exact: true }).click()
   await expect(page.getByRole('cell', { name, exact: true })).toBeVisible()
 }
 

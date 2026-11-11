@@ -16,6 +16,18 @@ export function analyticsDayKey(date: Date, timezone: string): string {
   }).format(date)
 }
 
+/**
+ * The last `days` calendar days ending today in `timezone`, oldest first.
+ * Stepping through UTC noon keeps the list gap-free across DST changes.
+ */
+export function analyticsDayKeys(days: number, timezone: string, now = new Date()): string[] {
+  const [year, month, day] = analyticsDayKey(now, timezone).split('-').map(Number)
+  const today = Date.UTC(year ?? 1970, (month ?? 1) - 1, day ?? 1, 12)
+  return Array.from({ length: days }, (_, index) =>
+    new Date(today - (days - 1 - index) * 86_400_000).toISOString().slice(0, 10),
+  )
+}
+
 export function analyticsService(db: Db) {
   return {
     /** Upsert +1 for (today in `timezone`, `path`). Runs inside waitUntil. */
@@ -31,12 +43,14 @@ export function analyticsService(db: Db) {
     },
 
     /**
-     * Totals for the last `days` days (ending today, `timezone`): per-day sums
-     * for the chart and the top 20 paths for the ranking.
+     * Totals for the last `days` days (ending today, `timezone`): one entry
+     * per day for the chart — days without views included as 0 — and the top
+     * 20 paths for the ranking.
      */
-    async summary(days: number, timezone: string) {
-      const from = analyticsDayKey(new Date(Date.now() - (days - 1) * 86_400_000), timezone)
-      const [daily, top] = await Promise.all([
+    async summary(days: number, timezone: string, now = new Date()) {
+      const keys = analyticsDayKeys(days, timezone, now)
+      const from = keys[0] ?? analyticsDayKey(now, timezone)
+      const [rows, top] = await Promise.all([
         db
           .select({ day: pageviewDaily.day, count: sql<number>`sum(${pageviewDaily.count})` })
           .from(pageviewDaily)
@@ -51,7 +65,11 @@ export function analyticsService(db: Db) {
           .orderBy(desc(sql`sum(${pageviewDaily.count})`))
           .limit(20),
       ])
-      return { daily, top }
+      const counts = new Map(rows.map((row) => [row.day, Number(row.count)]))
+      return {
+        daily: keys.map((day) => ({ day, count: counts.get(day) ?? 0 })),
+        top: top.map((row) => ({ path: row.path, count: Number(row.count) })),
+      }
     },
   }
 }

@@ -1,4 +1,4 @@
-import type { Ai, D1Database, Fetcher, R2Bucket, SendEmail } from '@cloudflare/workers-types'
+import type { D1Database, Fetcher, R2Bucket, SendEmail } from '@cloudflare/workers-types'
 import type { Kanso } from '@kanso/core'
 import type { Principal } from './middleware/auth.ts'
 
@@ -17,8 +17,6 @@ export interface Bindings {
   ASSETS: Fetcher
   /** Cloudflare Email Service binding for form notifications. */
   EMAIL: SendEmail
-  /** Workers AI binding for admin text suggestions. */
-  AI: Ai
   /** Absolute origin, no trailing slash. */
   SITE_URL: string
 }

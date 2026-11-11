@@ -3,7 +3,7 @@ import type { Child } from 'hono/jsx'
 import type { PostArticleProps, PostFieldItem } from '../types.ts'
 
 /** Render one custom field value; returns null when there is nothing to show. */
-function fieldNode(field: PostFieldItem): Child {
+function fieldNode(field: PostFieldItem, yes: string): Child {
   const { type, value, image, posts } = field
   if (type === 'image') {
     return image ? <img class="post-field-image" src={image.url} alt={image.alt ?? ''} /> : null
@@ -23,7 +23,7 @@ function fieldNode(field: PostFieldItem): Child {
     return typeof value === 'string' && value ? <a href={value}>{value}</a> : null
   }
   if (type === 'checkbox') {
-    return value === true ? 'あり' : null
+    return value === true ? yes : null
   }
   return value === null || value === undefined || value === '' ? null : String(value)
 }
@@ -39,7 +39,7 @@ export function PostArticle({
   labels,
 }: PostArticleProps) {
   const renderedFields = (fields ?? [])
-    .map((field) => ({ field, node: fieldNode(field) }))
+    .map((field) => ({ field, node: fieldNode(field, labels?.yes ?? 'Yes') }))
     .filter((item) => item.node !== null)
   return (
     <article class="post">

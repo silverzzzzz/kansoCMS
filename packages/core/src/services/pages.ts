@@ -6,10 +6,11 @@ import type {
 } from '@kanso/shared'
 import { isReservedSlug, sectionsPlainText } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
-import { and, asc, count, eq, gt, isNotNull, isNull, like, lte, sql } from 'drizzle-orm'
+import { and, asc, count, eq, gt, isNotNull, isNull, lte } from 'drizzle-orm'
 import { EMPTY_DOCUMENT, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { media, pages, postTypes } from '../db/schema/index.ts'
+import { contains, startsWith } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
@@ -37,14 +38,6 @@ export function copySlug(slug: string, n: number): string {
 
 type RenderContext = { allowRawHtml: boolean }
 type UpdateContext = RenderContext & { userId: number | null }
-
-function searchPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, '\\$&')}%`
-}
-
-function searchTitle(query: string): SQL {
-  return sql`${pages.title} like ${searchPattern(query)} escape ${'\\'}`
-}
 
 function throwPageConflict(error: unknown): never {
   if (isUniqueViolation(error)) {
@@ -110,7 +103,7 @@ export function pagesService(db: Db) {
     } else if (query.status) {
       conditions.push(eq(pages.status, query.status))
     }
-    if (query.q) conditions.push(searchTitle(query.q))
+    if (query.q) conditions.push(contains(pages.title, query.q))
     const where = conditions.length > 0 ? and(...conditions) : undefined
 
     const [items, totals] = await Promise.all([
@@ -379,19 +372,22 @@ export function pagesService(db: Db) {
   }
 
   /**
-   * `DELETE /pages/:id` trashes; a second delete or `?force=true` purges.
-   * Trashing cascades to live descendants via the materialized path prefix.
+   * `DELETE /pages/:id` trashes; only `?force=true` purges. Repeating the
+   * request on a trashed page is a no-op, so a retry or a double click can
+   * never skip the trash. Trashing cascades to live descendants via the
+   * materialized path prefix.
    */
   async function deletePage(id: number, options?: { force?: boolean }): Promise<void> {
     const current = await getAny(id)
-    if (options?.force || current.deletedAt !== null) return purgePage(id)
+    if (options?.force) return purgePage(id)
+    if (current.deletedAt !== null) return
     const now = new Date()
     await db.batch([
       db.update(pages).set({ deletedAt: now, updatedAt: now }).where(eq(pages.id, id)),
       db
         .update(pages)
         .set({ deletedAt: now, updatedAt: now })
-        .where(and(like(pages.path, `${current.path}/%`), isNull(pages.deletedAt))),
+        .where(and(startsWith(pages.path, `${current.path}/`), isNull(pages.deletedAt))),
     ])
   }
 

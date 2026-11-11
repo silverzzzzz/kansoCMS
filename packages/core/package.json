@@ -6,7 +6,8 @@
   "description": "Domain logic and persistence (D1 / R2) for kansoCMS. Framework-agnostic.",
   "exports": {
     ".": "./src/index.ts",
-    "./schema": "./src/db/schema/index.ts"
+    "./schema": "./src/db/schema/index.ts",
+    "./testing": "./src/testing/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

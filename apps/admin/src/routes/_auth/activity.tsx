@@ -54,7 +54,10 @@ function ActivityPage() {
                   {row.targetType}
                   {row.targetId ? ` #${row.targetId}` : ''}
                 </td>
-                <td className="px-4 py-3">{row.summary}</td>
+                <td className="px-4 py-3">
+                  {row.summary}
+                  {row.count > 1 && <span className="ml-2 text-neutral-500">({row.count} 回)</span>}
+                </td>
               </tr>
             ))}
             {!activity.isPending && (activity.data?.items ?? []).length === 0 && (

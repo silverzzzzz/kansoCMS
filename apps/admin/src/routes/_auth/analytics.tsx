@@ -23,20 +23,22 @@ function AnalyticsPage() {
   const top = summary.data?.top ?? []
   const max = Math.max(1, ...daily.map((row) => row.count))
   const total = daily.reduce((sum, row) => sum + row.count, 0)
-  const width = daily.length * (BAR_WIDTH + BAR_GAP) || 1
+  // The API returns one entry per day of the window (zero days included), so
+  // the chart keeps the same proportions however little data there is.
+  const width = Math.max(1, daily.length) * (BAR_WIDTH + BAR_GAP) - BAR_GAP
 
   return (
     <div>
       <PageHeading
         title="アクセス解析"
-        description={`直近 ${DAYS} 日のページビュー (Cookie 不使用)。`}
+        description={`直近 ${DAYS} 日のページビュー (Cookie 不使用)。ログイン中の閲覧と検索エンジンなどのボットは数えません。`}
       />
       <section className="mt-8 border border-neutral-200 bg-white p-5">
         <div className="flex items-baseline justify-between">
           <h2 className="text-lg font-semibold">日別 PV</h2>
           <p className="text-sm text-neutral-500">合計 {total.toLocaleString()}</p>
         </div>
-        {daily.length === 0 ? (
+        {total === 0 ? (
           <p className="mt-6 text-sm text-neutral-500">まだ計測データがありません。</p>
         ) : (
           <svg
@@ -46,7 +48,8 @@ function AnalyticsPage() {
             aria-label="日別ページビュー"
           >
             {daily.map((row, index) => {
-              const height = Math.max(2, Math.round((row.count / max) * CHART_HEIGHT))
+              const height =
+                row.count === 0 ? 0 : Math.max(2, Math.round((row.count / max) * CHART_HEIGHT))
               const x = index * (BAR_WIDTH + BAR_GAP)
               return (
                 <g key={row.day}>

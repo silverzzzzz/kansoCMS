@@ -21,6 +21,11 @@ export const activityLog = sqliteTable(
     /** Row id or slug serialized to text; null for bulk/global actions. */
     targetId: text('target_id'),
     summary: text('summary').notNull(),
+    /**
+     * How many events this row stands for. Failed sign-ins are folded into one
+     * row per hour, so an unauthenticated client cannot flood the log.
+     */
+    count: integer('count').notNull().default(1),
     createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
   },
   (t) => [index('activity_log_created_idx').on(t.createdAt, t.id)],

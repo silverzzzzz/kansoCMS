@@ -237,6 +237,14 @@ export const analyticsSummaryQuery = (days: number) =>
     queryFn: () => getAnalyticsSummary(days),
   })
 
+/** Whether the optional Workers AI binding is configured (changes only on deploy). */
+export const aiStatusQuery = queryOptions({
+  queryKey: ['ai', 'status'],
+  queryFn: () => unwrap(api.ai.$get()),
+  staleTime: Number.POSITIVE_INFINITY,
+  retry: false,
+})
+
 export const sectionCatalogQuery = queryOptions({
   queryKey: ['site', 'sections'] as const,
   queryFn: getSectionCatalog,

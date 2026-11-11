@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
 import { invalidSectionDetails, sectionsMetaByTheme } from '../site/themes/sections-meta.ts'
 import { logActivity } from './activity.ts'
+import { publicOrigin } from './origin.ts'
 import { canUseRawHtml, currentUserId } from './principal.ts'
 import { idParamSchema, revisionParamSchema, validationHook } from './validate.ts'
 
@@ -169,13 +170,12 @@ export const pages = new Hono<AppEnv>()
       targetId: link.id,
       summary: `固定ページ #${id} の共有リンクを作成`,
     })
-    const base = c.env.SITE_URL || new URL(c.req.url).origin
     return c.json(
       {
         item: {
           id: link.id,
           expiresAt: link.expiresAt,
-          url: new URL(`/preview/share/${link.token}`, base).toString(),
+          url: new URL(`/preview/share/${link.token}`, publicOrigin(c)).toString(),
         },
       },
       201,

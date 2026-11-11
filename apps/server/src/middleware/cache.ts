@@ -37,7 +37,7 @@ export function siteCacheKey(url: string, version: string): string {
   return key.toString()
 }
 
-function hasSessionCookie(c: Context<AppEnv>): boolean {
+export function hasSessionCookie(c: Context<AppEnv>): boolean {
   return (c.req.header('Cookie') ?? '')
     .split(';')
     .some((part) => part.trimStart().startsWith(`${SESSION_COOKIE}=`))

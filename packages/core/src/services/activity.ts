@@ -1,10 +1,13 @@
-import { count, desc, lte } from 'drizzle-orm'
+import { and, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { activityLog } from '../db/schema/index.ts'
 
 /** Oldest rows beyond this cap are pruned on every insert. */
 export const ACTIVITY_LOG_MAX_ROWS = 2000
 export const ACTIVITY_LIST_MAX_LIMIT = 200
+/** Failed sign-ins inside this window share one log row. */
+export const FAILED_SIGN_IN_WINDOW_MS = 60 * 60 * 1000
+const FAILED_SIGN_IN_ACTION = 'login_failed'
 
 export type ActivityEntry = {
   actor: string
@@ -37,6 +40,31 @@ export function activityService(db: Db) {
     if (cutoff) await db.delete(activityLog).where(lte(activityLog.id, cutoff.id))
   }
 
+  /**
+   * Record a failed sign-in. The endpoint is public, so each request must not
+   * cost a row: attempts within an hour only bump the newest row's counter.
+   */
+  async function logFailedSignIn(summary: string, now = new Date()) {
+    const latest = db
+      .select({ id: activityLog.id })
+      .from(activityLog)
+      .where(
+        and(
+          eq(activityLog.action, FAILED_SIGN_IN_ACTION),
+          gte(activityLog.createdAt, new Date(now.getTime() - FAILED_SIGN_IN_WINDOW_MS)),
+        ),
+      )
+      .orderBy(desc(activityLog.id))
+      .limit(1)
+    const bumped = await db
+      .update(activityLog)
+      .set({ count: sql`${activityLog.count} + 1` })
+      .where(inArray(activityLog.id, latest))
+      .returning({ id: activityLog.id })
+    if (bumped.length > 0) return
+    await log({ actor: 'anonymous', action: FAILED_SIGN_IN_ACTION, targetType: 'auth', summary })
+  }
+
   async function list(limit = 100) {
     return db.query.activityLog.findMany({
       orderBy: [desc(activityLog.id)],
@@ -49,7 +77,7 @@ export function activityService(db: Db) {
     return row?.value ?? 0
   }
 
-  return { log, list, count: countRows }
+  return { log, logFailedSignIn, list, count: countRows }
 }
 
 export type ActivityService = ReturnType<typeof activityService>

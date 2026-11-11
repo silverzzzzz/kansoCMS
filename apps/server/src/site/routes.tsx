@@ -1,4 +1,4 @@
-import { BOT_UA_PATTERN, KansoError } from '@kanso/core'
+import { KansoError } from '@kanso/core'
 import {
   absoluteUrl,
   buildBreadcrumb,
@@ -16,6 +16,7 @@ import { parseBody } from '../forms/body.ts'
 import { submitForm } from '../forms/submit.ts'
 import { resolveMessages } from '../i18n.ts'
 import { siteCache } from '../middleware/cache.ts'
+import { pageviews } from '../middleware/pageviews.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { feedResponse, robotsResponse, sitemapResponse } from './feeds.ts'
 import { draftValues, type FormState, formSlugsIn, prepareForms } from './forms.tsx'
@@ -38,35 +39,9 @@ type ContentResolution =
 export const site = new Hono<AppEnv>()
 
 site.route('/preview', preview)
+// Order matters: pageviews wraps the cache so that cached responses count too.
+site.use('*', pageviews)
 site.use('*', siteCache)
-
-/**
- * Cookie-less pageview counting (T52). Runs after the handler: only 200 HTML
- * responses to GET requests count, so previews (mounted above), feeds, the
- * maintenance 503 and errors are naturally excluded. The write is deferred
- * to `waitUntil` and can never fail the request.
- */
-const ANALYTICS_EXCLUDED = /^\/(search|preview|sitemap\.xml|robots\.txt|feed\.xml)/
-site.use(
-  '*',
-  createMiddleware<AppEnv>(async (c, next) => {
-    await next()
-    if (c.req.method !== 'GET' || c.res.status !== 200) return
-    if (!c.res.headers.get('content-type')?.includes('text/html')) return
-    const path = c.req.path
-    if (ANALYTICS_EXCLUDED.test(path)) return
-    if (BOT_UA_PATTERN.test(c.req.header('user-agent') ?? '')) return
-    const work = (async () => {
-      const { timezone } = await c.var.kanso.settings.site()
-      await c.var.kanso.analytics.recordView(path, timezone)
-    })().catch(() => {})
-    try {
-      c.executionCtx.waitUntil(work)
-    } catch {
-      // No ExecutionContext (non-Workers runtime): the write still proceeds.
-    }
-  }),
-)
 
 site.get('/sitemap.xml', sitemapResponse)
 site.get('/robots.txt', robotsResponse)
@@ -98,7 +73,7 @@ site.use(
       >
         <section class="page">
           <h1>{ctx.site.name}</h1>
-          <p>{settings.maintenanceMessage || ctx.messages.notFound.body}</p>
+          <p>{settings.maintenanceMessage || ctx.messages.maintenance.body}</p>
         </section>
       </ctx.theme.Layout>,
       503,
@@ -399,6 +374,8 @@ async function renderAuthorArchive(
     page,
     perPage: POSTS_PER_PAGE,
   })
+  // An author without published posts here has no archive (not an empty, indexable page).
+  if (result.total === 0) return notFound(c)
   const totalPages = Math.max(1, Math.ceil(result.total / POSTS_PER_PAGE))
   if (page > totalPages) return notFound(c)
 

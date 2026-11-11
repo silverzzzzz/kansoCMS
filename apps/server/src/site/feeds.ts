@@ -138,7 +138,13 @@ export async function robotsResponse(c: Context<AppEnv>) {
 export async function feedResponse(c: Context<AppEnv>, type: PostType) {
   const [settings, result] = await Promise.all([
     c.var.kanso.settings.site(),
-    c.var.kanso.posts.listPublished({ postTypeId: type.id, page: 1, perPage: 20 }),
+    // A feed is a timeline: pinned posts must not jump ahead of newer ones.
+    c.var.kanso.posts.listPublished({
+      postTypeId: type.id,
+      page: 1,
+      perPage: 20,
+      order: 'newest',
+    }),
   ])
   const feedUrl = absoluteUrl(c.env.SITE_URL, `/${type.slug}/feed.xml`)
   const body = buildAtomFeed({

@@ -55,12 +55,11 @@ export const auth = new Hono<AppEnv>()
     const user = await c.var.kanso.passkeys
       .finishLogin(credential, relyingParty(c))
       .catch(async (err) => {
-        await logActivity(c, {
-          actor: 'anonymous',
-          action: 'login_failed',
-          targetType: 'auth',
-          summary: 'パスキー認証に失敗',
-        })
+        // Folded into one row per hour (public endpoint). Logging is best
+        // effort: whatever happens here, the caller gets the sign-in error.
+        try {
+          await c.var.kanso.activity.logFailedSignIn('パスキー認証に失敗')
+        } catch {}
         throw err
       })
     await startSession(c, user.id)

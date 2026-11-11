@@ -36,6 +36,7 @@ import {
   tags,
   users,
 } from '../db/schema/index.ts'
+import { contains } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { copySlug, copyTitle } from './pages.ts'
@@ -47,14 +48,6 @@ type RenderContext = { allowRawHtml: boolean }
 type CreateContext = RenderContext & { authorId: number | null }
 type UpdateContext = RenderContext & { userId: number | null }
 type PostListQuery = ListQuery & { postTypeId?: number }
-
-function searchPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, '\\$&')}%`
-}
-
-function searchTitle(query: string): SQL {
-  return sql`${posts.title} like ${searchPattern(query)} escape ${'\\'}`
-}
 
 function uniqueIds(ids: number[] | undefined): number[] | undefined {
   return ids ? [...new Set(ids)] : undefined
@@ -220,6 +213,8 @@ export function postsService(db: Db) {
     categoryId?: number
     tagId?: number
     authorId?: number
+    /** `pinned` (default) puts sticky posts first; `newest` is strictly chronological. */
+    order?: 'pinned' | 'newest'
   }) {
     const conditions: SQL[] = [eq(posts.postTypeId, input.postTypeId), postsPublishedNow()]
     if (input.authorId !== undefined) conditions.push(eq(posts.authorId, input.authorId))
@@ -252,7 +247,8 @@ export function postsService(db: Db) {
     const [items, totals] = await Promise.all([
       db.query.posts.findMany({
         where,
-        orderBy: postsListOrder(),
+        orderBy:
+          input.order === 'newest' ? [desc(posts.publishedAt), desc(posts.id)] : postsListOrder(),
         limit: input.perPage,
         offset: (input.page - 1) * input.perPage,
         columns: { bodyHtml: false, searchText: false },
@@ -358,7 +354,7 @@ export function postsService(db: Db) {
     } else if (query.status) {
       conditions.push(eq(posts.status, query.status))
     }
-    if (query.q) conditions.push(searchTitle(query.q))
+    if (query.q) conditions.push(contains(posts.title, query.q))
     const where = conditions.length > 0 ? and(...conditions) : undefined
 
     const [items, totals] = await Promise.all([
@@ -589,10 +585,13 @@ export function postsService(db: Db) {
     }
   }
 
-  /** `DELETE /posts/:id` trashes; a second delete or `?force=true` purges. */
+  /**
+   * `DELETE /posts/:id` trashes; only `?force=true` purges. Repeating the
+   * request on a trashed post is a no-op (see `pages.delete`).
+   */
   async function deletePost(id: number, options?: { force?: boolean }): Promise<void> {
     const current = await getAny(id)
-    if (options?.force || current.deletedAt !== null) {
+    if (options?.force) {
       await db.batch([
         db.delete(posts).where(eq(posts.id, id)),
         revisions.deleteStatement('post', id),
@@ -600,6 +599,7 @@ export function postsService(db: Db) {
       ])
       return
     }
+    if (current.deletedAt !== null) return
     await db
       .update(posts)
       .set({ deletedAt: new Date(), updatedAt: new Date() })

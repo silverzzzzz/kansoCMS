@@ -101,8 +101,9 @@ async function resolveData(
 /**
  * Prepare a post's custom field values (post type `fields_json` definitions)
  * for the synchronous JSX render, resolving `image` / `posts` fields the same
- * way sections do. Definition changes are tolerated: stored values failing the
- * current schema render as-is instead of failing the page.
+ * way sections do. Definition changes are tolerated field by field: a stored
+ * value that no longer fits its definition falls back to the field's default,
+ * so nothing unvalidated (a non-http link in a `url` field, say) is rendered.
  */
 export async function preparePostFields(
   kanso: Kanso,
@@ -110,8 +111,12 @@ export async function preparePostFields(
   stored: SectionValues | null,
 ): Promise<PostFieldItem[]> {
   if (!defs || defs.length === 0) return []
-  const parsed = sectionValuesSchemaFor(defs).safeParse(stored ?? {})
-  const values: SectionValues = parsed.success ? parsed.data : (stored ?? {})
+  const values: SectionValues = {}
+  for (const def of defs) {
+    const schema = sectionValuesSchemaFor([def])
+    const parsed = schema.safeParse({ [def.name]: stored?.[def.name] })
+    Object.assign(values, parsed.success ? parsed.data : schema.parse({}))
+  }
   const data = await resolveData(kanso, defs, values)
   return defs.map((def) => ({
     name: def.name,

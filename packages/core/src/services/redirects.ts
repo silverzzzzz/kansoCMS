@@ -6,21 +6,14 @@ import {
   type UpdateRedirectInput,
 } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
-import { asc, eq, inArray, or, sql } from 'drizzle-orm'
+import { asc, eq, or } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { redirects } from '../db/schema/index.ts'
+import { contains } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 
-function searchPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, '\\$&')}%`
-}
-
 function searchRedirects(query: string): SQL | undefined {
-  const pattern = searchPattern(query)
-  return or(
-    sql`${redirects.fromPath} like ${pattern} escape ${'\\'}`,
-    sql`${redirects.to} like ${pattern} escape ${'\\'}`,
-  )
+  return or(contains(redirects.fromPath, query), contains(redirects.to, query))
 }
 
 function throwRedirectConflict(error: unknown): never {
@@ -112,18 +105,12 @@ export function redirectsService(db: Db) {
     let created = 0
     let updated = 0
     if (deduped.length > 0) {
+      // One read of every source path: `in (...)` over up to 500 rows would
+      // exceed D1's limit of 100 bound parameters per query.
       const existing = new Set(
-        (
-          await db
-            .select({ fromPath: redirects.fromPath })
-            .from(redirects)
-            .where(
-              inArray(
-                redirects.fromPath,
-                deduped.map((row) => row.fromPath),
-              ),
-            )
-        ).map((row) => row.fromPath),
+        (await db.select({ fromPath: redirects.fromPath }).from(redirects)).map(
+          (row) => row.fromPath,
+        ),
       )
       const now = new Date()
       const statements = deduped.map((row) => {

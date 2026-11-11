@@ -1,7 +1,7 @@
 import { type ContentStatus, type RichTextDoc, SLUG_PATTERN, slugify } from '@kanso/shared'
 import type { FormEvent, ReactNode } from 'react'
 import { useState } from 'react'
-import { docToText } from '../../lib/ai.ts'
+import { docToText, suggestAi } from '../../lib/ai.ts'
 import { Editor } from '../editor/Editor.tsx'
 import { MediaField } from '../media/MediaField.tsx'
 import { Button, Field, inputClass } from '../ui.tsx'
@@ -145,8 +145,8 @@ export function ContentForm({
         />
         <div className="mt-2">
           <AiSuggestButton
-            kind="excerpt"
-            text={docToText(value.bodyJson)}
+            request={() => suggestAi('excerpt', docToText(value.bodyJson))}
+            disabled={docToText(value.bodyJson) === ''}
             onResult={(text) => change('excerpt', text)}
           />
         </div>
@@ -180,8 +180,8 @@ export function ContentForm({
               />
               <div className="mt-2">
                 <AiSuggestButton
-                  kind="description"
-                  text={docToText(value.bodyJson)}
+                  request={() => suggestAi('description', docToText(value.bodyJson))}
+                  disabled={docToText(value.bodyJson) === ''}
                   onResult={(text) => change('seoDescription', text)}
                 />
               </div>

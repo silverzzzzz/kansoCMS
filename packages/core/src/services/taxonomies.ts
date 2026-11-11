@@ -8,20 +8,13 @@ import type { SQL } from 'drizzle-orm'
 import { and, asc, eq, or, sql } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import { categories, postCategories, posts, postTags, postTypes, tags } from '../db/schema/index.ts'
+import { contains } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 import { hasAncestorCycle } from './page-tree.ts'
 import { postsPublishedNow } from './posts.ts'
 
-function searchPattern(query: string): string {
-  return `%${query.replace(/[\\%_]/g, '\\$&')}%`
-}
-
 function searchTags(query: string): SQL | undefined {
-  const pattern = searchPattern(query)
-  return or(
-    sql`${tags.name} like ${pattern} escape ${'\\'}`,
-    sql`${tags.slug} like ${pattern} escape ${'\\'}`,
-  )
+  return or(contains(tags.name, query), contains(tags.slug, query))
 }
 
 function throwTaxonomyConflict(error: unknown, message: string): never {
