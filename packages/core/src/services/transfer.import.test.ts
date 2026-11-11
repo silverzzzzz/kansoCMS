@@ -305,6 +305,32 @@ describe('export and import', () => {
     expect((await target.kanso.pages.list({})).items.map((row) => row.title)).toEqual(['New'])
     expect((await target.kanso.pages.list({ trashed: 'true' })).total).toBe(1)
   })
+
+  it('leaves rows alone that only differ in how an older version stored them', async () => {
+    const type = await target.kanso.postTypes.create({ slug: 'news', name: 'News' })
+    const page = await target.kanso.pages.create(
+      { title: 'About', slug: 'about', status: 'draft' },
+      context,
+    )
+    const post = await target.kanso.posts.create(
+      { postTypeId: type.id, slug: 'hello', title: 'Hello', status: 'draft' },
+      { ...context, authorId: null },
+    )
+    // A blank excerpt used to be stored as '' (now NULL), and a post written before
+    // its type had custom fields has no values for them at all.
+    target.exec("update pages set excerpt = ''")
+    target.exec("update posts set excerpt = ''")
+    await target.kanso.postTypes.update(type.id, {
+      fields: sectionFieldListSchema.parse([{ type: 'text', name: 'venue', label: '会場' }]),
+    })
+
+    const bundle = await target.kanso.transfer.export({ settings: false })
+    const report = await target.kanso.transfer.import(bundleOf(bundle), adminImport)
+
+    expect(report).toEqual({ created: 0, updated: 0, skipped: 3, warnings: [] })
+    expect(await target.kanso.revisions.list('page', page.id)).toEqual([])
+    expect(await target.kanso.revisions.list('post', post.id)).toEqual([])
+  })
 })
 
 describe('settings in a bundle', () => {

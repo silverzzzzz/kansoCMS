@@ -4,6 +4,7 @@ import {
   type APIResponse,
   type BrowserContext,
   expect,
+  type Page,
 } from '@playwright/test'
 import { SoftAuthenticator } from '../packages/core/src/auth/soft-authenticator.ts'
 
@@ -29,6 +30,34 @@ const E2E_PASSKEY = {
 type SetupResponse = { needed: boolean }
 type FormListResponse = { items: { id: number; slug: string }[] }
 type PageListResponse = { items: { id: number; slug: string }[]; total: number }
+type MenuListResponse = { items: { id: number; slug: string; name: string }[] }
+type UserListResponse = { items: { id: number; email: string }[] }
+type MediaListResponse = { items: { id: number; filename: string }[] }
+type PostTypeListResponse = { items: { id: number; slug: string }[] }
+type PostListResponse = { items: { id: number }[] }
+
+/** Menus a test creates use real slugs (`header`), so they are recognised by name instead. */
+export const E2E_MENU_NAME_PREFIX = 'E2E '
+
+/**
+ * Chromium's virtual authenticator (CDP `WebAuthn`): a platform authenticator
+ * with user verification that answers every prompt automatically. Each test
+ * registers fresh credentials in it, so its counters never meet old ones.
+ */
+export async function addVirtualAuthenticator(page: Page): Promise<void> {
+  const client = await page.context().newCDPSession(page)
+  await client.send('WebAuthn.enable')
+  await client.send('WebAuthn.addVirtualAuthenticator', {
+    options: {
+      protocol: 'ctap2',
+      transport: 'internal',
+      hasResidentKey: true,
+      hasUserVerification: true,
+      isUserVerified: true,
+      automaticPresenceSimulation: true,
+    },
+  })
+}
 
 async function expectOk(response: APIResponse) {
   if (response.ok()) return
@@ -118,13 +147,13 @@ export async function shareSession(
   await context.addCookies((await request.storageState()).cookies)
 }
 
-export async function cleanupE2E(request: APIRequestContext): Promise<void> {
+async function listPages(request: APIRequestContext, trashed: boolean) {
   const pages: PageListResponse['items'] = []
   let page = 1
   let total = 0
   do {
     const response = await request.get('/api/v1/pages', {
-      params: { page: String(page), perPage: '100' },
+      params: { page: String(page), perPage: '100', ...(trashed ? { trashed: 'true' } : {}) },
     })
     await expectOk(response)
     const result = (await response.json()) as PageListResponse
@@ -132,11 +161,64 @@ export async function cleanupE2E(request: APIRequestContext): Promise<void> {
     total = result.total
     page += 1
   } while (pages.length < total)
+  return pages
+}
 
-  // Deleting a parent only nulls its children's parentId, so order does not matter.
+export async function cleanupE2E(request: APIRequestContext): Promise<void> {
+  // Live pages and pages a test left in the trash. `force=true` purges: a plain
+  // DELETE only moves a page to the trash.
+  const pages = [...(await listPages(request, false)), ...(await listPages(request, true))]
+  // Purging a parent re-homes its children, so order does not matter.
   for (const item of pages.filter((item) => item.slug.startsWith(E2E_PREFIX))) {
-    const response = await request.delete(`/api/v1/pages/${item.id}`)
+    const response = await request.delete(`/api/v1/pages/${item.id}`, {
+      params: { force: 'true' },
+    })
     await expectOk(response)
+  }
+
+  // Post types a test created, with their posts (live and trashed): a type can
+  // only be deleted once it is empty.
+  const typesResponse = await request.get('/api/v1/post-types')
+  await expectOk(typesResponse)
+  const types = (await typesResponse.json()) as PostTypeListResponse
+  for (const type of types.items.filter((item) => item.slug.startsWith(E2E_PREFIX))) {
+    for (const trashed of ['false', 'true']) {
+      const postsResponse = await request.get('/api/v1/posts', {
+        params: { type: type.slug, perPage: '100', trashed },
+      })
+      await expectOk(postsResponse)
+      for (const post of ((await postsResponse.json()) as PostListResponse).items) {
+        await expectOk(
+          await request.delete(`/api/v1/posts/${post.id}`, { params: { force: 'true' } }),
+        )
+      }
+    }
+    await expectOk(await request.delete(`/api/v1/post-types/${type.id}`))
+  }
+
+  const menusResponse = await request.get('/api/v1/menus')
+  await expectOk(menusResponse)
+  const menus = (await menusResponse.json()) as MenuListResponse
+  for (const item of menus.items.filter((menu) => menu.name.startsWith(E2E_MENU_NAME_PREFIX))) {
+    await expectOk(await request.delete(`/api/v1/menus/${item.id}`))
+  }
+
+  const usersResponse = await request.get('/api/v1/users')
+  await expectOk(usersResponse)
+  const users = (await usersResponse.json()) as UserListResponse
+  for (const item of users.items.filter(
+    (user) => user.email.startsWith(E2E_PREFIX) && user.email !== E2E_EMAIL,
+  )) {
+    await expectOk(await request.delete(`/api/v1/users/${item.id}`))
+  }
+
+  const mediaResponse = await request.get('/api/v1/media', {
+    params: { q: E2E_PREFIX, perPage: '100' },
+  })
+  await expectOk(mediaResponse)
+  const media = (await mediaResponse.json()) as MediaListResponse
+  for (const item of media.items.filter((file) => file.filename.startsWith(E2E_PREFIX))) {
+    await expectOk(await request.delete(`/api/v1/media/${item.id}`))
   }
 
   const formsResponse = await request.get('/api/v1/forms')

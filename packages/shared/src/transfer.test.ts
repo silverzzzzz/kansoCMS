@@ -78,10 +78,17 @@ describe('splitBundle', () => {
 
     const parts = splitBundle(bundle)
 
-    expect(parts.map((part) => Object.keys(part.settings ?? {}).length)).toEqual([0, 0, 0, 0, 0, 1])
+    expect(parts.map((part) => Object.keys(part.settings ?? {}).length)).toEqual([
+      0, 0, 0, 0, 0, 0, 0, 1,
+    ])
     expect(parts[0]?.categories.map((item) => item.slug)).toEqual(['parent', 'child'])
     expect(parts[1]?.pages.map((item) => item.path)).toEqual(['a', 'a/b', 'a/b/c'])
-    expect(parts.slice(2, 5).map((part) => part.posts.length)).toEqual([50, 50, 20])
+    expect(parts.slice(2, 7).map((part) => part.posts.length)).toEqual([25, 25, 25, 25, 20])
+    expect(
+      splitBundle(bundle, { contentPerRequest: 100 })
+        .slice(2, 4)
+        .map((part) => part.posts.length),
+    ).toEqual([100, 20])
     for (const part of parts) expect(importBundleSchema.safeParse(part).success).toBe(true)
   })
 

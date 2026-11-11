@@ -238,13 +238,18 @@ function shallowFirst(pages: ExportBundle['pages']): ExportBundle['pages'] {
  * post types, taxonomies, forms, menus and redirects first, then pages
  * (parents before children), then posts, and settings last (they may point
  * at a page created earlier). A small file comes back as a single request.
+ *
+ * Pages and posts go 25 to a request by default — a quarter of what the
+ * server accepts. The query count would allow more; the margin is for CPU
+ * time, which Workers Free caps at 10 ms per request and local development
+ * cannot measure.
  */
 export function splitBundle(
   bundle: ExportBundle,
   options: { contentPerRequest?: number } = {},
 ): ExportBundle[] {
   const contentPerRequest = Math.min(
-    options.contentPerRequest ?? 50,
+    options.contentPerRequest ?? 25,
     IMPORT_REQUEST_LIMITS.pages,
     IMPORT_REQUEST_LIMITS.posts,
   )

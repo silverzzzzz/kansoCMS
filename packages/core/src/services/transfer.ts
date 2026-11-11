@@ -118,6 +118,14 @@ function toIso(value: Date | string | null | undefined): string | null {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
 }
 
+/**
+ * A blank excerpt means "none" and is stored as NULL; rows written before that
+ * rule hold ''. Comparing through this keeps such a row from counting as changed.
+ */
+function blankToNull(value: string | null | undefined): string | null {
+  return value?.trim() ? value : null
+}
+
 /** `a/b/c` → `{ slug: 'c', parentPath: 'a/b' }`; top-level paths have `parentPath: null`. */
 export function pageIdentity(path: string): { slug: string; parentPath: string | null } {
   const index = path.lastIndexOf('/')
@@ -840,7 +848,7 @@ export function transferService(db: Db) {
         title: item.title,
         bodyJson: item.bodyJson ?? EMPTY_DOCUMENT,
         sections,
-        excerpt: item.excerpt?.trim() ? item.excerpt : null,
+        excerpt: blankToNull(item.excerpt),
         status: item.status,
         publishedAt: desiredPublishedAt === null ? null : toIso(desiredPublishedAt),
         sortOrder: item.sortOrder,
@@ -854,7 +862,7 @@ export function transferService(db: Db) {
         title: existing.title,
         bodyJson: existing.bodyJson ?? EMPTY_DOCUMENT,
         sections: existing.sectionsJson,
-        excerpt: existing.excerpt,
+        excerpt: blankToNull(existing.excerpt),
         status: existing.status,
         publishedAt: toIso(existing.publishedAt),
         sortOrder: existing.sortOrder,
@@ -1094,10 +1102,18 @@ export function transferService(db: Db) {
         currentCategoryIds.flatMap((id) => categorySlugById.get(id) ?? []),
       )
       const currentTagSlugs = sortedUnique(currentTagIds.flatMap((id) => tagSlugById.get(id) ?? []))
+      // Stored values are compared the way a save would store them today, so a post
+      // older than its type's custom fields does not count as changed.
+      let currentFields = existing.fieldsJson
+      try {
+        currentFields = parsePostFields(type.fields, existing.fieldsJson ?? undefined)
+      } catch {
+        // They no longer pass the type's fields: whatever the bundle brings replaces them.
+      }
       const desired = {
         title: item.title,
         bodyJson: item.bodyJson ?? EMPTY_DOCUMENT,
-        excerpt: item.excerpt?.trim() ? item.excerpt : null,
+        excerpt: blankToNull(item.excerpt),
         status: item.status,
         publishedAt: desiredPublishedAt === null ? null : toIso(desiredPublishedAt),
         pinned: item.pinned,
@@ -1115,11 +1131,11 @@ export function transferService(db: Db) {
       const current = {
         title: existing.title,
         bodyJson: existing.bodyJson ?? EMPTY_DOCUMENT,
-        excerpt: existing.excerpt,
+        excerpt: blankToNull(existing.excerpt),
         status: existing.status,
         publishedAt: toIso(existing.publishedAt),
         pinned: existing.pinned,
-        fields: existing.fieldsJson,
+        fields: currentFields,
         coverMediaId: existing.coverMediaId,
         ogMediaId: existing.ogMediaId,
         authorId: existing.authorId,

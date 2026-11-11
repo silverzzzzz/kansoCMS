@@ -6,7 +6,9 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Server-rendered HTML with JSON-LD, Open Graph, `sitemap.xml`, `robots.txt` and an Atom feed per post type — no client JS
 - The same content over a headless JSON API (`/api/v1`, API-key auth) for Astro / Next / anything else
 - Admin UI with a Tiptap editor, media library (R2) and draft preview
+- Responsive images without an image service: the uploading browser makes 480 / 960 / 1600 px WebP copies, they are stored in R2 next to the original, and pages serve them with `srcset`
 - Passwordless sign-in with passkeys (WebAuthn): Windows Hello, Touch ID, a phone or a security key — no passwords stored, no email service needed
+- Several users with two roles (administrator / editor): an administrator invites people with a one-time registration link
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
 - Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
@@ -17,6 +19,7 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Per-post-type custom fields, page templates and optional Workers AI assist (excerpt and SEO text from the body, image alt text from the image itself)
 - Author archives with editable profiles, related posts and an automatic table of contents on articles
 - Cookie-less analytics (daily D1 aggregation) and an activity log of every admin mutation
+- A daily Cron Trigger that empties trash older than 30 days and removes expired links and sessions
 - Full-site JSON export/import — content, menus, redirects and form definitions move between installs by slug in requests small enough for the Workers Free plan; media is referenced by key, not embedded
 - One `wrangler deploy`, no servers, no Node runtime in production
 
@@ -25,9 +28,9 @@ Design notes live in [docs/architecture.md](docs/architecture.md) and the per-ta
 
 > Status: **all planned phases complete** — blog + fixed pages, contact forms, full-text search,
 > themes, the section-based customize editor, a removable starter site, passkey sign-in,
-> scheduled publishing, trash, menus, analytics, custom fields, author archives, JSON
-> export/import and an activity log all work from the admin UI. The admin UI is Japanese only
-> for now.
+> user invitations, scheduled publishing, trash, menus, analytics, custom fields, author
+> archives, responsive images, JSON export/import and an activity log all work from the admin
+> UI. Everything runs on the Workers Free plan. The admin UI is Japanese only for now.
 
 ## Layout
 
@@ -75,10 +78,23 @@ created on. Setup installs the starter site unless you untick **サンプルサ�
 設定 → サンプルサイト. Removal keeps pages and posts you edited, images still in use, forms with
 submissions and post types you added posts to.
 
+#### Users and roles
+
+An administrator adds people under **ユーザー**: name, email address and role. That creates the
+user and shows a registration link (valid for 7 days, single use) to hand over; the invitee opens
+it, creates a passkey and is signed in. No email is sent, so no mail service is needed. Editors
+work on content — pages, posts, media, forms, menus, redirects. Settings, users, API keys, the
+sample site, raw HTML blocks and settings in an export/import are for administrators. The site
+always keeps an administrator who can sign in: the last one with a passkey can be neither
+demoted nor removed, and an invited administrator who has not registered yet does not count.
+Removing a user can hand their posts to someone else.
+
 #### Lost passkeys
 
-Anyone who can write to the site's D1 database can issue a one-time link (valid for an hour) that
-registers a new passkey for an existing user and signs them in:
+Another administrator can issue a fresh registration link under **ユーザー → リンクを再発行**.
+When there is no other administrator, anyone who can write to the site's D1 database can issue a
+one-time link (valid for an hour) that registers a new passkey for an existing user and signs
+them in:
 
 ```sh
 pnpm passkey:link you@example.com                                   # local D1, prints http://localhost:5173/…
@@ -146,6 +162,26 @@ and 100 posts each; the admin UI does the splitting, and `splitBundle` from `@ka
 the same for API clients. Site settings are exported and imported only by an administrator signed
 in to the admin; the sample-content manifest and the cache generation never leave their site.
 
+### Images
+
+Originals and every derived size live in the R2 bucket; no image service is involved. When an
+image is uploaded, the admin UI draws 480, 960 and 1600 px wide WebP copies in the browser (only
+sizes smaller than the original; JPEG where the browser cannot encode WebP) and stores them as
+`<key>.w<width>.webp` next to it. The Worker never decodes pixels: it checks the format, the
+width and the proportions from the file headers. Public pages then emit `srcset`, `sizes`,
+`width` and `height` for covers, section images, custom fields and images in the body — the
+body ones are added when the page is rendered, so existing content needs no re-save. Images
+uploaded earlier (the sample site's included) get their copies from **メディア → 縮小版を作成**.
+GIFs (animation) and AVIF files are served as they are.
+
+### Scheduled cleanup
+
+`apps/server/wrangler.jsonc` schedules the Worker once a day (`triggers.crons`, 18:00 UTC). The
+run purges pages and posts that have been in the trash for 30 days, expired share links,
+sessions, registration links and sign-in challenges, and pageview rows older than 400 days — one
+D1 batch. Locally a Cron Trigger does not fire by itself; call it with
+`curl http://localhost:5173/cdn-cgi/handler/scheduled`.
+
 ### Form notifications (email)
 
 Manage forms under **管理画面 → フォーム**. Each form has its own field definitions and a
@@ -188,6 +224,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/blog/feed.xml` | Atom feed of the 20 latest posts, `X-Robots-Tag: noindex` |
 | `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex |
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
+| `/preview/share/<token>` | A draft shared through a link issued in the editor: no sign-in, valid 7 days, revocable, `noindex, nofollow`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
 
 Top-level slugs are shared between pages and post types, so a `blog` page and a `blog` post type cannot coexist. Content pages carry `WebSite` (and `Organization` once you fill in the organisation settings), `WebPage` / `CollectionPage`, canonical, OG and `rel=prev/next` metadata. A site-wide default OG image can be picked in settings — used whenever a page, post or archive doesn't set its own — fixed-page breadcrumbs include the published ancestor pages, and an X account in the organisation settings emits `twitter:site`. `noindex` works at three levels — per page/post, per post type (archives only, keeping posts indexable) and site-wide in settings — and drops the content out of the sitemap and on-site search alike. Search pages have no JSON-LD.
@@ -254,6 +291,36 @@ pnpm deploy
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
+
+The Workers Free plan is enough. Its limit of 50 D1 queries per request is what the write paths
+are built around — the sample-site install, the JSON import and the daily cleanup each run as a
+few batched statements, and tests pin their query counts. The deploy also registers the daily
+Cron Trigger (Free allows five per account). What could not be measured outside Cloudflare is
+CPU time: Free allows 10 ms per request, so the admin sends a large import in parts of 25 pages
+or posts.
+
+## Backups and recovery
+
+- **Database.** D1 keeps its own history (Time Travel): 7 days on Workers Free, 30 days on
+  Workers Paid, always on. To go back to a point in time:
+
+  ```sh
+  cd apps/server
+  pnpm exec wrangler d1 time-travel info kanso                                   # current bookmark
+  pnpm exec wrangler d1 time-travel restore kanso --timestamp=2026-11-12T03:00:00+09:00
+  ```
+
+  A restore overwrites the database in place and prints a bookmark of the state it replaced;
+  restoring to that bookmark undoes it.
+- **Files.** Media live in the R2 bucket and are not part of Time Travel or of the JSON export.
+  Copy the bucket with any S3-compatible tool (for example `rclone sync`) if you need an
+  off-site copy. Deleting a media item in the admin deletes its R2 objects for good.
+- **Content as a file.** **ツール → エクスポート** gives a JSON file of the content, menus,
+  redirects and form definitions (optionally settings) that can be imported into any install.
+  It is the way to move a site or keep a readable copy; it does not carry users, API keys, form
+  submissions or files.
+- **Mistakes in the editor.** A deleted page or post waits in the trash for 30 days, and every
+  save keeps the previous version among the latest 20 revisions.
 
 ## Scripts
 

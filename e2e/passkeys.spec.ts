@@ -1,5 +1,6 @@
 import { type APIRequestContext, expect, type Page, test } from '@playwright/test'
 import {
+  addVirtualAuthenticator,
   apiLogin,
   E2E_EMAIL,
   E2E_PREFIX,
@@ -10,26 +11,6 @@ import {
 } from './helpers.ts'
 
 type PasskeyList = { items: { id: number; name: string }[] }
-
-/**
- * Chromium's virtual authenticator (CDP `WebAuthn`): a platform authenticator
- * with user verification that answers every prompt automatically. Each test
- * registers fresh credentials in it, so its counters never meet old ones.
- */
-async function addVirtualAuthenticator(page: Page): Promise<void> {
-  const client = await page.context().newCDPSession(page)
-  await client.send('WebAuthn.enable')
-  await client.send('WebAuthn.addVirtualAuthenticator', {
-    options: {
-      protocol: 'ctap2',
-      transport: 'internal',
-      hasResidentKey: true,
-      hasUserVerification: true,
-      isUserVerified: true,
-      automaticPresenceSimulation: true,
-    },
-  })
-}
 
 async function renameNewestPasskey(page: Page, name: string): Promise<void> {
   const rows = page.locator('tbody tr')

@@ -71,63 +71,76 @@ kansoCMS/
 ├── apps/
 │   ├── server/                     # ★唯一のデプロイ単位 (Cloudflare Worker)
 │   │   ├── src/
-│   │   │   ├── index.ts            # export default { fetch: app.fetch }
+│   │   │   ├── index.ts            # export default { fetch, scheduled }
 │   │   │   ├── app.ts              # secureHeaders → kanso → /api/v1 → /media → /admin → /* (site)
 │   │   │   ├── env.ts              # AppEnv (Bindings = worker-configuration.d.ts の Env, Variables = kanso/principal)
-│   │   │   ├── middleware/         # kanso (services 注入) / auth (session・API key・CSRF) / cache / error
-│   │   │   ├── api/                # /api/v1 (JSON): setup, auth, api-keys, pages, post-types(+categories),
-│   │   │   │                       #   posts, tags, media, redirects, search, settings。validate.ts (zValidator hook), principal.ts
+│   │   │   ├── bindings.ts         # 任意の binding (Workers AI)。既定の Env には無い
+│   │   │   ├── scheduled.ts        # Cron Trigger: ゴミ箱の自動削除と期限切れデータの掃除
+│   │   │   ├── i18n.ts / secrets.ts
+│   │   │   ├── testing.ts          # テスト用: Worker 全体をメモリ上の D1 / R2 で動かす (createTestApp)
+│   │   │   ├── middleware/         # kanso (services 注入) / auth (session・API key・CSRF・role) / cache / pageviews / error
+│   │   │   ├── api/                # /api/v1 (JSON): setup, auth, users, api-keys, pages, post-types(+categories), posts, tags,
+│   │   │   │                       #   media(+variants), menus, forms, public-forms, redirects, search, settings, site, starter,
+│   │   │   │                       #   share-links, activity, analytics, ai, transfer (export/import)
 │   │   │   ├── site/               # 公開サイト SSR (hono/jsx)
-│   │   │   │   ├── routes.tsx      # /, /search, /:path+ (page → type → post → category/tag → 404)、siteCache
-│   │   │   │   ├── search.tsx      # 検索フォーム・結果・スニペット・q を保持するページ送り
-│   │   │   │   ├── context.ts      # loadSiteContext: settings / nav / meta() / formatDate を 1 回で用意
+│   │   │   │   ├── routes.tsx      # /, /search, /:path+ (page → type → post → category/tag/author → 404)、メンテナンス
+│   │   │   │   ├── context.ts      # loadSiteContext: settings / nav (メニュー) / meta() / formatDate を 1 回で用意
 │   │   │   │   ├── render.tsx      # renderPage / renderPost (meta + JSON-LD + Layout)
-│   │   │   │   ├── head.tsx        # <Head>: title/meta/OG/canonical/prev/next/feed/JSON-LD を一括出力
-│   │   │   │   ├── feeds.ts        # sitemap.xml / robots.txt / :type/feed.xml
-│   │   │   │   ├── preview.tsx     # /preview/:kind/:id (セッション必須, noindex, no-store)
-│   │   │   │   └── themes/         # types.ts / index.ts (契約・レジストリ)、default/・paper/ (Layout / PostList / PostArticle)
+│   │   │   │   ├── images.tsx      # ResponsiveImg (srcset)、保存済み本文の <img> を表示時に書き換え
+│   │   │   │   ├── sections.tsx    # セクションとカスタムフィールドの値の検証・データ解決
+│   │   │   │   ├── forms.tsx / search.tsx / head.tsx / feeds.ts
+│   │   │   │   ├── preview.tsx     # /preview/:kind/:id (セッション必須)、/preview/share/:token (共有リンク)
+│   │   │   │   └── themes/         # types.ts / index.ts (契約・レジストリ)、sections-meta.ts (JSX なしのカタログ)、
+│   │   │   │                       #   chrome.tsx、sections.tsx、default/・paper/
+│   │   │   ├── forms/              # 公開フォームの送信・Turnstile・通知メール
+│   │   │   ├── starter/            # サンプルサイトの内容と投入
 │   │   │   ├── media/              # /media/:key+ → R2 (immutable Cache-Control)
 │   │   │   └── admin.ts            # /admin/* → ASSETS の /admin/index.html を返す (SPA fallback)
-│   │   ├── public/                 # 静的ファイル (themes/base.css, default.css, paper.css)。public/admin/ は admin ビルド出力 (gitignore)
+│   │   ├── public/                 # themes/*.css、starter/ (サンプル画像)。public/admin/ は admin ビルド出力 (gitignore)
+│   │   ├── scripts/passkey-link.mjs   # `pnpm passkey:link` (パスキーの復旧リンクを D1 に発行)
 │   │   ├── worker-configuration.d.ts  # `pnpm types` (wrangler types) 生成。手書き禁止
-│   │   ├── wrangler.jsonc          # DB (D1) / MEDIA (R2) / ASSETS / vars.SITE_URL
+│   │   ├── wrangler.jsonc          # DB (D1) / MEDIA (R2) / ASSETS / EMAIL / triggers.crons / vars.SITE_URL (AI はコメント)
 │   │   ├── vite.config.ts          # @cloudflare/vite-plugin
 │   │   └── tsconfig.json           # jsxImportSource: "hono/jsx"
 │   │
 │   └── admin/                      # 管理画面 SPA (React 19 + Vite + Tailwind v4)
 │       ├── src/
 │       │   ├── main.tsx / router.tsx   # TanStack Router (basepath /admin), QueryClient
-│       │   ├── routes/             # file-based: setup, login, passkey-link, _auth/(index, pages, posts, post-types,
-│       │   │                       #   tags, media, forms, redirects, settings, api-keys, account)。routeTree.gen.ts は生成物
+│       │   ├── routes/             # file-based: setup, login, passkey-link, _auth/(index, activity, analytics, pages, customize,
+│       │   │                       #   menus, posts, post-types, tags, media, forms, redirects, tools, settings, users,
+│       │   │                       #   api-keys, account)。routeTree.gen.ts は生成物
 │       │   ├── api/                # hc<ApiType>() クライアント, queries (TanStack Query), errors
-│       │   ├── components/         # ui, content/ContentForm, editor/ (Tiptap), media/ (picker, upload)
-│       │   └── lib/                # datetime, page-tree, passkey (WebAuthn の JSON 変換・エラー文言)
+│       │   ├── components/         # ui, content/ (ContentForm, SeoPanel, ShareLinks, AI ボタン), editor/ (Tiptap),
+│       │   │                       #   customize/, forms/, media/ (picker, upload), starter/, MenuForm, PostFieldsEditor
+│       │   └── lib/                # datetime, page-tree, passkey, seo-check, schedule, ai, image-variants (縮小版をブラウザで生成)
 │       ├── vite.config.ts          # base: /admin/, outDir: ../server/public/admin, dev proxy /api,/media → :5173
 │       └── tsconfig.json           # jsxImportSource: "react"
 │
 ├── packages/
 │   ├── create-kanso/               # create-kanso — GitHub からサイトを生成する Node.js CLI (ESM + JSDoc、runtime 依存なし)
-│   │   ├── bin/create-kanso.mjs    # npm create kanso のエントリポイント
-│   │   └── src/                   # 引数、ustar 展開、コピー、設定の書き換え、単体テスト
 │   │
 │   ├── core/                       # @kanso/core — ドメイン + 永続化。Hono 非依存
 │   │   ├── src/
-│   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)
-│   │   │   ├── services/           # auth (セッション・API キー), passkeys, cache-version, pages (+page-tree), post-types, posts, revisions, redirects, search, taxonomies, media, settings, starter
+│   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)、db/search.ts (contains / startsWith)
+│   │   │   ├── services/           # auth, passkeys, users, pages (+page-tree), post-types, posts, taxonomies, revisions,
+│   │   │   │                       #   redirects, search, media, menus, forms, settings, starter, share-links, analytics,
+│   │   │   │                       #   activity, transfer, housekeeping, cache-version
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt / plainText
 │   │   │   ├── auth/               # webauthn (登録・認証の検証), cbor, encoding, soft-authenticator (テスト用)
-│   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得
+│   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得 (EXIF の向きを考慮)
+│   │   │   ├── forms/ / mail/      # 送信データの CSV、通知メールの本文
+│   │   │   ├── testing/            # テスト用: node:sqlite を D1 の API の裏に置く (createTestD1 / createTestKanso)
 │   │   │   ├── errors.ts           # KansoError (notFound / validation / forbidden / unauthorized / conflict)
 │   │   │   └── index.ts            # createKanso({ db, media }) → services
 │   │   ├── migrations/             # drizzle-kit 出力 SQL。wrangler の migrations_dir がここを指す
 │   │   └── drizzle.config.ts
 │   │
 │   ├── shared/                     # @kanso/shared — zod スキーマ / 型 / 定数。ブラウザ安全
-│   │   └── src/                    # auth, pages, posts, revisions, redirects, search, taxonomies, media, settings, richtext,
-│   │                               #   content, query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
+│   │   └── src/                    # auth, pages, posts, revisions, redirects, search, taxonomies, media, menus, forms, settings,
+│   │                               #   sections, richtext, toc, transfer (バンドル形式と splitBundle), activity, ai, starter,
+│   │                               #   themes, content, query, slug (RESERVED_SLUGS), site (POSTS_PER_PAGE)
 │   │
 │   └── seo/                        # @kanso/seo — JSON-LD, meta/OG, sitemap, Atom。pure 関数 + テスト
-│       └── src/                    # jsonld.ts, meta.ts, sitemap.ts, feed.ts, xml.ts
 │
 ├── examples/astro-blog/            # Astro SSG: read API キーで公開投稿・固定ページを静的生成
 ├── e2e/                            # Playwright E2E (§7)。playwright.config.ts はルート
@@ -135,7 +148,7 @@ kansoCMS/
 ├── docs/
 │   ├── architecture.md             # 本書
 │   └── tasks/phase-N.md            # フェーズごとのタスクボード (仕様の正本 + 各タスクの決定)
-├── package.json                    # scripts: dev / build / deploy / typecheck / test / check / db:*
+├── package.json                    # scripts: dev / build / deploy / typecheck / test / check / db:* / passkey:link
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 ├── biome.json                      # lint + format (ESLint+Prettier の代替)
@@ -163,10 +176,10 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 
 | テーブル | 主な列 | 備考 |
 |---|---|---|
-| `users` | id, email (uniq), name, role (`admin`/`editor`), webauthn_user_id (uniq), timestamps | 初回起動時 `/admin/setup` で作成。パスワードは持たない (Phase 6 で `password_hash` を削除) |
+| `users` | id, email (uniq), name, role (`admin`/`editor`), webauthn_user_id (uniq), slug (uniq), bio, avatar_media_id, timestamps | 1 人目は `/admin/setup`、2 人目以降は管理者の招待 (Phase 12)。パスワードは持たない。`slug`・`bio`・アバターは著者ページ用 |
 | `passkeys` | id, user_id, credential_id (uniq), public_key (SPKI), algorithm (ES256/RS256), sign_count, transports_json, backed_up, name, created_at, last_used_at | 1 ユーザー 10 個まで。最後の 1 つは削除不可 |
 | `auth_challenges` | id (= チャレンジ), purpose (`setup`/`login`/`register`/`link`), user_id, data_json, expires_at | 5 分、1 回限り (`delete … returning`) |
-| `passkey_links` | id (= トークンの SHA-256), user_id, expires_at, created_at | `pnpm passkey:link` が発行する登録リンク。1 時間、1 回限り |
+| `passkey_links` | id (= トークンの SHA-256), user_id, expires_at, created_at | パスキーの登録リンク。1 回限り。CLI (`pnpm passkey:link`) は 1 時間、管理画面の招待・再発行は 7 日。再発行すると同じユーザーの古いリンクは消える |
 | `sessions` | id, user_id, expires_at, created_at | Cookie は `HttpOnly; Secure; SameSite=Lax` |
 | `api_keys` | id, name, key_hash, scope (`read`/`write`), last_used_at | headless 用。`X-API-KEY` |
 | `pages` | id, slug, **path** (親を含む完全パス, uniq), parent_id, sort_order, title, body_json, body_html, sections_json, search_text, excerpt, status, published_at, seo_*, timestamps | 階層は `path` 列で解決 (`/company/about`)。`sections_json` 非 null のページは本文の代わりにセクション列を描画 (Phase 4) |
@@ -175,15 +188,21 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `categories` | id, post_type_id, slug, name, parent_id, sort_order | 投稿タイプごとに独立。uniq (`post_type_id`, `slug`) |
 | `tags` | id, slug (uniq), name | 全タイプ共通 |
 | `post_categories` / `post_tags` | post_id, category_id / tag_id | 中間テーブル |
-| `media` | id, r2_key, filename, mime, size, width, height, alt, created_at | 実体は R2。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
+| `media` | id, r2_key, filename, mime, size, width, height, alt, variants_json, created_at | 実体は R2。`variants_json` は縮小版 (幅 480 / 960 / 1600 の WebP。キーは `<元のキー>.w<幅>.webp`) の一覧 (Phase 12)。`r2_key = media/{yyyy}/{mm}/{uuid}.{ext}` |
 | `forms` | id, slug (uniq), name, fields_json, notify_to, success_message, redirect_url, turnstile (bool) | フィールド定義は zod で検証した JSON |
 | `form_submissions` | id, form_id, data_json, meta_json (ip, ua, referrer), created_at, read_at | 管理画面で閲覧・CSV 出力 |
 | `settings` | key (pk), value_json | `site` (title / description / locale / timezone / logoMediaId / ogImageMediaId / homePostTypeSlug / noindex / theme: default / paper)、`organization` (name / url / logoMediaId / twitterHandle / sameAs)、`theme` (テーマ名で名前空間を切ったテーマ設定、Phase 4)、`starter` (サンプルサイトのマニフェスト: 作成した ID と書き込んだ設定値、Phase 5。未投入なら行なし)。zod スキーマは `packages/shared/settings.ts` / `starter.ts` |
+| `menus` | id, slug (uniq), name, items_json, timestamps | slug `header` のメニューがヘッダーナビを差し替える。子は 1 階層 |
+| `share_links` | id (= トークンの SHA-256), target_type (`page`/`post`), target_id, created_by, expires_at, created_at | 下書きの共有リンク。7 日、無効化可 |
+| `pageview_daily` | day (`YYYY-MM-DD`), path, count — PK (day, path) | Cookie を使わないアクセス解析の日次集計。400 日で削除 |
+| `activity_log` | id, actor, user_id, action, target_type, target_id, summary, count, created_at | 操作ログ。最新 2,000 件。ログイン失敗は 1 時間ごとに 1 行へまとめ `count` を増やす |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
 
 `forms` / `form_submissions` はテーブルだけ初期マイグレーションに含まれ、Phase 2 でサービスと API を載せる。
+
+Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.deleted_at` (ゴミ箱。`path` と (`post_type_id`, `slug`) の一意制約は `WHERE deleted_at IS NULL` の部分インデックス)、`posts.pinned`、`post_types.fields_json` / `posts.fields_json` (カスタムフィールドの定義と値)、`post_types.noindex`。
 
 - `status`: `draft` / `published`。**予約公開** = `published` かつ `published_at` が未来。公開クエリは常に `status='published' AND published_at <= now` (`pages.publishedNow()` / `posts.postsPublishedNow()`)。
 - `seo_*`: `seo_title`, `seo_description`, `og_media_id`, `noindex`, `canonical_url`。
@@ -210,9 +229,11 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
 | `GET /:type/category/:slug`, `GET /:type/tag/:slug` | `site` — 絞込一覧 | 公開 |
+| `GET /:type/author/:slug` | `site` — 著者ページ。その投稿タイプに公開済みの投稿がない著者は 404 | 公開 |
 | `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
-| `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable` | 公開 |
+| `GET /preview/share/:token` | `site/preview` — 共有リンクで下書きを描画。`noindex, nofollow` + `no-store` | 公開 (有効なリンクのみ) |
+| `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`。縮小版も同じ経路 | 公開 |
 | `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 (ユーザー 0 人のときだけ) |
 | `POST /api/v1/auth/passkey/options`, `POST /api/v1/auth/passkey` | パスキーでログイン (ユーザー名なし) → セッション Cookie | 公開 |
 | `POST /api/v1/auth/passkey-link/options`, `POST /api/v1/auth/passkey-link` | 登録リンク (`token`) でパスキーを追加してログイン | 公開 (有効なリンクのみ) |
@@ -224,6 +245,15 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302 リダイレクトの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
 | `GET /api/v1/search` | 公開ページ・投稿の全文検索 (`q`: 1〜100 文字、`page` ≥ 1、`perPage`: 1〜50、既定 10) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/search/reindex` | 全ページ・投稿の検索本文を再計算 → `{ ok: true, pages, posts }` | セッション or `x-api-key` (`write`) |
+| `DELETE /api/v1/pages/:id`, `DELETE /api/v1/posts/:id` | ゴミ箱へ移動。`?force=true` のときだけ完全削除 (ゴミ箱の行への `force` なしは何もしない)。`POST …/:id/restore` で復元、`POST …/:id/duplicate` で複製 | セッション or `x-api-key` (`write`) |
+| `GET/POST /api/v1/pages/:id/share-links` (posts も同じ), `DELETE /api/v1/share-links/:id` | 下書き共有リンクの一覧・発行・無効化 | セッション or `x-api-key` |
+| `PUT /api/v1/media/:id/variants` | 縮小版 (multipart、`w480` / `w960` / `w1600`) を R2 に保存。形式・幅・縦横比を検証 | セッション or `x-api-key` (`write`) |
+| `GET/POST/PATCH/DELETE /api/v1/menus` | メニュー | セッション or `x-api-key` |
+| `GET /api/v1/activity`, `GET /api/v1/analytics/summary` | 操作ログ、アクセス解析 (期間内の全日 + 上位 20 パス) | セッション or `x-api-key` (`read`) |
+| `GET /api/v1/ai`, `POST /api/v1/ai/suggest`, `POST /api/v1/ai/alt` | Workers AI (任意)。binding がなければ `available: false` / 503 | セッション or `x-api-key` |
+| `GET /api/v1/export`, `POST /api/v1/import` | サイトの JSON エクスポート / インポート (§6)。エクスポートは `write` が必要。設定を含められるのは管理者セッションだけ | セッション or `x-api-key` (`write`) |
+| `GET/POST /api/v1/users`, `PATCH/DELETE /api/v1/users/:id`, `POST /api/v1/users/:id/link` | ユーザーの一覧・招待・権限変更・削除・登録リンクの再発行 | セッションの `admin` のみ |
+| `GET/PATCH /api/v1/auth/profile` | 自分の著者プロフィール (slug・紹介文・アバター) | セッションのみ |
 | `GET/POST/DELETE /api/v1/starter` | サンプルサイトの状態取得・投入 (201、投入済みは 409)・削除 (`{ removed, kept }`、未投入は 404) | セッションの `admin` のみ |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
 | `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
@@ -241,7 +271,8 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - パスキーを失ったとき: `pnpm passkey:link <email> [--remote] [--url <サイト>]` が D1 (`DB` バインディング) に 1 時間有効・1 回限りの登録リンクを書き込み、`/admin/passkey-link?token=…` で新しいパスキーを登録してログインする。D1 に書ける = Cloudflare アカウントの管理者であることを本人確認とする。
 - セッション: Cookie `kanso_session` (`HttpOnly; SameSite=Lax`, 本番は `Secure`)。パスキーの検証後に発行。
 - API キー: `kanso_<base64url>` を `x-api-key` ヘッダで送る。D1 には SHA-256 ハッシュのみ保存。`scope` は `read` / `write`。
-- ロール: `admin` / `editor`。設定と API キー管理は `admin` のみ (`requireRole('admin')`)。生 HTML ブロックも `admin` のみ。
+- ロール: `admin` / `editor`。設定・ユーザー管理・API キー・サンプルサイトは `admin` のみ (`requireRole('admin')`)。生 HTML ブロックと、設定のエクスポート / インポートも `admin` のセッションだけ。
+- ユーザーの追加 (Phase 12): 管理者が名前・メール・権限を入れると、パスキーを持たないユーザーと 7 日間有効の登録リンクができる。相手がリンクでパスキーを作るとログインできる。メールは送らない (リンクを画面からコピーして渡す)。ログインできる管理者 (パスキーを持つ管理者) が必ず 1 人残る: その最後の 1 人は降格も削除もできず、招待しただけでまだパスキーを登録していない管理者は数に入れない (判定は UPDATE / DELETE の WHERE 句に入れて 1 文で行う)。
 - CSRF: 変更系リクエストは `Sec-Fetch-Site` / `Origin` を `Host` と照合する (`middleware/auth.ts`)。
 
 ## 6. 横断的関心事
@@ -277,6 +308,34 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - **D1 のクエリ数**: Workers Free は 1 呼び出しあたり 50 クエリ (`batch()` は 1)。サービスを 1 件ずつ呼ぶと約 80 になるため、core の `services/starter.ts` が集合読み出しと `db.batch()` で書く (実測: 投入 12 / 削除 21、リクエスト全体)。行の値は各サービスと共通の insert ビルダー (`pageInsertValues` など) で作る。投入はメディア行の batch の後、残り全部とマニフェストを 1 つの batch (トランザクション) で書き、batch 内の参照はスラッグのサブクエリで解く (`AUTOINCREMENT` なので ID を先に決めない)。失敗時はメディア行と R2 を消す。
 - 削除はマニフェストに載っているものだけが対象: リビジョンのある (編集した) ページ・投稿、マニフェスト外の子ページを持つページ、残る投稿がある投稿タイプとそれが使うカテゴリ、送信のあるか更新したフォーム、残るコンテンツ (サンプル以外を含む) やサイトロゴから参照される画像は残し、`kept` に理由つきで返す。テーマ設定・サイト説明は投入時の値のままなら戻す。最後にマニフェストを消す。
 - D1 は LIKE / GLOB のパターンを 50 バイトに制限するので、本文中のメディア URL 照合は `instr()` を使う。
+
+### ゴミ箱と定期処理 (Phase 9, 11, 12)
+
+- 削除は `deleted_at` を入れるだけ。公開側のクエリ (`publishedNow()` / `postsPublishedNow()`) が `deleted_at IS NULL` を含むので、SSR・サイトマップ・フィード・検索は個別対応なしでゴミ箱を無視する。完全削除は `?force=true` のときだけ。
+- 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行を消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
+
+### エクスポート / インポート (Phase 10, 11)
+
+- バンドルは ID を持たない。投稿タイプ・カテゴリ・タグ・著者は slug、固定ページは path、メディアは R2 のキーで参照する。セクションとカスタムフィールドの中の画像も `{ $ref: 'media', key }` で運ぶ。
+- インポートは「必要な行をまとめて読む → メモリ上で差分を取る → `db.batch()` でまとめて書く」。同じインポートで作った行への参照は、文の中の slug / path サブクエリで解決する。固定ページ 100 + 投稿 100 の 1 リクエストが 19 クエリ。
+- 1 リクエストは固定ページ・投稿それぞれ 100 件まで。`splitBundle()` (shared) が大きなファイルを順序を保って分割し、管理画面が順に送る。
+- 設定は管理者セッションだけが出し入れできる。`starter` (サンプルの行 ID 一覧) と `cache` (キャッシュの世代) は、そのサイトだけで意味を持つ値なので運ばない。
+
+### アクセス解析と操作ログ (Phase 10, 11)
+
+- アクセス解析は `middleware/pageviews.ts`。`siteCache` の手前に置く (キャッシュから返したアクセスも数えるため)。GET・200・HTML だけを数え、セッション Cookie 付き・ボット・`/search`・`/preview` は数えない。書き込みは `waitUntil` で行う。
+- 操作ログは API ハンドラから `logActivity()` で書く (principal を知っているのが API 層のため)。未ログインでも叩けるログイン失敗は、1 時間ごとに 1 行へまとめる。
+
+### 画像の最適化 (Phase 12)
+
+- 画像は R2 だけに置く。縮小版 (幅 480 / 960 / 1600) は、アップロードするブラウザが canvas で作り、元画像の隣に保存する。Cloudflare Images や画像変換は使わないので、変換の課金がなく、`workers.dev` やローカル開発でも同じように動く。
+- サーバは画素をデコードしない。縮小版が WebP (WebP を作れないブラウザでは JPEG) であること、幅が宣言どおりであること、縦横比が元画像と合うことだけをヘッダから確かめる。
+- 公開側は `site/images.tsx`。カバー画像・セクション・カスタムフィールドは `ResponsiveImg` (`srcset`・`sizes`・`width`・`height`)、本文は保存済みの HTML の `<img>` を表示時に書き換える (画像のある本文で 1 クエリ増える)。縮小版のない画像は元画像だけを出す。
+
+### テスト (Phase 11)
+
+- `@kanso/core/testing`: Node 組み込みの `node:sqlite` を、drizzle が使う D1 の API の裏に置き、全マイグレーションを適用したメモリ DB を作る。ローカル開発で効かない D1 の制限 (バインド変数 100 個、LIKE パターン 50 バイト) を再現し、D1 への往復回数を数える。
+- `apps/server/src/testing.ts`: Worker 全体 (`app`) をその DB で動かす。サービスをモックした単体テストだけでは、実際の SQL と D1 の制限を一度も通らない (Phase 7〜10 の不具合の原因)。複数行を書く経路は、クエリ数の上限をテストで固定する。
 
 ### キャッシュ
 
@@ -329,6 +388,8 @@ pnpm deploy                                                 # admin build → se
 - `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。
 - `.github/workflows/ci.yml`: 2 ジョブ (`gates`: typecheck/check/test/build、`e2e`: Chromium + ローカル D1 で Playwright)。デプロイは CI に含めない。
 - `SITE_URL` (`wrangler.jsonc` の `vars`) は canonical / JSON-LD / sitemap / feed の絶対 URL に使う。本番では実ドメインに書き換える。
+- Workers AI は任意 (`wrangler.jsonc` の `ai` binding はコメント)。AI binding は必ずリモートに接続するので、有効にすると `pnpm dev` に Cloudflare のログインが要る。既定のままならログインなしで開発サーバーと CI が動く。
+- Cron Trigger はローカルでは自動で動かない。`curl "http://localhost:5173/cdn-cgi/handler/scheduled"` で `scheduled` を呼べる。
 - Email (Phase 2): `wrangler email sending enable <domain>` で送信ドメインを有効化。未設定でもフォームは D1 保存のみで動く（メールは opt-in）。
 - 秘密情報は `wrangler secret put` (Phase 2 で `TURNSTILE_SECRET_KEY`)。セッションは D1 に乱数 ID で保存するため署名用シークレットは不要。
 
@@ -348,6 +409,7 @@ pnpm deploy                                                 # admin build → se
 | 9. 編集体験と運用 | **done (2026-11-11)** | 予約公開 UI (`status=scheduled` 仮想フィルタ)、メニュービルダー (`menus` 表 + `header` slug でナビ差替)、ゴミ箱 (`deleted_at` + partial unique index + 復元)、favicon/検証タグ/カスタム head・body、`robotsExtra`、リダイレクト CSV インポート (RFC4180、部分成功)、SEO チェックリスト + SERP プレビュー、複製 (`-copy` slug) + 下書き共有リンク (SHA-256・7日)、ピン留め (`posts.pinned`)、カスタム 404 (`site.notFoundPageId`)、メンテナンスモード (公開 GET 503・セッション/robots/sitemap/preview バイパス) ([tasks/phase-9.md](tasks/phase-9.md)) | 競合 CMS の運用導線を揃える |
 | 10. 構造化と分析 | **done (2026-11-11)** | 軽量アクセス解析 (`pageview_daily` 日次集計・Cookie/JS 不使用・`executionCtx` で非同期記録)、投稿タイプ別カスタムフィールド (field DSL・`<dl>` 描画)、ページテンプレート (section プリセット)、AI アシスト (Workers AI・抜粋/説明文/alt 生成)、著者アーカイブ (`/{type}/author/{slug}`) + プロフィール編集 + 関連記事 + 目次 (h2/h3 自動 ID)、JSON エクスポート/インポート (slug upsert・冪等・メディアはメタのみ)、アクティビティログ (`activity_log`・2,000 件上限・全変更系ハンドラ計測) ([tasks/phase-10.md](tasks/phase-10.md)) | 構造化コンテンツとサイト内分析を持つ CMS になる |
 | 11. 安定化 | **done (2026-11-12)** | Phase 7〜10 を実サーバーで動かして見つかった不具合の修正: Workers AI を任意設定に (既定では Cloudflare のログインなしで `pnpm dev` と CI が動く)、インポートの一括処理化 (Workers Free の 50 クエリに収まる) と設定の管理者限定、アクセス解析の計測位置、ログイン失敗ログの集約、ゴミ箱の完全削除条件、LIKE 50 バイト制限。実 DB を使うテストの土台 (`@kanso/core/testing`) ([tasks/phase-11.md](tasks/phase-11.md)) | 実サーバーと E2E で全機能が動き、複数行を書く経路がクエリ上限に収まる |
+| 12. 運用機能 | **done (2026-11-12)** | ユーザーの招待と権限管理 (登録リンク方式)、Cron Trigger による定期処理 (ゴミ箱 30 日・期限切れデータ)、画像の最適化 (縮小版をブラウザで作って R2 に保存、`srcset`)、Phase 7〜12 の E2E、バックアップ手順 ([tasks/phase-12.md](tasks/phase-12.md)) | 複数人で運用でき、放置しても溜まり続けるものがない |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -371,6 +433,10 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **全文検索は D1 FTS5 の trigram を使う** (2026-09-22)。空白区切り最大 8 語を AND 検索し、全語 3 文字以上なら MATCH + bm25 順、短い語を含む場合はエスケープした LIKE + 公開日降順。検索時に公開状態と公開日時を照合し、スニペットは HTML ではなくテキストと hit フラグで返す。公開 `/search` は `q` をキャッシュキー・ページ送りに保持する。
 - **公開テーマは同梱して設定で切り替える** (2026-09-22)。`site.theme` は default / paper (既定 default)。テーマの契約とレジストリは `site/themes/`、CSS は `public/themes/` に置き、Paper は独自レイアウトと CSS に default の記事部品を再利用する。設定保存時のキャッシュ世代更新で全ページへ即時反映し、追加方法は README の Themes を参照する。
 - **headless 利用例は Astro 5 の静的生成にする** (2026-09-22)。`examples/astro-blog` は `astro:env` のサーバ専用 API キーと素の fetch で公開投稿・固定ページを取得し、予約公開を除外する。画像は CMS の絶対 URL、フォームは注記に置換。`@kanso/*` に依存せずコピー可能とし、root dev は apps のみ、root typecheck は例も含め、例の build は API が必要なため明示実行にする。
+- **無料プランで動くことを優先する** (2026-11-12、ユーザー判断)。複数行を書く経路は Workers Free の 50 クエリ / リクエストに収め、実 DB のテストで上限を固定する。
+- **Workers AI は既定で無効** (2026-11-12)。設定があるだけで開発サーバーが Cloudflare に接続するため、使う人だけが有効にする。
+- **画像は R2 だけに置き、縮小版はブラウザで作る** (2026-11-12、ユーザー判断)。Cloudflare Images / 画像変換には依存しない。
+- **ユーザーの招待はリンクで渡す** (2026-11-12)。メールサービスを前提にしない。パスキーの登録リンク (Phase 6) をそのまま使う。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 
