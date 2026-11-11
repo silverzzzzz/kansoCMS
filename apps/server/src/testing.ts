@@ -85,6 +85,12 @@ export function createTestApp(bindings: Record<string, unknown> = {}) {
     signOut: () => {
       cookie = ''
     },
+    /** Continue as whoever a response just signed in (reads its `Set-Cookie`). */
+    adoptSession: (response: Response) => {
+      const session = /kanso_session=([^;]+)/.exec(response.headers.get('set-cookie') ?? '')?.[1]
+      if (!session) throw new Error('The response did not start a session')
+      cookie = `kanso_session=${session}`
+    },
     /** Wait for everything handed to `waitUntil`. */
     flush: async () => {
       while (pending.length > 0) await Promise.all(pending.splice(0))

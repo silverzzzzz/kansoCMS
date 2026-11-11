@@ -1,12 +1,13 @@
 import { raw } from 'hono/html'
 import type { Child } from 'hono/jsx'
+import { ResponsiveImg } from '../../images.tsx'
 import type { PostArticleProps, PostFieldItem } from '../types.ts'
 
 /** Render one custom field value; returns null when there is nothing to show. */
 function fieldNode(field: PostFieldItem, yes: string): Child {
   const { type, value, image, posts } = field
   if (type === 'image') {
-    return image ? <img class="post-field-image" src={image.url} alt={image.alt ?? ''} /> : null
+    return image ? <ResponsiveImg image={image} class="post-field-image" /> : null
   }
   if (type === 'posts') {
     return posts && posts.items.length > 0 ? (
@@ -57,15 +58,7 @@ export function PostArticle({
             <span>{post.authorName}</span>
           ))}
       </p>
-      {post.coverMedia && (
-        <img
-          class="post-cover"
-          src={post.coverMedia.url}
-          alt={post.coverMedia.alt ?? ''}
-          width={post.coverMedia.width ?? undefined}
-          height={post.coverMedia.height ?? undefined}
-        />
-      )}
+      {post.coverMedia && <ResponsiveImg image={post.coverMedia} class="post-cover" eager />}
       {(post.categories.length > 0 || post.tags.length > 0) && (
         <nav class="post-terms">
           {post.categories.map((category) => (

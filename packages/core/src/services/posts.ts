@@ -38,7 +38,7 @@ import {
 } from '../db/schema/index.ts'
 import { contains } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
-import { assertMediaExists } from './media.ts'
+import { assertMediaExists, toSiteImage } from './media.ts'
 import { copySlug, copyTitle } from './pages.ts'
 import { redirectsService } from './redirects.ts'
 import { revisionsService } from './revisions.ts'
@@ -177,14 +177,7 @@ export function postsService(db: Db) {
       tags: tagRows,
       authorName: author?.name ?? null,
       authorSlug: author?.slug ?? null,
-      coverMedia: cover
-        ? {
-            url: mediaUrl(cover.r2Key),
-            alt: cover.alt,
-            width: cover.width,
-            height: cover.height,
-          }
-        : null,
+      coverMedia: cover ? toSiteImage(cover) : null,
       ogMediaUrl: ogMedia ? mediaUrl(ogMedia.r2Key) : null,
     }
   }

@@ -1,4 +1,4 @@
-import { AI_ALT_MAX_BYTES, supportsAiAlt } from '@kanso/shared'
+import { canSuggestAlt, mediaVariantUrl } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
 import { api } from '../../api/client.ts'
@@ -6,6 +6,7 @@ import { ApiError } from '../../api/errors.ts'
 import { type MediaItem, mediaListQuery } from '../../api/queries.ts'
 import { unwrap } from '../../api/request.ts'
 import { suggestAlt } from '../../lib/ai.ts'
+import { backfillImageVariants, needsImageVariants } from '../../lib/image-variants.ts'
 import { ConfirmDialog } from '../ConfirmDialog.tsx'
 import { AiSuggestButton } from '../content/AiSuggestButton.tsx'
 import { Pagination } from '../Pagination.tsx'
@@ -44,7 +45,26 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
       await queryClient.invalidateQueries({ queryKey: ['media'] })
     },
   })
-  const error = saveAlt.error ?? remove.error ?? media.error
+  const [optimizing, setOptimizing] = useState<string | null>(null)
+  const pending = (media.data?.items ?? []).filter(needsImageVariants)
+  // Images uploaded before variants existed (the sample site's included).
+  const optimize = useMutation({
+    mutationFn: async (items: MediaItem[]) => {
+      let failed = 0
+      for (const [index, item] of items.entries()) {
+        setOptimizing(`${index + 1} / ${items.length}`)
+        await backfillImageVariants(item).catch(() => {
+          failed += 1
+        })
+      }
+      if (failed > 0) throw new Error(`${failed} 件の縮小版を作成できませんでした`)
+    },
+    onSettled: async () => {
+      setOptimizing(null)
+      await queryClient.invalidateQueries({ queryKey: ['media'] })
+    },
+  })
+  const error = saveAlt.error ?? remove.error ?? optimize.error ?? media.error
 
   return (
     <div>
@@ -73,8 +93,28 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
       {error && (
         <div className="mb-4">
           <Alert tone="error">
-            {error instanceof ApiError ? error.message : '処理に失敗しました'}
+            {error instanceof ApiError
+              ? error.message
+              : error === optimize.error
+                ? error.message
+                : '処理に失敗しました'}
           </Alert>
+        </div>
+      )}
+      {pending.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 border border-neutral-200 bg-white px-4 py-3 text-sm">
+          <p className="text-neutral-700">
+            このページの画像のうち {pending.length} 件に、表示サイズに合わせた縮小版がありません。
+          </p>
+          <Button
+            type="button"
+            size="small"
+            variant="secondary"
+            disabled={optimize.isPending}
+            onClick={() => optimize.mutate(pending)}
+          >
+            {optimize.isPending ? `作成中 ${optimizing ?? ''}` : '縮小版を作成'}
+          </Button>
         </div>
       )}
       {media.isLoading && <p className="text-sm text-neutral-600">読み込み中…</p>}
@@ -89,7 +129,12 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
               disabled={!onSelect}
             >
               {item.mime.startsWith('image/') ? (
-                <img className="h-full w-full object-contain" src={item.url} alt={item.alt ?? ''} />
+                <img
+                  className="h-full w-full object-contain"
+                  src={mediaVariantUrl(item, 480)}
+                  alt={item.alt ?? ''}
+                  loading="lazy"
+                />
               ) : (
                 <span className="flex h-full items-center justify-center p-3 text-xs text-neutral-600">
                   {item.filename}
@@ -101,6 +146,7 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
             </p>
             <p className="mt-1 text-xs text-neutral-500">
               {item.width && item.height ? `${item.width}×${item.height}` : item.mime}
+              {item.variants.length > 0 && ` ・ 縮小版 ${item.variants.length} 種`}
             </p>
             {editing === item.id ? (
               <form
@@ -118,7 +164,7 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
                     onChange={(event) => setAlt(event.target.value)}
                   />
                 </label>
-                {supportsAiAlt(item.mime) && item.size <= AI_ALT_MAX_BYTES && (
+                {canSuggestAlt(item) && (
                   <div className="mt-2">
                     <AiSuggestButton request={() => suggestAlt(item.id)} onResult={setAlt} />
                   </div>

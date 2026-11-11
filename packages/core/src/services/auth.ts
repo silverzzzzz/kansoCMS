@@ -1,6 +1,5 @@
 import {
   type ApiKeyScope,
-  mediaUrl,
   type PublicUser,
   SESSION_TTL_SECONDS,
   type UpdateProfileInput,
@@ -11,7 +10,7 @@ import { generateToken, sha256Hex } from '../auth/encoding.ts'
 import type { Db } from '../db/client.ts'
 import { apiKeys, media, sessions, users } from '../db/schema/index.ts'
 import { KansoError } from '../errors.ts'
-import { assertMediaExists } from './media.ts'
+import { assertMediaExists, toSiteImage } from './media.ts'
 
 const API_KEY_PREFIX = 'kanso_'
 const API_KEY_TOUCH_INTERVAL_MS = 5 * 60 * 1000
@@ -90,7 +89,7 @@ export function authService(db: Db) {
     const avatar = user.avatarMediaId
       ? await db.query.media.findFirst({
           where: eq(media.id, user.avatarMediaId),
-          columns: { r2Key: true, alt: true, width: true, height: true },
+          columns: { r2Key: true, alt: true, width: true, height: true, variantsJson: true },
         })
       : null
     return {
@@ -98,7 +97,7 @@ export function authService(db: Db) {
       name: user.name,
       slug: user.slug,
       bio: user.bio,
-      avatar: avatar ? { url: mediaUrl(avatar.r2Key), alt: avatar.alt } : null,
+      avatar: avatar ? toSiteImage(avatar) : null,
     }
   }
 

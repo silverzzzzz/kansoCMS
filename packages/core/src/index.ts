@@ -8,6 +8,7 @@ import { analyticsService } from './services/analytics.ts'
 import { authService } from './services/auth.ts'
 import { cacheVersionService } from './services/cache-version.ts'
 import { formsService } from './services/forms.ts'
+import { housekeepingService } from './services/housekeeping.ts'
 import { mediaService } from './services/media.ts'
 import { menusService } from './services/menus.ts'
 import { pagesService } from './services/pages.ts'
@@ -22,6 +23,7 @@ import { shareLinksService } from './services/share-links.ts'
 import { starterService } from './services/starter.ts'
 import { taxonomiesService } from './services/taxonomies.ts'
 import { transferService } from './services/transfer.ts'
+import { usersService } from './services/users.ts'
 
 export {
   effectiveExcerpt,
@@ -57,6 +59,7 @@ export function createKanso(bindings: KansoBindings) {
     auth: authService(db),
     cacheVersion: cacheVersionService(db),
     forms: formsService(db),
+    housekeeping: housekeepingService(db),
     media: mediaService(db, bindings.media),
     menus: menusService(db),
     settings: settingsService(db),
@@ -71,6 +74,7 @@ export function createKanso(bindings: KansoBindings) {
     starter: starterService(db, bindings.media),
     taxonomies: taxonomiesService(db),
     transfer: transferService(db),
+    users: usersService(db),
   }
 }
 
@@ -79,6 +83,7 @@ export type Kanso = ReturnType<typeof createKanso>
 export type { Db } from './db/client.ts'
 export { KansoError, type KansoErrorCode } from './errors.ts'
 export type { ActivityEntry } from './services/activity.ts'
+export type { HousekeepingReport } from './services/housekeeping.ts'
 export type { PasskeyService, RelyingParty } from './services/passkeys.ts'
 export type { PostContentInput } from './services/posts.ts'
 export type {

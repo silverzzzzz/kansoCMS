@@ -37,6 +37,10 @@
   // to your account. Uncomment to enable:
   // "ai": { "binding": "AI" },
 
+  // Daily housekeeping at 18:00 UTC (03:00 in Japan): empties trash older than 30 days
+  // and removes expired share links, sessions and registration links.
+  "triggers": { "crons": ["0 18 * * *"] },
+
   // Local development emulates delivery; adding "remote": true would send real email.
   "send_email": [{ "name": "EMAIL" }],
 

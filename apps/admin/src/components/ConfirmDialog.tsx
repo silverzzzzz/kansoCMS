@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { Button } from './ui.tsx'
 
 export function ConfirmDialog({
@@ -9,6 +9,7 @@ export function ConfirmDialog({
   pending = false,
   onConfirm,
   onClose,
+  children,
 }: {
   open: boolean
   title: string
@@ -17,6 +18,8 @@ export function ConfirmDialog({
   pending?: boolean
   onConfirm: () => void
   onClose: () => void
+  /** Extra controls shown between the description and the buttons. */
+  children?: ReactNode
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -41,6 +44,7 @@ export function ConfirmDialog({
           </button>
         </div>
         <p className="mt-3 text-sm leading-6 text-neutral-600">{description}</p>
+        {children && <div className="mt-4">{children}</div>}
         <div className="mt-6 flex justify-end gap-2">
           <Button type="button" variant="secondary" onClick={onClose} disabled={pending}>
             キャンセル

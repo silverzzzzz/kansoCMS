@@ -1,6 +1,12 @@
 import { zValidator } from '@hono/zod-validator'
 import { KansoError } from '@kanso/core'
-import { MEDIA_MAX_BYTES, mediaListQuerySchema, updateMediaSchema } from '@kanso/shared'
+import {
+  MEDIA_MAX_BYTES,
+  MEDIA_VARIANT_MAX_BYTES,
+  MEDIA_VARIANT_WIDTHS,
+  mediaListQuerySchema,
+  updateMediaSchema,
+} from '@kanso/shared'
 import { Hono } from 'hono'
 import { createMiddleware } from 'hono/factory'
 import { z } from 'zod'
@@ -13,6 +19,13 @@ const uploadMediaSchema = z.object({
   alt: z.string().trim().max(500).optional(),
 })
 
+/** Downscaled copies of one image, one optional file per variant width. */
+const variantsFormSchema = z.object({
+  w480: z.instanceof(File).optional(),
+  w960: z.instanceof(File).optional(),
+  w1600: z.instanceof(File).optional(),
+})
+
 // Multipart framing plus the `alt` field never needs more than this on top of the file.
 const MULTIPART_OVERHEAD_BYTES = 64 * 1024
 
@@ -21,6 +34,16 @@ const rejectOversizedBody = createMiddleware<AppEnv>(async (c, next) => {
   const length = Number(c.req.header('content-length'))
   if (Number.isFinite(length) && length > MEDIA_MAX_BYTES + MULTIPART_OVERHEAD_BYTES) {
     throw KansoError.validation('File is too large')
+  }
+  await next()
+})
+
+/** The same guard for a set of variants. */
+const rejectOversizedVariants = createMiddleware<AppEnv>(async (c, next) => {
+  const length = Number(c.req.header('content-length'))
+  const limit = MEDIA_VARIANT_WIDTHS.length * MEDIA_VARIANT_MAX_BYTES + MULTIPART_OVERHEAD_BYTES
+  if (Number.isFinite(length) && length > limit) {
+    throw KansoError.validation('Variants are too large')
   }
   await next()
 })
@@ -74,6 +97,27 @@ export const media = new Hono<AppEnv>()
         targetId: item.id,
         summary: `メディア「${item.filename}」を更新`,
       })
+      return c.json({ item })
+    },
+  )
+  /**
+   * Store the downscaled copies of an image (made by the uploading browser)
+   * next to the original in R2, replacing any earlier set.
+   */
+  .put(
+    '/:id/variants',
+    rejectOversizedVariants,
+    zValidator('param', idParamSchema, validationHook),
+    zValidator('form', variantsFormSchema, validationHook),
+    async (c) => {
+      const form = c.req.valid('form')
+      const uploads = []
+      for (const width of MEDIA_VARIANT_WIDTHS) {
+        const file = form[`w${width}`]
+        if (file) uploads.push({ width, bytes: await file.arrayBuffer() })
+      }
+      if (uploads.length === 0) throw KansoError.validation('No variants were sent')
+      const item = await c.var.kanso.media.setVariants(c.req.valid('param').id, uploads)
       return c.json({ item })
     },
   )

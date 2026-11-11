@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import { api } from '../../api/client.ts'
 import type { MediaItem } from '../../api/queries.ts'
 import { unwrap } from '../../api/request.ts'
+import { uploadImageVariants } from '../../lib/image-variants.ts'
 import { Alert, Button } from '../ui.tsx'
 
 export function UploadDropzone({ onUploaded }: { onUploaded?: (item: MediaItem) => void }) {
@@ -32,7 +33,10 @@ export function UploadDropzone({ onUploaded }: { onUploaded?: (item: MediaItem) 
       try {
         const data = await unwrap(api.media.$post({ form: { file } }))
         successCount += 1
-        onUploaded?.(data.item)
+        // Smaller copies for responsive images. The original is already
+        // stored; if this step fails they can be made later from the library.
+        const withVariants = await uploadImageVariants(data.item, file).catch(() => null)
+        onUploaded?.(withVariants ?? data.item)
       } catch (error) {
         messages.push(
           `${file.name}: ${error instanceof Error ? error.message : 'アップロード失敗'}`,

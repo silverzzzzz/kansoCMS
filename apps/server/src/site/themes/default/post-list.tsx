@@ -1,3 +1,4 @@
+import { Thumbnail } from '../../images.tsx'
 import type { PostListProps } from '../types.ts'
 
 function pageHref(basePath: string, page: number): string {
@@ -16,7 +17,7 @@ export function PostList({
   return (
     <section class="post-list">
       <div class="post-list-heading">
-        {avatar && <img class="author-avatar" src={avatar.url} alt={avatar.alt ?? ''} />}
+        {avatar && <Thumbnail image={avatar} class="author-avatar" />}
         <div>
           <h1>{heading}</h1>
           {description && <p>{description}</p>}

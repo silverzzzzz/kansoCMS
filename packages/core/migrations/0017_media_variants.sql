@@ -1,0 +1,1 @@
+ALTER TABLE `media` ADD `variants_json` text;

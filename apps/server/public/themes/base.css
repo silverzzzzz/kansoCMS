@@ -24,7 +24,8 @@
   background: color-mix(in srgb, var(--color-accent) 25%, var(--color-bg));
 }
 
-.page img {
+.page img,
+.post-body img {
   max-width: 100%;
   height: auto;
 }

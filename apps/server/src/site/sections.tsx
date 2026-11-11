@@ -67,7 +67,15 @@ async function resolveData(
     if (field.type === 'image') {
       const mediaId = values[field.name]
       const item = typeof mediaId === 'number' ? await kanso.media.find(mediaId) : null
-      data.images[field.name] = item ? { url: item.url, alt: item.alt } : null
+      data.images[field.name] = item
+        ? {
+            url: item.url,
+            alt: item.alt,
+            width: item.width,
+            height: item.height,
+            variants: item.variants,
+          }
+        : null
     }
     if (field.type === 'posts') {
       const value = values[field.name]

@@ -75,8 +75,11 @@ function LoginPage() {
           </summary>
           <div className="mt-3 space-y-2 leading-6">
             <p>
-              サイトを運用している人が、次のコマンドでパスキーの登録用リンク (1 時間有効・1 回限り)
-              を発行できます。
+              ほかの管理者に、管理画面の「ユーザー」から登録リンクを再発行してもらってください。
+            </p>
+            <p>
+              管理者が自分だけの場合は、サイトを運用している人が次のコマンドで登録用リンク (1
+              時間有効・1 回限り) を発行できます。
             </p>
             <code className="block overflow-x-auto border border-neutral-200 bg-neutral-50 p-3 text-xs">
               pnpm passkey:link メールアドレス --remote --url https://サイトのアドレス

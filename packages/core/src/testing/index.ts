@@ -2,7 +2,9 @@ import type { R2Bucket } from '@cloudflare/workers-types'
 import { createKanso } from '../index.ts'
 import { createTestD1 } from './d1.ts'
 
+export { SoftAuthenticator } from '../auth/soft-authenticator.ts'
 export { createTestD1, type TestD1 } from './d1.ts'
+export { jpegBytes, pngBytes, webpBytes } from './images.ts'
 
 interface StoredObject {
   bytes: Uint8Array
@@ -35,7 +37,12 @@ export function createTestBucket() {
       return {
         key,
         size: stored.bytes.byteLength,
+        httpEtag: `"${key}"`,
         httpMetadata: { contentType: stored.contentType },
+        writeHttpMetadata(headers: Headers) {
+          if (stored.contentType) headers.set('content-type', stored.contentType)
+        },
+        body: new Blob([stored.bytes.slice()]).stream(),
         arrayBuffer: async () => stored.bytes.slice().buffer,
       }
     },

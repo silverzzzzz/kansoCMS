@@ -1,12 +1,6 @@
 import { zValidator } from '@hono/zod-validator'
 import { KansoError } from '@kanso/core'
-import {
-  AI_ALT_MAX_BYTES,
-  type AiSuggestInput,
-  aiAltSchema,
-  aiSuggestSchema,
-  supportsAiAlt,
-} from '@kanso/shared'
+import { type AiSuggestInput, aiAltSchema, aiSuggestSchema, canSuggestAlt } from '@kanso/shared'
 import type { Context } from 'hono'
 import { Hono } from 'hono'
 import { aiBinding } from '../bindings.ts'
@@ -92,13 +86,16 @@ export const ai = new Hono<AppEnv>()
     if (!binding) return unavailable(c)
     const { mediaId, locale } = c.req.valid('json')
     const item = await c.var.kanso.media.get(mediaId)
-    if (!supportsAiAlt(item.mime)) {
-      throw KansoError.validation('This file type cannot be described')
+    if (!canSuggestAlt(item)) {
+      throw KansoError.validation('This file cannot be described (unsupported type or too large)')
     }
-    if (item.size > AI_ALT_MAX_BYTES) {
-      throw KansoError.validation('Image is too large to describe')
-    }
-    const object = await c.env.MEDIA.get(item.r2Key)
+    // A stored variant is plenty for a description and far lighter than the
+    // original: the smallest one at least 960px wide, else the largest there is.
+    const variants = [...item.variants].sort((a, b) => a.width - b.width)
+    const variant = variants.find((candidate) => candidate.width >= 960) ?? variants.at(-1)
+    const key = (variant?.url ?? item.url).slice(1)
+    const mime = variant ? (key.endsWith('.webp') ? 'image/webp' : 'image/jpeg') : item.mime
+    const object = await c.env.MEDIA.get(key)
     if (!object) throw KansoError.notFound('Media')
     const image = toBase64(new Uint8Array(await object.arrayBuffer()))
 
@@ -107,7 +104,7 @@ export const ai = new Hono<AppEnv>()
         { role: 'system', content: ALT_PROMPT[language(locale)] },
         {
           role: 'user',
-          content: [{ type: 'image_url', image_url: { url: `data:${item.mime};base64,${image}` } }],
+          content: [{ type: 'image_url', image_url: { url: `data:${mime};base64,${image}` } }],
         },
       ],
       max_tokens: 128,

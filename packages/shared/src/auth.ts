@@ -125,6 +125,28 @@ export const updateProfileSchema = z.object({
 })
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>
 
+/**
+ * How long an invitation (or a re-issued registration link) stays valid.
+ * Longer than the recovery CLI's hour: the invitee may not act the same day.
+ */
+export const USER_INVITE_TTL_SECONDS = 7 * 24 * 60 * 60
+
+const userNameSchema = z.string().trim().min(1).max(100)
+
+/** An administrator adds a user; the user then registers a passkey through a one-time link. */
+export const inviteUserSchema = z.object({
+  email: z.email().max(254),
+  name: userNameSchema,
+  role: z.enum(USER_ROLES).default('editor'),
+})
+export type InviteUserInput = z.infer<typeof inviteUserSchema>
+
+export const updateUserSchema = z.object({
+  name: userNameSchema.optional(),
+  role: z.enum(USER_ROLES).optional(),
+})
+export type UpdateUserInput = z.infer<typeof updateUserSchema>
+
 export const createApiKeySchema = z.object({
   name: z.string().trim().min(1).max(100),
   scope: z.enum(API_KEY_SCOPES),

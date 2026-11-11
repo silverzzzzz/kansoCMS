@@ -23,6 +23,7 @@ import { siteInfo } from './site.ts'
 import { starter } from './starter.ts'
 import { tags } from './tags.ts'
 import { transfer } from './transfer.ts'
+import { users } from './users.ts'
 
 /**
  * REST API, mounted at /api/v1. Health, setup and login are public; management
@@ -50,6 +51,7 @@ const protectedApi = new Hono<AppEnv>()
   .route('/site', siteInfo)
   .route('/starter', starter)
   .route('/tags', tags)
+  .route('/users', users)
   .route('/', transfer)
 
 export const api = new Hono<AppEnv>()

@@ -56,9 +56,44 @@ function readGifSize(bytes: Uint8Array): ImageSize | null {
   return validSize(le16(bytes, 6), le16(bytes, 8))
 }
 
+function le32(bytes: Uint8Array, offset: number): number {
+  return le16(bytes, offset) + le16(bytes, offset + 2) * 0x10000
+}
+
+/**
+ * EXIF orientation (tag 0x0112) from a JPEG APP1 segment, or null. Cameras
+ * and phones store a portrait photo as landscape pixels plus this tag, and
+ * browsers rotate when they draw it.
+ */
+function readExifOrientation(bytes: Uint8Array, start: number, length: number): number | null {
+  // "Exif\0\0", then a TIFF header and its first image file directory.
+  if (length < 14 || !matches(bytes, start, [0x45, 0x78, 0x69, 0x66, 0x00, 0x00])) return null
+  const tiff = start + 6
+  const end = start + length
+  const little = matches(bytes, tiff, [0x49, 0x49])
+  if (!little && !matches(bytes, tiff, [0x4d, 0x4d])) return null
+  const u16 = (offset: number) => (little ? le16(bytes, offset) : be16(bytes, offset))
+  const u32 = (offset: number) => (little ? le32(bytes, offset) : be32(bytes, offset))
+
+  const directory = tiff + u32(tiff + 4)
+  if (directory + 2 > end) return null
+  const entries = u16(directory)
+  for (let index = 0; index < entries; index += 1) {
+    const entry = directory + 2 + index * 12
+    if (entry + 12 > end) return null
+    if (u16(entry) === 0x0112) return u16(entry + 8)
+  }
+  return null
+}
+
+/**
+ * The size a JPEG is displayed at: orientations 5-8 turn the picture by a
+ * quarter, so width and height swap.
+ */
 function readJpegSize(bytes: Uint8Array): ImageSize | null {
   if (bytes.length < 4 || !matches(bytes, 0, [0xff, 0xd8])) return null
 
+  let orientation: number | null = null
   let offset = 2
   while (offset < bytes.length) {
     if (bytes[offset] !== 0xff) return null
@@ -73,9 +108,16 @@ function readJpegSize(bytes: Uint8Array): ImageSize | null {
 
     const segmentLength = be16(bytes, offset)
     if (segmentLength < 2 || offset + segmentLength > bytes.length) return null
+    if (marker === 0xe1 && orientation === null) {
+      orientation = readExifOrientation(bytes, offset + 2, segmentLength - 2)
+    }
     if (marker >= 0xc0 && marker <= 0xc2) {
       if (segmentLength < 7) return null
-      return validSize(be16(bytes, offset + 5), be16(bytes, offset + 3))
+      const width = be16(bytes, offset + 5)
+      const height = be16(bytes, offset + 3)
+      return orientation !== null && orientation >= 5 && orientation <= 8
+        ? validSize(height, width)
+        : validSize(width, height)
     }
     offset += segmentLength
   }

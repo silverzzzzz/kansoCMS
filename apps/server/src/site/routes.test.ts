@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppEnv, Bindings } from '../env.ts'
 import { onError } from '../middleware/error.ts'
 import { site } from './routes.tsx'
+import type { SiteImage } from './themes/types.ts'
 
 vi.mock('../forms/notify.ts', () => ({
   notifySubmission: vi.fn().mockResolvedValue({ skipped: 'no_from' }),
@@ -167,7 +168,7 @@ function testSetup(
       name: string
       slug: string
       bio: string | null
-      avatar: { url: string; alt: string | null } | null
+      avatar: SiteImage | null
     } | null
     headerMenu?: {
       itemsJson: { label: string; href: string; children: { label: string; href: string }[] }[]
@@ -246,9 +247,17 @@ function testSetup(
         ),
     },
     media: {
-      find: vi
-        .fn()
-        .mockImplementation((id: number) => Promise.resolve({ id, url: `/media/${id}.png` })),
+      find: vi.fn().mockImplementation((id: number) =>
+        Promise.resolve({
+          id,
+          url: `/media/${id}.png`,
+          alt: null,
+          width: null,
+          height: null,
+          variants: [],
+        }),
+      ),
+      findByKeys: vi.fn().mockResolvedValue([]),
     },
     postTypes: {
       list: vi.fn().mockResolvedValue(options.postTypes ?? []),
@@ -1280,7 +1289,7 @@ describe('author archive and article extras (T56)', () => {
     name: 'Taro',
     slug: 'taro',
     bio: 'Writes about kansoCMS.',
-    avatar: { url: '/media/avatar.png', alt: 'Taro' },
+    avatar: { url: '/media/avatar.png', alt: 'Taro', width: 400, height: 400, variants: [] },
   }
 
   it('links the byline author name to the author archive', async () => {

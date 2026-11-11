@@ -24,6 +24,15 @@ export function supportsAiAlt(mime: string): boolean {
   return (AI_ALT_MIME_TYPES as readonly string[]).includes(mime)
 }
 
+/**
+ * Whether alt text can be suggested for a media item: either one of its
+ * stored variants (always a small WebP/JPEG) or the original itself can be
+ * shown to the model.
+ */
+export function canSuggestAlt(item: { mime: string; size: number; variants: unknown[] }): boolean {
+  return item.variants.length > 0 || (supportsAiAlt(item.mime) && item.size <= AI_ALT_MAX_BYTES)
+}
+
 /** Alt text is written from the image itself, so the request names the media row. */
 export const aiAltSchema = z.object({
   mediaId: z.number().int().positive(),

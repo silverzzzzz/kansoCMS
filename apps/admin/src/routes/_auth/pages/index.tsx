@@ -1,3 +1,4 @@
+import { TRASH_RETENTION_DAYS } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -106,6 +107,11 @@ function PagesPage() {
           ゴミ箱
         </button>
       </nav>
+      {trashed && (
+        <p className="mt-3 text-xs text-neutral-500">
+          ゴミ箱に入れてから {TRASH_RETENTION_DAYS} 日たつと、自動で完全に削除されます。
+        </p>
+      )}
       {mutationError && (
         <div className="mt-4">
           <Alert tone="error">

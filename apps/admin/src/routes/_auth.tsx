@@ -73,6 +73,7 @@ function AuthLayout() {
           {user.role === 'admin' && (
             <>
               <NavLink to="/settings" label="設定" />
+              <NavLink to="/users" label="ユーザー" />
               <NavLink to="/api-keys" label="API キー" />
             </>
           )}
@@ -100,6 +101,7 @@ function AuthLayout() {
                 {user.role === 'admin' && (
                   <>
                     <NavLink to="/settings" label="設定" />
+                    <NavLink to="/users" label="ユーザー" />
                     <NavLink to="/api-keys" label="API キー" />
                   </>
                 )}
@@ -159,6 +161,7 @@ type NavLinkProps = {
     | '/redirects'
     | '/tools'
     | '/settings'
+    | '/users'
     | '/api-keys'
     | '/account'
   label: string

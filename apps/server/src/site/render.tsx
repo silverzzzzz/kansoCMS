@@ -14,6 +14,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { AppEnv } from '../env.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { type FormState, prepareForms } from './forms.tsx'
+import { withResponsiveImages } from './images.tsx'
 import { preparePostFields, prepareSections, SectionsBody } from './sections.tsx'
 
 type Page = Awaited<ReturnType<Kanso['pages']['get']>>
@@ -38,6 +39,7 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
   const prepared = sections
     ? { html: '', scripts: [] as string[] }
     : await prepareForms(c, page.bodyHtml, ownPath, options.form, ctx.messages.form)
+  const bodyHtml = await withResponsiveImages(c.var.kanso, prepared.html)
   const ogMedia = page.ogMediaId ? await c.var.kanso.media.find(page.ogMediaId) : null
   const ancestors =
     !isHome && page.parentId !== null ? await c.var.kanso.pages.listPublishedAncestors(page) : []
@@ -99,11 +101,11 @@ export async function renderPage(c: Context<AppEnv>, page: Page, options: Render
       {sections ? (
         <SectionsBody sections={sections} formatDate={ctx.formatDate} />
       ) : isHome ? (
-        <article class="page">{raw(prepared.html)}</article>
+        <article class="page">{raw(bodyHtml)}</article>
       ) : (
         <article class="page">
           <h1>{page.title}</h1>
-          {raw(prepared.html)}
+          {raw(bodyHtml)}
         </article>
       )}
     </ctx.theme.Layout>
@@ -121,6 +123,7 @@ export async function renderPost(
   const ownPath = `/${type.slug}/${post.slug}`
   const ownUrl = absoluteUrl(ctx.origin, ownPath)
   const prepared = await prepareForms(c, post.bodyHtml, ownPath, options.form, ctx.messages.form)
+  const bodyHtml = await withResponsiveImages(c.var.kanso, prepared.html)
   const [fields, related] = await Promise.all([
     preparePostFields(c.var.kanso, type.fieldsJson, post.fieldsJson),
     c.var.kanso.posts.listRelated({
@@ -180,7 +183,7 @@ export async function renderPost(
     >
       <ctx.theme.PostArticle
         post={post}
-        bodyHtml={injectHeadingIds(prepared.html)}
+        bodyHtml={injectHeadingIds(bodyHtml)}
         typeSlug={type.slug}
         formatDate={ctx.formatDate}
         fields={fields}

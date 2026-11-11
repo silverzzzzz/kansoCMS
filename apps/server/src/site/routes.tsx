@@ -20,6 +20,7 @@ import { pageviews } from '../middleware/pageviews.ts'
 import { loadSiteContext, type SiteRequestContext } from './context.ts'
 import { feedResponse, robotsResponse, sitemapResponse } from './feeds.ts'
 import { draftValues, type FormState, formSlugsIn, prepareForms } from './forms.tsx'
+import { withResponsiveImages } from './images.tsx'
 import { preview } from './preview.tsx'
 import { renderPage, renderPost } from './render.tsx'
 import { SearchResults } from './search.tsx'
@@ -450,10 +451,11 @@ async function notFound(c: Context<AppEnv>) {
       body = <SectionsBody sections={sections} formatDate={ctx.formatDate} />
     } else {
       const prepared = await prepareForms(c, custom.bodyHtml, '/404', undefined, ctx.messages.form)
+      const bodyHtml = await withResponsiveImages(c.var.kanso, prepared.html)
       body = (
         <article class="page">
           <h1>{custom.title}</h1>
-          {raw(prepared.html)}
+          {raw(bodyHtml)}
         </article>
       )
     }

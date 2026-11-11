@@ -300,6 +300,11 @@ export const apiKeysQuery = queryOptions({
   queryFn: getApiKeys,
 })
 
+export const usersQuery = queryOptions({
+  queryKey: ['users'],
+  queryFn: () => unwrap(api.users.$get()),
+})
+
 export const meQueryOptions = queryOptions({
   queryKey: ['auth', 'me'] as const,
   queryFn: async (): Promise<PublicUser | null> => {

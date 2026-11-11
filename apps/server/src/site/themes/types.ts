@@ -1,6 +1,12 @@
 import type { Kanso } from '@kanso/core'
 import type { PageMeta } from '@kanso/seo'
-import type { SectionField, SectionValues, ThemeName, TocItem } from '@kanso/shared'
+import type {
+  ResponsiveImage,
+  SectionField,
+  SectionValues,
+  ThemeName,
+  TocItem,
+} from '@kanso/shared'
 import type { Child, FC } from 'hono/jsx'
 import type { SiteExtras } from '../context.ts'
 
@@ -36,7 +42,7 @@ export interface PostListProps {
   heading: string
   description?: string | null
   /** Author avatar on author archives. */
-  avatar?: { url: string; alt: string | null } | null
+  avatar?: SiteImage | null
   items: PostSummaryItem[]
   pagination: { page: number; totalPages: number; basePath: string }
   formatDate: (date: Date) => string
@@ -69,10 +75,11 @@ export interface PostArticleProps {
   labels?: { toc: string; related: string; yes: string }
 }
 
-export interface SectionImageData {
-  url: string
-  alt: string | null
-}
+/** An image ready to render: where it is, how big it is, and its smaller copies. */
+export type SiteImage = ResponsiveImage & { alt: string | null }
+
+/** An image resolved for rendering, with the variants a `srcset` is built from. */
+export type SectionImageData = SiteImage
 
 export interface SectionPostsData {
   typeSlug: string

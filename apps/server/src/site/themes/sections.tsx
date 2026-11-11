@@ -1,3 +1,4 @@
+import { IMAGE_SIZES, ResponsiveImg } from '../images.tsx'
 import { standardSectionsMeta } from './sections-meta.ts'
 import type { SectionDefinition, SectionProps } from './types.ts'
 
@@ -47,7 +48,7 @@ function Hero({ values, data }: SectionProps) {
   const buttonUrl = str(values.button_url)
   return (
     <section class="section section-hero">
-      {image && <img class="section-hero-image" src={image.url} alt={image.alt ?? ''} />}
+      {image && <ResponsiveImg image={image} class="section-hero-image" eager />}
       <div class="section-hero-body">
         {heading && <h1>{heading}</h1>}
         {text && <Paragraphs text={text} />}
@@ -109,7 +110,7 @@ function ImageWithText({ values, data }: SectionProps) {
   const reverse = bool(values.reverse)
   return (
     <section class={`section section-image-with-text${reverse ? ' is-reverse' : ''}`}>
-      {image && <img class="section-image" src={image.url} alt={image.alt ?? ''} />}
+      {image && <ResponsiveImg image={image} class="section-image" sizes={IMAGE_SIZES.half} />}
       <div class="section-image-with-text-body">
         {heading && <h2>{heading}</h2>}
         {body && <Paragraphs text={body} />}

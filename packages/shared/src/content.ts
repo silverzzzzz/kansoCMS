@@ -5,6 +5,9 @@ export const CONTENT_STATUSES = ['draft', 'published'] as const
 export type ContentStatus = (typeof CONTENT_STATUSES)[number]
 export const contentStatusSchema = z.enum(CONTENT_STATUSES)
 
+/** Trashed pages and posts are purged by the daily housekeeping job after this many days. */
+export const TRASH_RETENTION_DAYS = 30
+
 export const USER_ROLES = ['admin', 'editor'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 export const userRoleSchema = z.enum(USER_ROLES)

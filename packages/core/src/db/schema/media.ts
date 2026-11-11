@@ -1,3 +1,4 @@
+import type { MediaVariant } from '@kanso/shared'
 import { sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
@@ -11,5 +12,7 @@ export const media = sqliteTable('media', {
   width: integer('width'),
   height: integer('height'),
   alt: text('alt'),
+  /** Downscaled copies stored next to the original in R2 (see `MEDIA_VARIANT_WIDTHS`). */
+  variantsJson: text('variants_json', { mode: 'json' }).$type<MediaVariant[]>(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`(unixepoch())`),
 })

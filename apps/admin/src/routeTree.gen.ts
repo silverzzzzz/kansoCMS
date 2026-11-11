@@ -38,6 +38,7 @@ import { Route as AuthPostsNewRouteImport } from './routes/_auth/posts/new'
 import { Route as AuthRedirectsIndexRouteImport } from './routes/_auth/redirects/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthTagsIndexRouteImport } from './routes/_auth/tags/index'
+import { Route as AuthUsersIndexRouteImport } from './routes/_auth/users/index'
 import { Route as AuthFormsIdIndexRouteImport } from './routes/_auth/forms/$id/index'
 import { Route as AuthFormsIdSubmissionsIndexRouteImport } from './routes/_auth/forms/$id/submissions/index'
 import { Route as AuthFormsIdSubmissionsSidRouteImport } from './routes/_auth/forms/$id/submissions/$sid'
@@ -186,6 +187,11 @@ const AuthTagsIndexRoute = AuthTagsIndexRouteImport.update({
   path: '/tags/',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthUsersIndexRoute = AuthUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => AuthRoute,
+} as any)
 const AuthFormsIdIndexRoute = AuthFormsIdIndexRouteImport.update({
   id: '/forms/$id/',
   path: '/forms/$id/',
@@ -233,6 +239,7 @@ export interface FileRoutesByFullPath {
   '/redirects/': typeof AuthRedirectsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
   '/tags/': typeof AuthTagsIndexRoute
+  '/users/': typeof AuthUsersIndexRoute
   '/forms/$id/': typeof AuthFormsIdIndexRoute
   '/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
   '/forms/$id/submissions/': typeof AuthFormsIdSubmissionsIndexRoute
@@ -266,6 +273,7 @@ export interface FileRoutesByTo {
   '/redirects': typeof AuthRedirectsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
   '/tags': typeof AuthTagsIndexRoute
+  '/users': typeof AuthUsersIndexRoute
   '/forms/$id': typeof AuthFormsIdIndexRoute
   '/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
   '/forms/$id/submissions': typeof AuthFormsIdSubmissionsIndexRoute
@@ -301,6 +309,7 @@ export interface FileRoutesById {
   '/_auth/redirects/': typeof AuthRedirectsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
   '/_auth/tags/': typeof AuthTagsIndexRoute
+  '/_auth/users/': typeof AuthUsersIndexRoute
   '/_auth/forms/$id/': typeof AuthFormsIdIndexRoute
   '/_auth/forms/$id/submissions/$sid': typeof AuthFormsIdSubmissionsSidRoute
   '/_auth/forms/$id/submissions/': typeof AuthFormsIdSubmissionsIndexRoute
@@ -336,6 +345,7 @@ export interface FileRouteTypes {
     | '/redirects/'
     | '/settings/'
     | '/tags/'
+    | '/users/'
     | '/forms/$id/'
     | '/forms/$id/submissions/$sid'
     | '/forms/$id/submissions/'
@@ -369,6 +379,7 @@ export interface FileRouteTypes {
     | '/redirects'
     | '/settings'
     | '/tags'
+    | '/users'
     | '/forms/$id'
     | '/forms/$id/submissions/$sid'
     | '/forms/$id/submissions'
@@ -403,6 +414,7 @@ export interface FileRouteTypes {
     | '/_auth/redirects/'
     | '/_auth/settings/'
     | '/_auth/tags/'
+    | '/_auth/users/'
     | '/_auth/forms/$id/'
     | '/_auth/forms/$id/submissions/$sid'
     | '/_auth/forms/$id/submissions/'
@@ -620,6 +632,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthTagsIndexRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_auth/users/': {
+      id: '/_auth/users/'
+      path: '/users'
+      fullPath: '/users/'
+      preLoaderRoute: typeof AuthUsersIndexRouteImport
+      parentRoute: typeof AuthRoute
+    }
     '/_auth/forms/$id/': {
       id: '/_auth/forms/$id/'
       path: '/forms/$id'
@@ -670,6 +689,7 @@ interface AuthRouteChildren {
   AuthRedirectsIndexRoute: typeof AuthRedirectsIndexRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
   AuthTagsIndexRoute: typeof AuthTagsIndexRoute
+  AuthUsersIndexRoute: typeof AuthUsersIndexRoute
   AuthFormsIdIndexRoute: typeof AuthFormsIdIndexRoute
   AuthFormsIdSubmissionsSidRoute: typeof AuthFormsIdSubmissionsSidRoute
   AuthFormsIdSubmissionsIndexRoute: typeof AuthFormsIdSubmissionsIndexRoute
@@ -701,6 +721,7 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthRedirectsIndexRoute: AuthRedirectsIndexRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,
   AuthTagsIndexRoute: AuthTagsIndexRoute,
+  AuthUsersIndexRoute: AuthUsersIndexRoute,
   AuthFormsIdIndexRoute: AuthFormsIdIndexRoute,
   AuthFormsIdSubmissionsSidRoute: AuthFormsIdSubmissionsSidRoute,
   AuthFormsIdSubmissionsIndexRoute: AuthFormsIdSubmissionsIndexRoute,
