@@ -4,6 +4,8 @@
   "private": false,
   "type": "module",
   "description": "Create a kansoCMS site from the upstream repository.",
+  "license": "MIT",
+  "author": "suyama tomohito",
   "bin": {
     "create-kanso": "bin/create-kanso.mjs"
   },
