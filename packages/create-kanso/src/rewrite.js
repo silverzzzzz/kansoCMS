@@ -68,7 +68,8 @@ export function rewriteRootPackage(text, project, warn) {
 
 /** @param {Project} project */
 export function nextSteps(project) {
-  return `pnpm install
+  return `npm install -g pnpm   # only without pnpm 11 or later
+pnpm install
 pnpm --filter @kanso/server exec wrangler d1 create ${project.d1}
 
 Paste the printed database_id into apps/server/wrangler.jsonc.
@@ -93,7 +94,8 @@ pnpm passkey:link you@example.com --remote --url https://your-domain`
 export function generateReadme(project) {
   return `# ${project.name}
 
-A kansoCMS site. Requires Node.js 22+, pnpm 10.32.1 and a Cloudflare account for deployment.
+A kansoCMS site. Requires Node.js 22+, pnpm 11 or later and a Cloudflare account for deployment.
+The project is a pnpm workspace, so npm, Yarn and Bun cannot install it.
 
 ## Next steps
 

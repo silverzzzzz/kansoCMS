@@ -2,3 +2,11 @@ packages:
   - apps/*
   - packages/*
   - examples/*
+
+# Dependencies that may run their install scripts. pnpm stops the install when
+# a dependency with such a script is not listed here.
+allowBuilds:
+  esbuild: true
+  workerd: true
+  # Reaches the workspace through the Astro example, which never optimises images.
+  sharp: false

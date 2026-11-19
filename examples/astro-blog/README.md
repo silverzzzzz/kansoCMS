@@ -6,7 +6,8 @@ You can copy this folder out of the monorepo.
 
 ## Prerequisites
 
-- Node.js 24 and pnpm 10.
+- Node.js 24, and pnpm 11 or later inside this repository. A standalone copy of this folder
+  installs with npm or any other package manager.
 - A running kansoCMS reachable from your development machine and build environment.
 - A post type such as `blog`, with published posts whose publication dates have passed.
 - A **read** API key: create one in the admin API-key screen, or send
