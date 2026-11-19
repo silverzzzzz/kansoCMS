@@ -235,7 +235,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /preview/share/:token` | `site/preview` — 共有リンクで下書きを描画。`noindex, nofollow` + `no-store` | 公開 (有効なリンクのみ) |
-| `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`。縮小版も同じ経路 | 公開 |
+| `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`、sandbox の CSP、`Cross-Origin-Resource-Policy: cross-origin`。縮小版も同じ経路 | 公開 |
 | `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す)。`localhost` 以外では Worker のシークレット `SETUP_TOKEN` (16 文字以上) を `x-setup-token` ヘッダーで送らないと 403。未設定なら拒否 (`GET` の `token` が `off` / `required` / `unset` を返す) | 公開 (ユーザー 0 人のときだけ) |
 | `POST /api/v1/auth/passkey/options`, `POST /api/v1/auth/passkey` | パスキーでログイン (ユーザー名なし) → セッション Cookie | 公開 |
 | `POST /api/v1/auth/passkey-link/options`, `POST /api/v1/auth/passkey-link` | 登録リンク (`token`) でパスキーを追加してログイン | 公開 (有効なリンクのみ) |
@@ -353,7 +353,12 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 ### セキュリティ
 
 - CSRF: Cookie は `SameSite=Lax` + 変更系 API で `Origin` ヘッダ検証。
-- CSP: 現在は CSP ヘッダーを出力していない。追加する場合、公開サイトで Turnstile を使うときは `script-src` で `https://challenges.cloudflare.com` を許可する。管理画面は Vite の hash を許可する。
+- CSP (Phase 13、`apps/server/src/security-headers.ts`):
+  - 管理画面 (`/admin/*`) は `ADMIN_CSP`。スクリプトは管理画面のバンドルだけ (`script-src 'self'`。inline も eval もなし)、他サイトへの埋め込み禁止 (`frame-ancestors 'none'`)、`object-src 'none'`、`base-uri 'self'` (カスタマイズのプレビューが `<base href>` を入れる)、`form-action 'self'`、`connect-src 'self'`。カスタマイズのプレビュー (`srcdoc`。スクリプトは動かない) はこの方針を引き継ぐので、公開ページの見た目を保つためにスタイル・画像・フォント・メディア・フレームは `https:` も許す。
+  - Static Assets が Worker より先に返す `/admin/` と `/admin/index.html` には `apps/server/public/_headers` で同じ値を付け、テストで一致を確かめる。`vite preview` と本番は `_headers` を適用するが、`vite dev` は適用しない (クライアント側のルートを直接開いたときは Worker の SPA fallback が付ける)。
+  - zod は `new Function` が使えるかを試し、CSP 下ではその試行が違反として報告される。管理画面は最初に `@kanso/shared/zod-config` の `disableZodJit()` (`jitless`) を呼んで試行させない。
+  - 公開サイトには CSP を付けない (テーマ・head HTML・生 HTML ブロックの自由度のため)。付けるなら Turnstile 用に `script-src` で `https://challenges.cloudflare.com` を許可する。
+- メディア (`/media/*`): `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox` で、ファイルを直接開いてもスクリプトは動かない (Chrome 157・Edge 157・Firefox 155 で画像も PDF も表示されることを確認)。`Cross-Origin-Resource-Policy` は `/media` だけ `cross-origin` (別オリジンの headless フロントエンドが `<img>` で埋め込めるように。Phase 12 までは Hono の `secureHeaders` の既定 `same-origin` が付いていて、ブラウザが別オリジンからの読み込みを拒んでいた)、それ以外の応答は `same-origin`。
 - パスキー: 公開鍵 (SPKI) だけを保存し、署名は WebCrypto (ECDSA P-256 / RSASSA-PKCS1-v1_5) で検証する。チャレンジは 1 回限りで 5 分、署名カウンタが戻ったら拒否 (0 固定の同期パスキーは許可)。attestation は検証しない (`none` を要求)。API キーと登録リンクのトークンは SHA-256 ハッシュ保存。
 - フォーム: Turnstile + honeypot + サイズ上限 + IP ごとのレート制限。
 - レート制限 (Phase 13、`apps/server/src/rate-limit.ts`): 誰でも呼べて D1 に書く・メールを送るエンドポイントだけが対象。認証まわり (パスキーのログイン・登録リンク・セットアップの POST) は IP ごとに 10 分で 30 回、フォームの送信 (JSON API と HTML フォーム。honeypot に掛かった送信は数えない) は 10 分で 10 回。D1 の `rate_limits` に「種類:IP の SHA-256」をキーとした固定窓で数え、1 回の判定は 1 文の upsert。超えると 429 と `Retry-After` (HTML フォームはメッセージ付きで再描画)。IP は `CF-Connecting-IP` で、ない (Cloudflare を通っていない) 要求は数えない。KV・Durable Objects・Rate Limiting binding は使わない (§1 と決定 1)。

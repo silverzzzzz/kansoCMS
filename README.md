@@ -203,6 +203,15 @@ with a message and the visitor's input. The counters live in the D1 table `rate_
 a hash of the address, and are cleared by the daily run. The client is `CF-Connecting-IP`, so
 requests that do not pass through Cloudflare (local development) are not counted.
 
+### Security headers
+
+The admin is served with a Content-Security-Policy that lets only its own bundle run (no inline
+script, no eval) and forbids framing it (`apps/server/src/security-headers.ts`; the same value is
+in `apps/server/public/_headers` for the files Static Assets serves directly). Files under
+`/media/` carry a sandboxing CSP, so an uploaded file opened directly cannot run script, and
+`Cross-Origin-Resource-Policy: cross-origin`, so a headless front end on another origin can embed
+them. The public site has no CSP, leaving themes and custom head HTML free.
+
 Notifications are sent only when **Settings → Forms** has a `fromEmail` and either the form
 or the Forms settings has at least one recipient. In local development the `EMAIL` binding is
 emulated: nothing is delivered, the dev server prints

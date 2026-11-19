@@ -1,6 +1,7 @@
 import type { R2Range } from '@cloudflare/workers-types'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
+import { MEDIA_CSP } from '../security-headers.ts'
 
 /**
  * Resolves the byte span R2 actually returned so the 206 can carry Content-Range.
@@ -37,6 +38,12 @@ export const media = new Hono<AppEnv>().get('/*', async (c) => {
   headers.set('cache-control', 'public, max-age=31536000, immutable')
   headers.set('x-content-type-options', 'nosniff')
   headers.set('accept-ranges', 'bytes')
+  // Media is meant to be embedded, also by headless front ends on another
+  // origin; secureHeaders' default `same-origin` would make browsers refuse it.
+  headers.set('cross-origin-resource-policy', 'cross-origin')
+  // Opened directly, a file is a sandboxed document that cannot run script.
+  // The browsers' own image and PDF viewers still work under it.
+  headers.set('content-security-policy', MEDIA_CSP)
 
   // `body` is absent when a precondition (If-None-Match etc.) short-circuits.
   if (!('body' in object) || !object.body) {

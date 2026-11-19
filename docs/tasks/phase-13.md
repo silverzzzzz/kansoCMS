@@ -7,7 +7,7 @@
 | # | タスク | 状態 | 範囲 |
 |---|---|---|---|
 | T70 | レート制限 (ログイン・セットアップ・登録リンク・公開フォーム) | done | core, server, admin |
-| T71 | セキュリティヘッダー (メディア配信の sandbox、管理画面の CSP) | todo | server |
+| T71 | セキュリティヘッダー (メディア配信の sandbox、管理画面の CSP) | done | shared, server, admin, e2e |
 | T72 | 上書き事故の防止 (古い版からの保存を拒否) | todo | shared, core, server, admin |
 | T73 | 見つからなかった URL の記録と 410 | todo | shared, core, server, admin |
 | T74 | robots.txt の AI 学習拒否スイッチ | todo | shared, server, admin |
@@ -61,7 +61,7 @@ Phase 13 の決定事項:
 
 ## T71. セキュリティヘッダー
 
-状態: `todo`
+状態: `done` (2026-11-20)
 
 ### ゴール
 
@@ -78,6 +78,14 @@ Phase 13 の決定事項:
 - 4 ゲート green。E2E と実サーバーで、管理画面の主要な画面に CSP 違反が出ないことを確かめる。
 
 ### 決定
+
+- **PDF も sandbox にした** (仕様から変更)。仕様では「Chrome は sandbox の文書で PDF を表示しない」としていたが、確かめると誤りだった。同じ PDF を sandbox の CSP あり・なしで開くと、Chrome 157 (通常モード)・Edge 157・Firefox 155 (pdf.js) のどれも同じように表示した。headless の Chrome は PDF ビューアを持たないので、通常モードの Chrome を画面外で起動して確かめた。メディアの CSP は `default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox` を全ファイルに付ける。
+- **既存の不具合を直した: 別オリジンから画像を埋め込めなかった**。Hono の `secureHeaders` は既定ですべての応答に `Cross-Origin-Resource-Policy: same-origin` を付けるので、headless のフロントエンド (例: `examples/astro-blog` のように CMS の画像 URL をそのまま使うサイト) の `<img>` をブラウザが拒んでいた。実ブラウザで別オリジンのページから読み込み、変更前は `net::ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` (幅 0)、変更後は表示 (幅 40) を確かめた。`secureHeaders` はハンドラーの後で値を上書きするため、CORP だけは `secureHeaders` から外し、応答に値がなければ `same-origin` を補うミドルウェアに替えた。`/media` は `cross-origin`。
+- **管理画面の CSP** (`ADMIN_CSP`): `script-src 'self'` (inline も eval もなし)、`frame-ancestors 'none'`、`object-src 'none'`、`base-uri 'self'`、`form-action 'self'`、`connect-src 'self'`。カスタマイズのプレビューは `srcdoc` の iframe (スクリプトなし) で、親の CSP を引き継ぐため、公開ページの見た目を保つようにスタイル・画像・フォント・メディア・フレームは `https:` も許した (サイトの head HTML の Web フォントや、生 HTML ブロックの埋め込み)。`base-uri` は最初 `'none'` にしたが、プレビューが `<base href="(サイトの origin)/">` を入れていて違反になったので `'self'` にした。
+- **zod の eval の検査**: 管理画面のカスタマイズ画面で `script-src eval` の違反が 1 件出た。出どころはバンドルの `Function('')` で、zod 4 が高速化のために `new Function` を使えるかを試す処理 (失敗は握りつぶすが、ブラウザは違反として報告する)。zod の `jitless` を有効にすると試さない。最初は `@kanso/shared` の index から設定したが、index を読み込む途中で検査が走るため効かなかった。`@kanso/shared/zod-config` (zod だけを読み込む) を `main.tsx` の最初で読み込んで解決した。
+- **静的ファイルにも付ける**: Static Assets は `/admin/` と `/admin/index.html` を Worker より先に返すので、`apps/server/public/_headers` に同じ CSP を書いた (テストで `ADMIN_CSP` との一致を確認)。`vite build` の出力 (`dist/client/_headers`) と `vite preview` で付くことを確かめた。`vite dev` は `_headers` を適用しない (開発中に `/admin/` を開いたときだけ CSP なし。直接開いたクライアント側のルートは Worker が付ける)。
+- 実ブラウザ (`vite preview`、新しい D1、仮想パスキーでセットアップ): 管理画面 19 画面すべてに CSP が付き、違反は 0 件、ページのエラーも 0 件。固定ページの編集画面とカスタマイズのプレビュー (テーマの CSS が効いた状態で表示) も違反なし。
+- テスト: server `security-headers.test.ts` (5 件。`_headers` と `ADMIN_CSP` の一致、SPA fallback、画像と PDF の CSP と CORP、ほかの応答の `same-origin`)。E2E `security-headers.spec.ts` (主な 6 画面を直接開き、握りつぶされた違反も `securitypolicyviolation` で拾って 0 件を確かめる)。E2E 全体 20 件が通過。
 
 ---
 

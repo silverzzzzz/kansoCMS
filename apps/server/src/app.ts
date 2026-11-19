@@ -14,7 +14,15 @@ import { site } from './site/routes.tsx'
  * resolved by the platform before any of this runs.
  */
 export const app = new Hono<AppEnv>()
-  .use(secureHeaders())
+  // secureHeaders overwrites after the handler, so Cross-Origin-Resource-Policy
+  // is set below instead: `/media` answers `cross-origin`, the rest `same-origin`.
+  .use(secureHeaders({ crossOriginResourcePolicy: false }))
+  .use(async (c, next) => {
+    await next()
+    if (!c.res.headers.has('cross-origin-resource-policy')) {
+      c.res.headers.set('cross-origin-resource-policy', 'same-origin')
+    }
+  })
   .use(kansoMiddleware)
   .onError(onError)
   .route('/api/v1', api)

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppEnv } from './env.ts'
+import { ADMIN_CSP } from './security-headers.ts'
 
 /**
  * SPA fallback for the admin UI. Real files under /admin/* (JS, CSS, the
@@ -21,6 +22,7 @@ export const admin = new Hono<AppEnv>().get('/*', async (c) => {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
+      'content-security-policy': ADMIN_CSP,
     },
   })
 })

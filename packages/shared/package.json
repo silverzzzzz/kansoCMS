@@ -5,7 +5,8 @@
   "type": "module",
   "description": "Shared zod schemas, types and constants for kansoCMS (browser-safe)",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./zod-config": "./src/zod-config.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
