@@ -255,6 +255,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET/POST/PATCH/DELETE /api/v1/menus` | メニュー | セッション or `x-api-key` |
 | `GET /api/v1/activity`, `GET /api/v1/analytics/summary` | 操作ログ、アクセス解析 (期間内の全日 + 上位 20 パス) | セッション or `x-api-key` (`read`) |
 | `GET /api/v1/ai`, `POST /api/v1/ai/suggest`, `POST /api/v1/ai/alt` | Workers AI (任意)。binding がなければ `available: false` / 503 | セッション or `x-api-key` |
+| `GET/POST /api/v1/backups`, `GET /api/v1/backups/:name` | 毎日のバックアップ (R2 の `backups/`) の一覧・今すぐ作成・ダウンロード | セッションの `admin` のみ |
 | `GET /api/v1/export`, `POST /api/v1/import` | サイトの JSON エクスポート / インポート (§6)。エクスポートは `write` が必要。設定を含められるのは管理者セッションだけ | セッション or `x-api-key` (`write`) |
 | `GET/POST /api/v1/users`, `PATCH/DELETE /api/v1/users/:id`, `POST /api/v1/users/:id/link` | ユーザーの一覧・招待・権限変更・削除・登録リンクの再発行 | セッションの `admin` のみ |
 | `GET/PATCH /api/v1/auth/profile` | 自分の著者プロフィール (slug・紹介文・アバター) | セッションのみ |
@@ -318,6 +319,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 - 削除は `deleted_at` を入れるだけ。公開側のクエリ (`publishedNow()` / `postsPublishedNow()`) が `deleted_at IS NULL` を含むので、SSR・サイトマップ・フィード・検索は個別対応なしでゴミ箱を無視する。完全削除は `?force=true` のときだけ。
 - 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行、1 日たったレート制限の行、30 日見かけない (または 1,000 件を超えた) 404 のパスを消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
+- 定期処理は掃除の後にバックアップを書く (Phase 13 T75、`apps/server/src/backups.ts`)。エクスポートと同じ JSON を設定込みで R2 の `backups/kanso-YYYYMMDD-HHMMSS.json` (UTC) に保存し、新しい 7 件を残す。`/media/*` は `media/` のキーしか返さないので公開されない。管理者だけが `GET/POST /api/v1/backups` と `GET /api/v1/backups/:name` で一覧・今すぐ作成・ダウンロードでき、戻すときは既存のインポートを使う。掃除とバックアップは別々に `try` し、片方の失敗はログに出してもう片方を止めない。1 回のバックアップの D1 往復は 13 (実測)。
 
 ### エクスポート / インポート (Phase 10, 11)
 

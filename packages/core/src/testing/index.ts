@@ -9,6 +9,7 @@ export { jpegBytes, pngBytes, webpBytes } from './images.ts'
 interface StoredObject {
   bytes: Uint8Array
   contentType: string | undefined
+  uploaded: Date
 }
 
 /** Test-only R2: an in-memory map behind the bucket methods the services call. */
@@ -28,8 +29,25 @@ export function createTestBucket() {
       objects.set(key, {
         bytes: await toBytes(value),
         contentType: options?.httpMetadata?.contentType,
+        uploaded: new Date(),
       })
       return { key }
+    },
+    /** Keys in order, like R2; one page is enough for tests. */
+    async list(options?: { prefix?: string }) {
+      const prefix = options?.prefix ?? ''
+      return {
+        objects: [...objects.entries()]
+          .filter(([key]) => key.startsWith(prefix))
+          .sort(([a], [b]) => (a < b ? -1 : 1))
+          .map(([key, stored]) => ({
+            key,
+            size: stored.bytes.byteLength,
+            uploaded: stored.uploaded,
+          })),
+        truncated: false,
+        delimitedPrefixes: [],
+      }
     },
     async get(key: string) {
       const stored = objects.get(key)

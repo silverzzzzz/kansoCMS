@@ -1,5 +1,35 @@
 import { createKanso } from '@kanso/core'
+import { createBackup } from './backups.ts'
 import type { Bindings } from './env.ts'
+
+/**
+ * Everything the daily Cron Trigger does, in order. A failure is logged and
+ * does not stop the next job, so a failing backup never blocks the cleanup.
+ */
+export async function runDaily(env: Bindings, now = new Date()): Promise<void> {
+  const jobs: [string, () => Promise<unknown>][] = [
+    ['housekeeping', () => runHousekeeping(env, now)],
+    ['backup', () => runBackup(env, now)],
+  ]
+  for (const [job, run] of jobs) {
+    try {
+      await run()
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          job,
+          message: error instanceof Error ? error.message : String(error),
+        }),
+      )
+    }
+  }
+}
+
+/** Writes today's backup to R2 and keeps the newest seven (backups.ts). */
+export async function runBackup(env: Bindings, now = new Date()) {
+  return createBackup(createKanso({ db: env.DB, media: env.MEDIA }), now)
+}
 
 /**
  * The daily Cron Trigger (`triggers.crons` in wrangler.jsonc): empties trash

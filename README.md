@@ -182,7 +182,8 @@ GIFs (animation) and AVIF files are served as they are.
 `apps/server/wrangler.jsonc` schedules the Worker once a day (`triggers.crons`, 18:00 UTC). The
 run purges pages and posts that have been in the trash for 30 days, expired share links,
 sessions, registration links and sign-in challenges, pageview rows older than 400 days and
-rate-limit counters older than a day — one D1 batch. Locally a Cron Trigger does not fire by itself; call it with
+rate-limit counters older than a day and missing-path counts not seen for 30 days — one D1
+batch — and then writes the daily backup (see Backups and recovery). Locally a Cron Trigger does not fire by itself; call it with
 `curl http://localhost:5173/cdn-cgi/handler/scheduled`.
 
 ### Form notifications (email)
@@ -358,6 +359,12 @@ or posts.
   redirects and form definitions (optionally settings) that can be imported into any install.
   It is the way to move a site or keep a readable copy; it does not carry users, API keys, form
   submissions or files.
+- **Daily backups.** The daily run also writes that JSON, settings included, to the R2 bucket
+  under `backups/` (`kanso-YYYYMMDD-HHMMSS.json`, UTC) and keeps the newest 7. Administrators
+  find them under **ツール → バックアップ**, can download one or take one now, and restore by
+  importing the file. `/media/*` serves only `media/` keys, so backups are never public. They
+  cover the same things as the export, not files, users or submissions: Time Travel stays the
+  full recovery point for the database.
 - **Mistakes in the editor.** A deleted page or post waits in the trash for 30 days, and every
   save keeps the previous version among the latest 20 revisions.
 

@@ -7,6 +7,7 @@ import { ai } from './ai.ts'
 import { analytics } from './analytics.ts'
 import { apiKeys } from './api-keys.ts'
 import { auth } from './auth.ts'
+import { backups } from './backups.ts'
 import { forms } from './forms.ts'
 import { media } from './media.ts'
 import { menus } from './menus.ts'
@@ -38,6 +39,7 @@ const protectedApi = new Hono<AppEnv>()
   .route('/ai', ai)
   .route('/analytics', analytics)
   .route('/api-keys', apiKeys)
+  .route('/backups', backups)
   .route('/forms', forms)
   .route('/media', media)
   .route('/menus', menus)

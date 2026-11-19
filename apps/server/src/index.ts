@@ -1,6 +1,6 @@
 import { app } from './app.ts'
 import type { Bindings } from './env.ts'
-import { runHousekeeping } from './scheduled.ts'
+import { runDaily } from './scheduled.ts'
 
 // Compile-time guard: the hand-mirrored `Bindings` (env.ts) and the generated
 // `Env` (worker-configuration.d.ts) must be mutually assignable. Adding a
@@ -11,6 +11,6 @@ const _bindingsMatchEnv: MutuallyAssignable<Bindings, Env> = true
 export default {
   fetch: app.fetch,
   scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runHousekeeping(env))
+    ctx.waitUntil(runDaily(env))
   },
 } satisfies ExportedHandler<Env>

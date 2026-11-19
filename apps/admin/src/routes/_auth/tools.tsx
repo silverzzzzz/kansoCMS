@@ -5,6 +5,7 @@ import { useRef, useState } from 'react'
 import { api } from '../../api/client.ts'
 import { ApiError } from '../../api/errors.ts'
 import { unwrap } from '../../api/request.ts'
+import { BackupList } from '../../components/BackupList.tsx'
 import { PageHeading } from '../../components/PageHeading.tsx'
 import { Alert, Button, Field } from '../../components/ui.tsx'
 
@@ -98,7 +99,7 @@ function ToolsPage() {
     <div>
       <PageHeading
         title="ツール"
-        description="コンテンツ一式のエクスポート / インポート (JSON)。"
+        description="コンテンツ一式のエクスポート / インポート (JSON) と、毎日のバックアップ。"
       />
       {error && (
         <div className="mt-6">
@@ -141,6 +142,8 @@ function ToolsPage() {
           </Button>
         </div>
       </section>
+
+      {isAdmin && <BackupList />}
 
       <section className="mt-8 border border-neutral-200 bg-white p-5">
         <h2 className="text-lg font-semibold">インポート</h2>
