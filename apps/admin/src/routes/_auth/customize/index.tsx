@@ -76,6 +76,7 @@ function CustomizePage() {
         description="セクションを追加・並べ替えてページを組み立てます。保存すると公開ページに反映されます。"
         actions={
           <select
+            aria-label="編集するページ"
             className={inputClass.replace('mt-2 ', '')}
             value={pageId ?? ''}
             onChange={(event) => navigate({ search: { page: Number(event.target.value) } })}
@@ -505,7 +506,7 @@ function Editor({
               )}
             </div>
           </div>
-          <p className="text-xs text-neutral-500">テーマ: {theme}</p>
+          <p className="text-xs text-neutral-600">テーマ: {theme}</p>
         </div>
 
         <div className="min-w-0 flex-1">

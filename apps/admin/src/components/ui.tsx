@@ -44,7 +44,8 @@ export function Field({
       {label}
       {children}
       {hint && (
-        <span className="mt-1 block text-xs font-normal leading-5 text-neutral-500">{hint}</span>
+        // neutral-600: fields also sit on the neutral-100 page background, where 500 is below 4.5:1.
+        <span className="mt-1 block text-xs font-normal leading-5 text-neutral-600">{hint}</span>
       )}
       {error && (
         <span role="alert" className="mt-1 block text-xs font-normal text-red-700">

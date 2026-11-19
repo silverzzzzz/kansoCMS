@@ -30,7 +30,8 @@ function DashboardPage() {
   return (
     <div>
       <div className="border-b border-neutral-200 pb-6">
-        <p className="text-sm text-neutral-500">{health.data?.site ?? 'kansoCMS'}</p>
+        {/* neutral-600: neutral-500 on the neutral-100 page background is below 4.5:1. */}
+        <p className="text-sm text-neutral-600">{health.data?.site ?? 'kansoCMS'}</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">
           おかえりなさい、{user.name}さん
         </h1>

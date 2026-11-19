@@ -59,6 +59,8 @@ export function Editor({
       FormBlock,
     ],
     content,
+    // The editable area is a textbox to assistive technology; it needs a name.
+    editorProps: { attributes: { 'aria-label': '本文' } },
     onUpdate: ({ editor: current }) => {
       const parsed = richTextDocSchema.safeParse(current.getJSON())
       if (!parsed.success) {

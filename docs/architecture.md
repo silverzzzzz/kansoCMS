@@ -398,7 +398,7 @@ pnpm run deploy                                             # admin build → se
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。
 - `pnpm build`: admin → `apps/server/public/admin/` → server の `vite build` が `public/` ごと client 出力へ同梱。
 - `pnpm test`: Vitest。モックだけでなく実 DB でも動かす。`@kanso/core/testing` が Node 組み込みの SQLite を D1 の API の裏に置き (全マイグレーション適用、バインド変数 100 個・LIKE 50 バイトの制限とクエリ数カウンタ付き)、`apps/server/src/testing.ts` が Worker 全体をその上で動かす。Cloudflare のアカウントも起動中のサーバーも要らない。
-- `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。
+- `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。 Phase 13 で、axe-core によるアクセシビリティ検査 (`accessibility.spec.ts`。公開ページと管理画面の主な画面、WCAG 2.1 A/AA の serious / critical で失敗) と、管理画面の CSP 違反の検査 (`security-headers.spec.ts`) を足した。
 - `.github/workflows/ci.yml`: 2 ジョブ (`gates`: typecheck/check/test/build、`e2e`: Chromium + ローカル D1 で Playwright)。デプロイは CI に含めない。
 - `SITE_URL` (`wrangler.jsonc` の `vars`) は canonical / JSON-LD / sitemap / feed の絶対 URL に使う。本番では実ドメインに書き換える。
 - Workers AI は任意 (`wrangler.jsonc` の `ai` binding はコメント)。AI binding は必ずリモートに接続するので、有効にすると `pnpm dev` に Cloudflare のログインが要る。既定のままならログインなしで開発サーバーと CI が動く。

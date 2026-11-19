@@ -26,6 +26,7 @@
     "setup:token": "pnpm --filter @kanso/server setup:token"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@biomejs/biome": "2.5.13",
     "@playwright/test": "^1.63.0",
     "typescript": "^5.9.3",

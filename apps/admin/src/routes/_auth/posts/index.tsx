@@ -158,7 +158,7 @@ function PostsPage() {
         <button
           type="button"
           className={
-            search.trashed ? 'text-neutral-500' : 'font-medium underline underline-offset-4'
+            search.trashed ? 'text-neutral-600' : 'font-medium underline underline-offset-4'
           }
           onClick={() => updateSearch({ type })}
         >
@@ -167,7 +167,7 @@ function PostsPage() {
         <button
           type="button"
           className={
-            search.trashed ? 'font-medium underline underline-offset-4' : 'text-neutral-500'
+            search.trashed ? 'font-medium underline underline-offset-4' : 'text-neutral-600'
           }
           onClick={() => updateSearch({ type, trashed: true })}
         >
@@ -175,7 +175,7 @@ function PostsPage() {
         </button>
       </nav>
       {search.trashed && (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-xs text-neutral-600">
           ゴミ箱に入れてから {TRASH_RETENTION_DAYS} 日たつと、自動で完全に削除されます。
         </p>
       )}

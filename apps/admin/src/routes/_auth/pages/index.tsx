@@ -94,21 +94,21 @@ function PagesPage() {
       <nav className="mt-6 flex gap-4 text-sm" aria-label="表示切替">
         <button
           type="button"
-          className={trashed ? 'text-neutral-500' : 'font-medium underline underline-offset-4'}
+          className={trashed ? 'text-neutral-600' : 'font-medium underline underline-offset-4'}
           onClick={() => setTrashed(false)}
         >
           一覧
         </button>
         <button
           type="button"
-          className={trashed ? 'font-medium underline underline-offset-4' : 'text-neutral-500'}
+          className={trashed ? 'font-medium underline underline-offset-4' : 'text-neutral-600'}
           onClick={() => setTrashed(true)}
         >
           ゴミ箱
         </button>
       </nav>
       {trashed && (
-        <p className="mt-3 text-xs text-neutral-500">
+        <p className="mt-3 text-xs text-neutral-600">
           ゴミ箱に入れてから {TRASH_RETENTION_DAYS} 日たつと、自動で完全に削除されます。
         </p>
       )}

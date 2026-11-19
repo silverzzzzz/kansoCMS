@@ -235,7 +235,7 @@ function UsersPage() {
           </Button>
         </div>
       </form>
-      <p className="mt-2 text-xs leading-5 text-neutral-500">
+      <p className="mt-2 text-xs leading-5 text-neutral-600">
         編集者はコンテンツ (固定ページ・投稿・メディア・フォームなど)
         を編集できます。設定・ユーザー・API キー・サンプルサイトは管理者だけが扱えます。
       </p>

@@ -128,7 +128,7 @@ running there. The local D1 must have its migrations applied. The suite signs in
 `admin@example.com` with a test-only software passkey (a fixed key in `e2e/helpers.ts`): if setup
 has not run it creates that admin with it, and if the admin exists without it (for example a
 database set up by hand) it registers the key through `passkey:link` against the local D1. The
-passkey screens are tested with Chromium's virtual authenticator. Test pages and forms use the `e2e-` slug prefix and are deleted after the run. The
+passkey screens are tested with Chromium's virtual authenticator. `e2e/accessibility.spec.ts` runs axe-core (WCAG 2.1 A/AA) on the public pages and every main admin screen and fails on serious or critical findings; `e2e/security-headers.spec.ts` fails on any Content-Security-Policy violation in the admin. Test pages and forms use the `e2e-` slug prefix and are deleted after the run. The
 starter-site test installs and removes the starter site, and skips itself when the database
 already has it installed.
 
