@@ -387,6 +387,17 @@ or posts.
 
 CI (GitHub Actions, `.github/workflows/ci.yml`) runs the four gates and the Playwright E2E on every push to `main` and on pull requests.
 
+## Security
+
+Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md), not in public
+issues.
+
+pnpm refuses dependency versions published less than a day ago, versions published with weaker
+provenance than earlier ones, and git or tarball URLs below the direct dependencies
+(`pnpm-workspace.yaml`). The workflows pin every action to a commit SHA, Dependabot proposes
+action and npm updates weekly, and `.github/workflows/security.yml` runs CodeQL and
+[zizmor](https://docs.zizmor.sh/).
+
 ## License
 
 MIT

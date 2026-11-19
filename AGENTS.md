@@ -9,6 +9,9 @@ deployment steps in one of the two files, change the other as well.
 
 - The repository is a pnpm 12 workspace (`packageManager` in `package.json`). npm, Yarn and Bun
   cannot install it.
+- pnpm refuses dependency versions published less than a day ago (`minimumReleaseAge` in
+  `pnpm-workspace.yaml`). When an install fails because a version is too new, wait or pick an
+  older version; do not add an exclusion just to get past it.
 - Gates: `pnpm typecheck && pnpm check && pnpm test && pnpm build`.
 - Local development: `pnpm db:migrate:local`, then `pnpm dev` (server on :5173, admin on :5174).
   Local D1 and R2 are emulated under `apps/server/.wrangler/`; nothing local reaches Cloudflare.

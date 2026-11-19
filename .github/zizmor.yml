@@ -1,0 +1,9 @@
+# zizmor configuration (https://docs.zizmor.sh/configuration/). Every exception needs a reason.
+
+rules:
+  dependabot-cooldown:
+    config:
+      # zizmor recommends 7 days. Dependabot waits 3 days (7 for majors): longer than pnpm's
+      # 1-day minimumReleaseAge, which is what blocks a fresh release, and short enough to keep
+      # updates timely. The audit still reports a missing or shorter cooldown.
+      days: 3

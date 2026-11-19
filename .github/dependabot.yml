@@ -1,0 +1,37 @@
+version: 2
+
+updates:
+  # The SHA-pinned actions in .github/workflows.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # Leave new action releases a few days for problems to surface before proposing them.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      actions:
+        update-types: [minor, patch]
+
+  # The pnpm workspace: Dependabot handles pnpm under the npm ecosystem. pnpm 12 writes
+  # pnpm-lock.yaml as two YAML documents, which GitHub's dependency graph cannot read, so this
+  # repository gets version updates here but no Dependabot alerts or security updates.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # pnpm refuses versions younger than minimumReleaseAge (1 day, pnpm-workspace.yaml), so a
+    # fresher version would fail `pnpm install` in CI. Waiting longer than that keeps Dependabot
+    # from proposing a version pnpm refuses.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    # Minor and patch updates are grouped; each major update gets its own pull request.
+    groups:
+      development-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+      production-dependencies:
+        dependency-type: production
+        update-types: [minor, patch]

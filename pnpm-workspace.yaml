@@ -3,6 +3,22 @@ packages:
   - packages/*
   - examples/*
 
+# Supply-chain policy. pnpm 12 already defaults to minimumReleaseAge 1440 and blockExoticSubdeps
+# true. Setting them keeps them if a default changes, and an explicit minimumReleaseAge is strict:
+# the install fails instead of falling back to a version that is too new.
+# Refuse versions published less than a day (1440 minutes) ago.
+minimumReleaseAge: 1440
+# Refuse a version published with weaker evidence (trusted publishing, provenance) than before.
+trustPolicy: no-downgrade
+# Reviewed downgrades that no version satisfying the dependent's range avoids.
+trustPolicyExclude:
+  # Last 4.x, published by its maintainer without provenance; @astrojs/check needs ^4.0.3.
+  - chokidar@4.0.3
+  # Types only, published without provenance; every @types/node@22 pins ~6.21.0.
+  - undici-types@6.21.0
+# Only direct dependencies may come from git or tarball URLs; subdependencies use the registry.
+blockExoticSubdeps: true
+
 # Dependencies that may run their install scripts. pnpm stops the install when
 # a dependency with such a script is not listed here.
 allowBuilds:
