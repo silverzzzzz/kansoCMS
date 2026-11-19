@@ -435,8 +435,9 @@ function NotFoundPaths({ onRedirect }: { onRedirect: (path: string) => void }) {
             見つからなかった URL
           </h2>
           <p className="mt-1 text-sm text-neutral-600">
-            公開サイトで 404 になったパスです (30 日以内)。リダイレクトか 410
-            を設定すると一覧から消えます。
+            {
+              '公開サイトで 404 になったパスです (30 日以内)。リダイレクトか 410 を設定すると一覧から消えます。'
+            }
           </p>
         </div>
         {total > 0 && (
