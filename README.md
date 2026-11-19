@@ -10,7 +10,7 @@ A minimal, WordPress-shaped CMS that runs entirely on Cloudflare (Workers + D1 +
 - Passwordless sign-in with passkeys (WebAuthn): Windows Hello, Touch ID, a phone or a security key — no passwords stored, no email service needed
 - Several users with two roles (administrator / editor): an administrator invites people with a one-time registration link
 - Revision history keeps the latest 20 pre-save states and restores them from the admin UI
-- Manual 301/302 redirects plus automatic redirects when published page paths or post slugs change
+- Manual 301/302 redirects and 410 (gone) rules, automatic redirects when published page paths or post slugs change, and a list of the public paths that answered 404 so they can be fixed
 - Japanese and English full-text search across published pages and posts, with highlighted snippets (D1 FTS5)
 - Bundled Default and Paper themes, switchable in site settings
 - Shopify-style customize editor: compose pages from theme sections (hero, text, latest posts, …) with a live preview, plus theme-wide settings (accent color, footer, social links) — no code, no Liquid
@@ -237,7 +237,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | --- | --- |
 | `/` | The page whose path is `home`; otherwise the archive of the post type set as *home* in settings; otherwise a placeholder |
 | `/company`, `/company/team` | Fixed pages, resolved by their full `path` |
-| `/old-path` | A managed 301/302 redirect when no published page or post matches the path |
+| `/old-path` | A managed 301/302 redirect, or 410 for a gone rule, when no published page or post matches the path; other misses are 404 and are counted under **リダイレクト → 見つからなかった URL** |
 | `/search?q=…` | Published page/post search with highlighted snippets and `?q=…&page=2` pagination; noindexed content is excluded and the page itself is `noindex` |
 | `/blog` | Post-type archive, 10 per page, `?page=2` … (`page=1` and invalid values redirect to the bare URL) |
 | `/blog/hello-world` | A post: `BlogPosting` + `BreadcrumbList` JSON-LD, `og:type=article`, `rel=alternate` to the feed |

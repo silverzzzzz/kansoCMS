@@ -6,7 +6,7 @@ import {
   buildOrganization,
   buildWebSite,
 } from '@kanso/seo'
-import { POSTS_PER_PAGE, SEARCH_PER_PAGE, SESSION_COOKIE } from '@kanso/shared'
+import { GONE_STATUS, POSTS_PER_PAGE, SEARCH_PER_PAGE, SESSION_COOKIE } from '@kanso/shared'
 import { type Context, Hono } from 'hono'
 import { getCookie } from 'hono/cookie'
 import { createMiddleware } from 'hono/factory'
@@ -482,8 +482,50 @@ async function notFound(c: Context<AppEnv>) {
   )
 }
 
+/** A 410 rule: the theme's chrome with the built-in "removed" message, never indexed. */
+async function gone(c: Context<AppEnv>) {
+  const ctx = await loadSiteContext(c.var.kanso, c.env.SITE_URL)
+  const meta = ctx.meta({ title: ctx.messages.gone.title, path: c.req.path, noindex: true })
+  return c.html(
+    <ctx.theme.Layout
+      meta={meta}
+      nav={ctx.nav}
+      search={ctx.search}
+      themeSettings={ctx.themeSettings}
+      extras={ctx.siteExtras}
+    >
+      <section class="page">
+        <h1>410</h1>
+        <p>{ctx.messages.gone.body}</p>
+      </section>
+    </ctx.theme.Layout>,
+    410,
+  )
+}
+
+/**
+ * Counts a GET for a path nothing answers, for the redirects screen. Runs
+ * after the response and can never fail the request.
+ */
+function recordMissing(c: Context<AppEnv>, path: string) {
+  if (c.req.method !== 'GET') return
+  const kanso = c.var.kanso
+  // Inside the promise chain, so even a synchronous failure only drops the count.
+  const work = Promise.resolve()
+    .then(() => kanso.notFound.record(path))
+    .catch(() => {})
+  try {
+    c.executionCtx.waitUntil(work)
+  } catch {
+    // No ExecutionContext (non-Workers runtime): the write still proceeds.
+  }
+}
+
+/** No page, post type or term answers `path`: a redirect rule, or a 404 that is counted. */
 async function missing(c: Context<AppEnv>, path: string) {
   const hit = await c.var.kanso.redirects.findByPath(path)
+  if (hit?.status === GONE_STATUS) return gone(c)
   if (hit) return c.redirect(hit.to, hit.status)
+  recordMissing(c, path)
   return notFound(c)
 }

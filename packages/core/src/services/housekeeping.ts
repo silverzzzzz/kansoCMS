@@ -1,8 +1,9 @@
 import { TRASH_RETENTION_DAYS } from '@kanso/shared'
-import { and, eq, inArray, lt } from 'drizzle-orm'
+import { and, desc, eq, inArray, lt, notInArray } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
 import {
   authChallenges,
+  notFoundPaths,
   pages,
   pageviewDaily,
   passkeyLinks,
@@ -18,6 +19,10 @@ const DAY_MS = 86_400_000
 export const PAGEVIEW_RETENTION_DAYS = 400
 /** Rate-limit windows are minutes long; a day-old counter can never matter again. */
 const RATE_LIMIT_RETENTION_SECONDS = 86_400
+/** A missing path not requested for this long is dropped from the redirects screen. */
+export const NOT_FOUND_RETENTION_DAYS = 30
+/** At most this many missing paths are kept (the most recently requested). */
+export const NOT_FOUND_MAX_ROWS = 1000
 
 export type HousekeepingReport = {
   pages: number
@@ -28,6 +33,7 @@ export type HousekeepingReport = {
   challenges: number
   pageviewRows: number
   rateLimitRows: number
+  notFoundRows: number
 }
 
 /**
@@ -65,6 +71,8 @@ export function housekeepingService(db: Db) {
       challenges,
       views,
       counters,
+      staleMissing,
+      overflowMissing,
     ] = await db.batch([
       db
         .delete(revisions)
@@ -103,6 +111,28 @@ export function housekeepingService(db: Db) {
           ),
         )
         .returning({ key: rateLimits.key }),
+      db
+        .delete(notFoundPaths)
+        .where(
+          lt(
+            notFoundPaths.lastSeen,
+            Math.floor(now.getTime() / 1000) - NOT_FOUND_RETENTION_DAYS * 86_400,
+          ),
+        )
+        .returning({ path: notFoundPaths.path }),
+      db
+        .delete(notFoundPaths)
+        .where(
+          notInArray(
+            notFoundPaths.path,
+            db
+              .select({ path: notFoundPaths.path })
+              .from(notFoundPaths)
+              .orderBy(desc(notFoundPaths.lastSeen))
+              .limit(NOT_FOUND_MAX_ROWS),
+          ),
+        )
+        .returning({ path: notFoundPaths.path }),
     ])
 
     return {
@@ -114,6 +144,7 @@ export function housekeepingService(db: Db) {
       challenges: challenges.length,
       pageviewRows: views.length,
       rateLimitRows: counters.length,
+      notFoundRows: staleMissing.length + overflowMissing.length,
     }
   }
 

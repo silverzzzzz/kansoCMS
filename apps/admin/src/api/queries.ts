@@ -62,6 +62,10 @@ async function getRedirects(q?: string) {
   return unwrap(api.redirects.$get({ query: q ? { q } : {} }))
 }
 
+async function getNotFoundPaths(page: number) {
+  return unwrap(api.redirects['not-found'].$get({ query: { page: String(page) } }))
+}
+
 async function getMenus() {
   return unwrap(api.menus.$get())
 }
@@ -134,6 +138,7 @@ export type PostItem = Awaited<ReturnType<typeof getPost>>['item']
 export type PostRevisionItem = Awaited<ReturnType<typeof getPostRevisions>>['items'][number]
 export type TagItem = Awaited<ReturnType<typeof getTags>>['items'][number]
 export type RedirectItem = Awaited<ReturnType<typeof getRedirects>>['items'][number]
+export type NotFoundPathItem = Awaited<ReturnType<typeof getNotFoundPaths>>['items'][number]
 export type MenuListItem = Awaited<ReturnType<typeof getMenus>>['items'][number]
 export type MenuItem = Awaited<ReturnType<typeof getMenu>>['item']
 export type MediaItem = Awaited<ReturnType<typeof getMedia>>['items'][number]
@@ -207,6 +212,13 @@ export const redirectsQuery = (q?: string) =>
   queryOptions({
     queryKey: ['redirects', 'list', q ?? ''] as const,
     queryFn: () => getRedirects(q),
+  })
+
+/** Public paths that answered 404, under the `redirects` key so rule changes refresh it. */
+export const notFoundPathsQuery = (page: number) =>
+  queryOptions({
+    queryKey: ['redirects', 'not-found', page] as const,
+    queryFn: () => getNotFoundPaths(page),
   })
 
 export const menusListQuery = queryOptions({

@@ -1,14 +1,15 @@
 import {
   type CreateRedirectInput,
   createRedirectSchema,
+  GONE_STATUS,
   normalizeRedirectPath,
   parseRedirectCsv,
   type UpdateRedirectInput,
 } from '@kanso/shared'
 import type { SQL } from 'drizzle-orm'
-import { asc, eq, or } from 'drizzle-orm'
+import { asc, eq, inArray, or } from 'drizzle-orm'
 import type { Db } from '../db/client.ts'
-import { redirects } from '../db/schema/index.ts'
+import { notFoundPaths, redirects } from '../db/schema/index.ts'
 import { contains } from '../db/search.ts'
 import { isUniqueViolation, KansoError } from '../errors.ts'
 
@@ -41,9 +42,17 @@ export function redirectsService(db: Db) {
     return redirect
   }
 
+  /** A path that now has a rule is no longer worth listing as missing. */
+  function forgetMissing(paths: string[]) {
+    return db.delete(notFoundPaths).where(inArray(notFoundPaths.path, paths))
+  }
+
   async function create(input: CreateRedirectInput) {
     try {
-      const [created] = await db.insert(redirects).values(input).returning({ id: redirects.id })
+      const [[created]] = await db.batch([
+        db.insert(redirects).values(input).returning({ id: redirects.id }),
+        forgetMissing([input.fromPath]),
+      ])
       if (!created) throw new Error('Redirect insert did not return a row')
       return get(created.id)
     } catch (error) {
@@ -54,17 +63,25 @@ export function redirectsService(db: Db) {
   async function update(id: number, input: UpdateRedirectInput) {
     const current = await get(id)
     const fromPath = input.fromPath ?? current.fromPath
-    const to = input.to ?? current.to
+    const status = input.status ?? current.status
+    // A 410 rule never keeps a target; leaving 410 needs one.
+    const to = status === GONE_STATUS ? '' : (input.to ?? current.to)
+    if (status !== GONE_STATUS && to === '') {
+      throw KansoError.validation('Redirect target is required')
+    }
     if (targetEqualsSource(fromPath, to)) {
       throw KansoError.validation('Redirect target equals its source')
     }
     if (Object.keys(input).length === 0) return current
 
     try {
-      await db
-        .update(redirects)
-        .set({ ...input, updatedAt: new Date() })
-        .where(eq(redirects.id, id))
+      await db.batch([
+        db
+          .update(redirects)
+          .set({ ...input, to, updatedAt: new Date() })
+          .where(eq(redirects.id, id)),
+        forgetMissing([fromPath]),
+      ])
       return get(id)
     } catch (error) {
       throwRedirectConflict(error)
@@ -126,7 +143,9 @@ export function redirectsService(db: Db) {
       })
       for (let offset = 0; offset < statements.length; offset += 100) {
         const [first, ...rest] = statements.slice(offset, offset + 100)
-        if (first) await db.batch([first, ...rest])
+        // 100 paths stay within D1's limit of 100 bound parameters per statement.
+        const paths = deduped.slice(offset, offset + 100).map((row) => row.fromPath)
+        if (first) await db.batch([first, ...rest, forgetMissing(paths)])
       }
     }
     return { created, updated, errors, truncated }

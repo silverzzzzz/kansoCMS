@@ -1,5 +1,11 @@
 import { zValidator } from '@hono/zod-validator'
-import { createRedirectSchema, redirectImportSchema, updateRedirectSchema } from '@kanso/shared'
+import {
+  createRedirectSchema,
+  notFoundDismissQuerySchema,
+  notFoundListQuerySchema,
+  redirectImportSchema,
+  updateRedirectSchema,
+} from '@kanso/shared'
 import { Hono } from 'hono'
 import { z } from 'zod'
 import type { AppEnv } from '../env.ts'
@@ -20,7 +26,10 @@ export const redirects = new Hono<AppEnv>()
       action: 'create',
       targetType: 'redirect',
       targetId: item.id,
-      summary: `リダイレクト ${item.fromPath} を作成`,
+      summary:
+        item.status === 410
+          ? `${item.fromPath} を削除済み (410) に設定`
+          : `リダイレクト ${item.fromPath} を作成`,
     })
     return c.json({ item }, 201)
   })
@@ -33,6 +42,18 @@ export const redirects = new Hono<AppEnv>()
     })
     return c.json(result)
   })
+  // Registered before `/:id`, which would otherwise take `not-found` as an id.
+  .get('/not-found', zValidator('query', notFoundListQuerySchema, validationHook), async (c) =>
+    c.json(await c.var.kanso.notFound.list(c.req.valid('query').page)),
+  )
+  .delete(
+    '/not-found',
+    zValidator('query', notFoundDismissQuerySchema, validationHook),
+    async (c) => {
+      await c.var.kanso.notFound.dismiss(c.req.valid('query').path)
+      return c.json({ ok: true })
+    },
+  )
   .patch(
     '/:id',
     zValidator('param', idParamSchema, validationHook),

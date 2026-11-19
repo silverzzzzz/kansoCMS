@@ -125,7 +125,7 @@ kansoCMS/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)、db/search.ts (contains / startsWith)
 │   │   │   ├── services/           # auth, passkeys, users, pages (+page-tree), post-types, posts, taxonomies, revisions,
 │   │   │   │                       #   redirects, search, media, menus, forms, settings, starter, share-links, analytics,
-│   │   │   │                       #   activity, transfer, housekeeping, cache-version, rate-limits
+│   │   │   │                       #   activity, transfer, housekeeping, cache-version, rate-limits, not-found
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt / plainText
 │   │   │   ├── auth/               # webauthn (登録・認証の検証), cbor, encoding, soft-authenticator (テスト用)
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得 (EXIF の向きを考慮)
@@ -198,7 +198,8 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `pageview_daily` | day (`YYYY-MM-DD`), path, count — PK (day, path) | Cookie を使わないアクセス解析の日次集計。400 日で削除 |
 | `activity_log` | id, actor, user_id, action, target_type, target_id, summary, count, created_at | 操作ログ。最新 2,000 件。ログイン失敗は 1 時間ごとに 1 行へまとめ `count` を増やす |
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
-| `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
+| `redirects` | id, from_path (uniq), to, status (`301`/`302`/`410`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成。`410` (削除済み) は転送先なし (`to` は空) |
+| `not_found_paths` | path (pk、`redirects.from_path` と同じ正規化), count, first_seen, last_seen (unix 秒) | 公開サイトで 404 になったパスの集計 (Phase 13)。リダイレクトか 410 を作ると消える。30 日見かけないもの・最終日時が古い順に 1,000 件を超えた分は定期処理で消す |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
 | `rate_limits` | key (pk、`種類:IP の SHA-256`), window_start (unix 秒), count | レート制限の固定窓カウンタ (Phase 13)。窓が変わると同じ行を 1 から数え直す。1 日たった行は定期処理で消す |
 
@@ -226,7 +227,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /` | `site` — `home` ページ → `settings.site.homePostTypeSlug` の一覧 → プレースホルダ | 公開 |
 | `POST /` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /search` | `site` — 公開ページ・投稿の全文検索 (`q`、10 件ごと、`page` は不正なら 1)。`noindex`、JSON-LD なし | 公開 |
-| `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301)。実体がなければ `redirects.from_path` を解決 | 公開 |
+| `GET /:path+` | `site` — `pages.path` 完全一致 (末尾 `/` は 301)。実体がなければ `redirects.from_path` を解決 (`410` はテーマの外枠で「削除されました」)。それもなければ 404 で、パスを `not_found_paths` に数える (`waitUntil`。クエリ文字列は除く。存在するパスのページ送り範囲外などの 404 は数えない) | 公開 |
 | `POST /:path+` | `site` — 本文中の `_form` slug のフォームへ送信 → 成功は 303/200 再描画、検証失敗は 422 再描画 | 公開 |
 | `GET /:type` | `site` — 投稿一覧 (`POSTS_PER_PAGE`=10、`?page=n` は 2 以上の整数のみ。`page=1`/不正値は 301、範囲外は 404) | 公開 |
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
@@ -244,7 +245,8 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /api/v1/pages/:id/revisions`, `GET /api/v1/posts/:id/revisions` | 固定ページ / 投稿の更新前スナップショット一覧 (最新 20 件) | セッション or `x-api-key` (`read`) |
 | `GET /api/v1/pages/:id/revisions/:revisionId`, `GET /api/v1/posts/:id/revisions/:revisionId` | 固定ページ / 投稿のリビジョン詳細 (snapshot 込み) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/pages/:id/revisions/:revisionId/restore`, `POST /api/v1/posts/:id/revisions/:revisionId/restore` | リビジョンを `update` 経由で復元 | セッション or `x-api-key` (`write`) |
-| `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302 リダイレクトの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
+| `GET/POST/PATCH/DELETE /api/v1/redirects` | 301/302/410 ルールの検索・登録・更新・削除 | セッション or `x-api-key` (`read`/`write`) |
+| `GET/DELETE /api/v1/redirects/not-found` | 404 になったパスの一覧 (回数の多い順、50 件ずつ) と、1 件 (`?path=`) または全件の削除 | セッション or `x-api-key` (`read`/`write`) |
 | `GET /api/v1/search` | 公開ページ・投稿の全文検索 (`q`: 1〜100 文字、`page` ≥ 1、`perPage`: 1〜50、既定 10) | セッション or `x-api-key` (`read`) |
 | `POST /api/v1/search/reindex` | 全ページ・投稿の検索本文を再計算 → `{ ok: true, pages, posts }` | セッション or `x-api-key` (`write`) |
 | `DELETE /api/v1/pages/:id`, `DELETE /api/v1/posts/:id` | ゴミ箱へ移動。`?force=true` のときだけ完全削除 (ゴミ箱の行への `force` なしは何もしない)。`POST …/:id/restore` で復元、`POST …/:id/duplicate` で複製 | セッション or `x-api-key` (`write`) |
@@ -315,7 +317,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 ### ゴミ箱と定期処理 (Phase 9, 11, 12)
 
 - 削除は `deleted_at` を入れるだけ。公開側のクエリ (`publishedNow()` / `postsPublishedNow()`) が `deleted_at IS NULL` を含むので、SSR・サイトマップ・フィード・検索は個別対応なしでゴミ箱を無視する。完全削除は `?force=true` のときだけ。
-- 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行、1 日たったレート制限の行を消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
+- 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行、1 日たったレート制限の行、30 日見かけない (または 1,000 件を超えた) 404 のパスを消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
 
 ### エクスポート / インポート (Phase 10, 11)
 
@@ -438,7 +440,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **フォームの埋め込みは Tiptap の `form` ブロックノード** (2026-09-15)。レンダラは `<div data-kanso-form="slug">` のプレースホルダを出し、公開側が描画時にフォーム定義を解決する (ショートコード文字列は使わない)。
 - **通知メールの差出人と既定宛先は設定に持つ** (2026-09-15)。`settings.forms = { fromEmail, fromName, notifyTo, turnstileSiteKey }`。フォームの `notifyTo` が空なら設定の既定宛先、両方空なら保存のみ。`fromEmail` が空ならメール無効。
 - **リビジョンは更新前スナップショットを対象ごとに最新 20 件保持する** (2026-09-16)。内容が同じでも更新ごとに記録し、復元も `update` を通すため復元前の状態が履歴に残る。削除済みのメディア・カテゴリ・タグ・親ページへの参照は復元時に除外する。
-- **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
+- **リダイレクトは手動 301/302 と公開済みコンテンツのパス変更で管理する** (2026-09-21)。Phase 13 で `410` (削除済み、転送先なし) と、404 になったパスの一覧 (管理画面「リダイレクト」から転送・410・消去) を足した。公開済みページ (子孫を含む) と投稿の URL 変更では 301 を自動作成し、既存の転送先も新 URL に付け替えてチェーンを作らない。実体をリダイレクトより優先し、下書きの変更と投稿タイプのスラッグ変更は自動作成の対象外とする。
 - **全文検索は D1 FTS5 の trigram を使う** (2026-09-22)。空白区切り最大 8 語を AND 検索し、全語 3 文字以上なら MATCH + bm25 順、短い語を含む場合はエスケープした LIKE + 公開日降順。検索時に公開状態と公開日時を照合し、スニペットは HTML ではなくテキストと hit フラグで返す。公開 `/search` は `q` をキャッシュキー・ページ送りに保持する。
 - **公開テーマは同梱して設定で切り替える** (2026-09-22)。`site.theme` は default / paper (既定 default)。テーマの契約とレジストリは `site/themes/`、CSS は `public/themes/` に置き、Paper は独自レイアウトと CSS に default の記事部品を再利用する。設定保存時のキャッシュ世代更新で全ページへ即時反映し、追加方法は README の Themes を参照する。
 - **headless 利用例は Astro 5 の静的生成にする** (2026-09-22)。`examples/astro-blog` は `astro:env` のサーバ専用 API キーと素の fetch で公開投稿・固定ページを取得し、予約公開を除外する。画像は CMS の絶対 URL、フォームは注記に置換。`@kanso/*` に依存せずコピー可能とし、root dev は apps のみ、root typecheck は例も含め、例の build は API が必要なため明示実行にする。

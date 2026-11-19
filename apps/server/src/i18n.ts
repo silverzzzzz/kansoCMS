@@ -2,6 +2,8 @@ import { DEFAULT_SUBMISSION_MESSAGES, type SubmissionMessages } from '@kanso/sha
 
 export type SiteMessages = {
   notFound: { title: string; body: string }
+  /** A path with a 410 rule (removed on purpose). */
+  gone: { title: string; body: string }
   maintenance: { body: string }
   home: { running: string; hintBefore: string; hintAfter: string }
   archive: {
@@ -44,6 +46,7 @@ export const en: SiteMessages = {
     kindPage: 'Page',
   },
   notFound: { title: 'Not Found', body: 'Page not found.' },
+  gone: { title: 'Page Removed', body: 'This page has been removed.' },
   maintenance: { body: 'This site is under maintenance. Please check back soon.' },
   home: {
     running: 'kansoCMS is running.',
@@ -83,6 +86,10 @@ export const ja: SiteMessages = {
   notFound: {
     title: 'ページが見つかりません',
     body: 'お探しのページは見つかりませんでした。',
+  },
+  gone: {
+    title: 'ページは削除されました',
+    body: 'お探しのページは削除されました。',
   },
   maintenance: {
     body: 'ただいまメンテナンス中です。しばらくしてからもう一度アクセスしてください。',

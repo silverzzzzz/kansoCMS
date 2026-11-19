@@ -1,10 +1,15 @@
-import type { RedirectStatus } from '@kanso/shared'
+import {
+  GONE_STATUS,
+  NOT_FOUND_PER_PAGE,
+  REDIRECT_STATUSES,
+  type RedirectStatus,
+} from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError } from '../../../api/errors.ts'
-import { type RedirectItem, redirectsQuery } from '../../../api/queries.ts'
+import { notFoundPathsQuery, type RedirectItem, redirectsQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
@@ -16,8 +21,24 @@ export const Route = createFileRoute('/_auth/redirects/')({
   component: RedirectsPage,
 })
 
+const STATUS_LABELS: Record<RedirectStatus, string> = {
+  301: '301 恒久',
+  302: '302 一時',
+  410: '410 削除済み',
+}
+
+function StatusOptions() {
+  return REDIRECT_STATUSES.map((value) => (
+    <option key={value} value={value}>
+      {STATUS_LABELS[value]}
+    </option>
+  ))
+}
+
 function RedirectsPage() {
   const queryClient = useQueryClient()
+  const createFormRef = useRef<HTMLFormElement>(null)
+  const toInputRef = useRef<HTMLInputElement>(null)
   const [input, setInput] = useState('')
   const [search, setSearch] = useState('')
   const [fromPath, setFromPath] = useState('')
@@ -38,7 +59,12 @@ function RedirectsPage() {
   const redirects = useQuery(redirectsQuery(search || undefined))
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ['redirects'] })
   const create = useMutation({
-    mutationFn: () => unwrap(api.redirects.$post({ json: { fromPath, to, status } })),
+    mutationFn: () =>
+      unwrap(
+        api.redirects.$post({
+          json: { fromPath, to: status === GONE_STATUS ? '' : to, status },
+        }),
+      ),
     onSuccess: async () => {
       setFromPath('')
       setTo('')
@@ -52,7 +78,11 @@ function RedirectsPage() {
         ? unwrap(
             api.redirects[':id'].$patch({
               param: { id: String(editing.id) },
-              json: { fromPath: editFromPath, to: editTo, status: editStatus },
+              json: {
+                fromPath: editFromPath,
+                to: editStatus === GONE_STATUS ? '' : editTo,
+                status: editStatus,
+              },
             }),
           )
         : Promise.reject(new Error('編集対象がありません')),
@@ -115,6 +145,7 @@ function RedirectsPage() {
         </Button>
       </form>
       <form
+        ref={createFormRef}
         className="mt-6 grid gap-4 border border-neutral-200 bg-white p-5 sm:grid-cols-[1fr_1fr_10rem_auto]"
         onSubmit={(event) => {
           event.preventDefault()
@@ -132,10 +163,14 @@ function RedirectsPage() {
         </Field>
         <Field label="転送先">
           <input
+            ref={toInputRef}
             className={inputClass}
-            value={to}
-            required
-            placeholder="/new/path または https://…"
+            value={status === GONE_STATUS ? '' : to}
+            required={status !== GONE_STATUS}
+            disabled={status === GONE_STATUS}
+            placeholder={
+              status === GONE_STATUS ? '(410 は転送先なし)' : '/new/path または https://…'
+            }
             onChange={(event) => setTo(event.target.value)}
           />
         </Field>
@@ -145,8 +180,7 @@ function RedirectsPage() {
             value={status}
             onChange={(event) => setStatus(Number(event.target.value) as RedirectStatus)}
           >
-            <option value={301}>301 恒久</option>
-            <option value={302}>302 一時</option>
+            <StatusOptions />
           </select>
         </Field>
         <div className="flex items-end">
@@ -169,7 +203,7 @@ function RedirectsPage() {
         >
           <Field
             label="CSV"
-            hint="1 行に `転送元,転送先[,種類]`。種類は 301 または 302 (省略時 301)。ヘッダ行は任意。同じ転送元は上書きされます。"
+            hint="1 行に `転送元,転送先[,種類]`。種類は 301・302・410 (省略時 301)。410 (削除済み) は転送先を空にします (`/old,,410`)。ヘッダ行は任意。同じ転送元は上書きされます。"
           >
             <textarea
               className={`${inputClass} font-mono text-xs`}
@@ -252,8 +286,9 @@ function RedirectsPage() {
                           <input
                             id={`${formId}-to`}
                             className={`${inputClass} mt-0`}
-                            value={editTo}
-                            required
+                            value={editStatus === GONE_STATUS ? '' : editTo}
+                            required={editStatus !== GONE_STATUS}
+                            disabled={editStatus === GONE_STATUS}
                             onChange={(event) => setEditTo(event.target.value)}
                           />
                         </form>
@@ -271,8 +306,7 @@ function RedirectsPage() {
                             setEditStatus(Number(event.target.value) as RedirectStatus)
                           }
                         >
-                          <option value={301}>301 恒久</option>
-                          <option value={302}>302 一時</option>
+                          <StatusOptions />
                         </select>
                       </td>
                       <td className="px-4 py-3 text-neutral-500">
@@ -298,14 +332,18 @@ function RedirectsPage() {
                     <tr key={redirect.id}>
                       <td className="px-4 py-3">
                         <span className="font-medium">/{redirect.fromPath}</span>
-                        <span className="mx-2 text-neutral-400" aria-hidden="true">
-                          →
-                        </span>
-                        <span className="break-all text-neutral-600">{redirect.to}</span>
+                        {redirect.status === GONE_STATUS ? (
+                          <span className="ml-2 text-neutral-500">(転送先なし)</span>
+                        ) : (
+                          <>
+                            <span className="mx-2 text-neutral-400" aria-hidden="true">
+                              →
+                            </span>
+                            <span className="break-all text-neutral-600">{redirect.to}</span>
+                          </>
+                        )}
                       </td>
-                      <td className="px-4 py-3">
-                        {redirect.status === 301 ? '301 恒久' : '302 一時'}
-                      </td>
+                      <td className="px-4 py-3">{STATUS_LABELS[redirect.status]}</td>
                       <td className="px-4 py-3 text-neutral-500">
                         {formatDateTime(redirect.updatedAt)}
                       </td>
@@ -342,6 +380,14 @@ function RedirectsPage() {
           </div>
         )}
       </div>
+      <NotFoundPaths
+        onRedirect={(path) => {
+          setFromPath(`/${path}`)
+          setStatus(301)
+          createFormRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          toInputRef.current?.focus({ preventScroll: true })
+        }}
+      />
       <ConfirmDialog
         open={deleting !== null}
         title="リダイレクトを削除"
@@ -351,5 +397,146 @@ function RedirectsPage() {
         onConfirm={() => remove.mutate()}
       />
     </div>
+  )
+}
+
+/**
+ * Public paths that answered 404 (counted by the site, kept 30 days). Each can
+ * get a redirect (prefilled in the form above), become a 410, or be dismissed.
+ */
+function NotFoundPaths({ onRedirect }: { onRedirect: (path: string) => void }) {
+  const queryClient = useQueryClient()
+  const [page, setPage] = useState(1)
+  const [clearOpen, setClearOpen] = useState(false)
+  const missing = useQuery(notFoundPathsQuery(page))
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['redirects'] })
+  const markGone = useMutation({
+    mutationFn: (path: string) =>
+      unwrap(api.redirects.$post({ json: { fromPath: path, to: '', status: GONE_STATUS } })),
+    onSuccess: invalidate,
+  })
+  const dismiss = useMutation({
+    mutationFn: (path?: string) =>
+      unwrap(api.redirects['not-found'].$delete({ query: path ? { path } : {} })),
+    onSuccess: async () => {
+      setClearOpen(false)
+      await invalidate()
+    },
+  })
+  const error = markGone.error ?? dismiss.error ?? missing.error
+  const total = missing.data?.total ?? 0
+  const pages = Math.max(1, Math.ceil(total / NOT_FOUND_PER_PAGE))
+
+  return (
+    <section className="mt-10" aria-labelledby="not-found-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="not-found-heading" className="text-lg font-semibold">
+            見つからなかった URL
+          </h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            公開サイトで 404 になったパスです (30 日以内)。リダイレクトか 410
+            を設定すると一覧から消えます。
+          </p>
+        </div>
+        {total > 0 && (
+          <Button type="button" variant="secondary" size="small" onClick={() => setClearOpen(true)}>
+            すべて消す
+          </Button>
+        )}
+      </div>
+      {error && (
+        <div className="mt-4">
+          <Alert tone="error">
+            {error instanceof ApiError ? error.message : '処理できませんでした'}
+          </Alert>
+        </div>
+      )}
+      <div className="mt-4">
+        {total === 0 ? (
+          <EmptyState>見つからなかった URL はありません。</EmptyState>
+        ) : (
+          <div className="overflow-x-auto border border-neutral-200 bg-white">
+            <table className="w-full min-w-[48rem] text-left text-sm">
+              <thead className="border-b border-neutral-200 bg-neutral-50 text-xs text-neutral-600">
+                <tr>
+                  <th className="px-4 py-3 font-medium">パス</th>
+                  <th className="px-4 py-3 text-right font-medium">回数</th>
+                  <th className="px-4 py-3 font-medium">最後のアクセス</th>
+                  <th className="px-4 py-3 text-right font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-200">
+                {missing.data?.items.map((item) => (
+                  <tr key={item.path}>
+                    <td className="break-all px-4 py-3 font-medium">/{item.path}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{item.count}</td>
+                    <td className="px-4 py-3 text-neutral-500">{formatDateTime(item.lastSeen)}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end gap-2">
+                        <Button type="button" size="small" onClick={() => onRedirect(item.path)}>
+                          リダイレクトを作る
+                        </Button>
+                        <Button
+                          type="button"
+                          size="small"
+                          variant="secondary"
+                          disabled={markGone.isPending}
+                          onClick={() => markGone.mutate(item.path)}
+                        >
+                          410 にする
+                        </Button>
+                        <Button
+                          type="button"
+                          size="small"
+                          variant="secondary"
+                          disabled={dismiss.isPending}
+                          onClick={() => dismiss.mutate(item.path)}
+                        >
+                          一覧から消す
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+      {pages > 1 && (
+        <div className="mt-4 flex items-center justify-end gap-3 text-sm">
+          <Button
+            type="button"
+            size="small"
+            variant="secondary"
+            disabled={page <= 1}
+            onClick={() => setPage((current) => current - 1)}
+          >
+            前へ
+          </Button>
+          <span>
+            {page} / {pages}
+          </span>
+          <Button
+            type="button"
+            size="small"
+            variant="secondary"
+            disabled={page >= pages}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            次へ
+          </Button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={clearOpen}
+        title="見つからなかった URL をすべて消す"
+        description="記録した 404 のパスを一覧からすべて消します。リダイレクトは変わりません。"
+        pending={dismiss.isPending}
+        onClose={() => setClearOpen(false)}
+        onConfirm={() => dismiss.mutate(undefined)}
+      />
+    </section>
   )
 }

@@ -5,6 +5,7 @@ import {
   parseRedirectCsv,
   REDIRECT_IMPORT_MAX_ROWS,
   redirectFromPathSchema,
+  updateRedirectSchema,
 } from './redirects.ts'
 
 describe('redirect schemas', () => {
@@ -33,6 +34,39 @@ describe('redirect schemas', () => {
       to: 'https://example.com/',
       status: 301,
     })
+  })
+
+  it('takes a 410 rule without a target', () => {
+    expect(createRedirectSchema.parse({ fromPath: '/removed/', status: 410 })).toEqual({
+      fromPath: 'removed',
+      to: '',
+      status: 410,
+    })
+  })
+
+  it('refuses a target on a 410 rule and a missing target on 301/302', () => {
+    const gone = createRedirectSchema.safeParse({ fromPath: 'old', to: '/new', status: 410 })
+    expect(gone.success).toBe(false)
+    expect(gone.error?.issues[0]).toMatchObject({
+      path: ['to'],
+      message: 'A 410 rule has no target',
+    })
+
+    for (const status of [301, 302] as const) {
+      expect(createRedirectSchema.safeParse({ fromPath: 'old', to: '', status }).success).toBe(
+        false,
+      )
+      expect(createRedirectSchema.safeParse({ fromPath: 'old', status }).success).toBe(false)
+    }
+    expect(createRedirectSchema.safeParse({ fromPath: 'old', to: 'javascript:x' }).success).toBe(
+      false,
+    )
+  })
+
+  it('leaves an empty target in a partial update to the service', () => {
+    expect(updateRedirectSchema.safeParse({ to: '' }).success).toBe(true)
+    expect(updateRedirectSchema.safeParse({ to: '', status: 301 }).success).toBe(false)
+    expect(updateRedirectSchema.safeParse({ status: 410 }).success).toBe(true)
   })
 })
 

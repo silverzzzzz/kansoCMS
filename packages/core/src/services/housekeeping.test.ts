@@ -121,6 +121,7 @@ describe('housekeeping', () => {
       challenges: 0,
       pageviewRows: 0,
       rateLimitRows: 0,
+      notFoundRows: 0,
     })
   })
 })

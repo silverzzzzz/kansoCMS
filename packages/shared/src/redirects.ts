@@ -2,8 +2,10 @@ import { z } from 'zod'
 import { redirectUrlSchema } from './forms.ts'
 import { isReservedSlug } from './slug.ts'
 
-export const REDIRECT_STATUSES = [301, 302] as const
+/** 301/302 forward to `to`; 410 says the path is gone for good and has no target (`to` is ''). */
+export const REDIRECT_STATUSES = [301, 302, 410] as const
 export type RedirectStatus = (typeof REDIRECT_STATUSES)[number]
+export const GONE_STATUS = 410
 
 export function normalizeRedirectPath(input: string): string {
   return input
@@ -26,20 +28,45 @@ export const redirectFromPathSchema = z
       .refine((value) => !isReservedSlug(value.split('/')[0] ?? ''), 'Path uses a reserved slug'),
   )
 
-const redirectStatusSchema = z.union([z.literal(301), z.literal(302)])
+const redirectStatusSchema = z.union([z.literal(301), z.literal(302), z.literal(410)])
 const redirectFieldsShape = {
   fromPath: redirectFromPathSchema,
-  to: redirectUrlSchema,
+  to: z.string().trim().max(2000),
   status: redirectStatusSchema,
 }
 
-function targetDiffersFromSource(value: { fromPath?: string; to?: string }): boolean {
+type RedirectShape = { fromPath?: string; to?: string; status?: RedirectStatus }
+
+function targetDiffersFromSource(value: RedirectShape): boolean {
   return (
     value.fromPath === undefined ||
     value.to === undefined ||
     !value.to.startsWith('/') ||
     normalizeRedirectPath(value.to) !== value.fromPath
   )
+}
+
+/**
+ * A 410 rule has no target; a 301/302 rule needs an http(s) URL or a path.
+ * In a partial update without `status` an empty `to` is left to the service,
+ * which knows the stored status.
+ */
+function checkTarget(value: RedirectShape, ctx: z.RefinementCtx): void {
+  if (value.to === undefined) return
+  if (value.status === GONE_STATUS) {
+    if (value.to !== '')
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'A 410 rule has no target' })
+    return
+  }
+  if (value.status === undefined && value.to === '') return
+  const target = redirectUrlSchema.safeParse(value.to)
+  if (!target.success) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['to'],
+      message: target.error.issues[0]?.message ?? 'Invalid redirect target',
+    })
+  }
 }
 
 const targetDiffersRefinement = {
@@ -49,20 +76,37 @@ const targetDiffersRefinement = {
 
 export const redirectFieldsSchema = z
   .object(redirectFieldsShape)
+  .superRefine(checkTarget)
   .refine(targetDiffersFromSource, targetDiffersRefinement)
 
 export const createRedirectSchema = z
   .object(redirectFieldsShape)
-  .extend({ status: redirectStatusSchema.default(301) })
+  .extend({ status: redirectStatusSchema.default(301), to: redirectFieldsShape.to.default('') })
+  .superRefine(checkTarget)
   .refine(targetDiffersFromSource, targetDiffersRefinement)
 
 export const updateRedirectSchema = z
   .object(redirectFieldsShape)
   .partial()
+  .superRefine(checkTarget)
   .refine(targetDiffersFromSource, targetDiffersRefinement)
 
 export type CreateRedirectInput = z.infer<typeof createRedirectSchema>
 export type UpdateRedirectInput = z.infer<typeof updateRedirectSchema>
+
+/** Paths longer than this are not counted as missing (they are almost always probes). */
+export const NOT_FOUND_MAX_PATH_LENGTH = 300
+export const NOT_FOUND_PER_PAGE = 50
+
+/** `GET /redirects/not-found`: public paths that answered 404, most frequent first. */
+export const notFoundListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+})
+
+/** `DELETE /redirects/not-found`: one path, or every recorded path without `path`. */
+export const notFoundDismissQuerySchema = z.object({
+  path: z.string().trim().min(1).max(2000).optional(),
+})
 
 /** Body of `POST /redirects/import`: raw CSV text, one `from,to[,status]` per line. */
 export const redirectImportSchema = z.object({

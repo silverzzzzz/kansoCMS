@@ -11,6 +11,7 @@ import { formsService } from './services/forms.ts'
 import { housekeepingService } from './services/housekeeping.ts'
 import { mediaService } from './services/media.ts'
 import { menusService } from './services/menus.ts'
+import { notFoundService } from './services/not-found.ts'
 import { pagesService } from './services/pages.ts'
 import { passkeyService } from './services/passkeys.ts'
 import { postTypesService } from './services/post-types.ts'
@@ -63,6 +64,7 @@ export function createKanso(bindings: KansoBindings) {
     housekeeping: housekeepingService(db),
     media: mediaService(db, bindings.media),
     menus: menusService(db),
+    notFound: notFoundService(db),
     settings: settingsService(db),
     pages: pagesService(db),
     passkeys: passkeyService(db),

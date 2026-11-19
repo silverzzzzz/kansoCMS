@@ -131,8 +131,9 @@ const exportedPostSchema = z.object({
 
 const exportedRedirectSchema = z.object({
   fromPath: z.string().trim().min(1).max(2000),
-  to: z.string().trim().min(1).max(2000),
-  status: z.union([z.literal(301), z.literal(302)]).default(301),
+  /** Empty for a 410 (gone) rule; the import checks it with createRedirectSchema. */
+  to: z.string().trim().max(2000).default(''),
+  status: z.union([z.literal(301), z.literal(302), z.literal(410)]).default(301),
 })
 
 const exportedMenuSchema = z.object({

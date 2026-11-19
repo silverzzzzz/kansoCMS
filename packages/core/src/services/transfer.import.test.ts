@@ -77,6 +77,8 @@ async function seedSite(test: TestKanso) {
   await kanso.redirects.create(
     createRedirectSchema.parse({ fromPath: '/old', to: '/company', status: 301 }),
   )
+  // A 410 rule has no target; it must survive the round trip as one.
+  await kanso.redirects.create(createRedirectSchema.parse({ fromPath: '/retired', status: 410 }))
   await kanso.menus.create({
     slug: 'header',
     name: 'ヘッダー',
@@ -116,13 +118,13 @@ describe('export and import', () => {
     const bundle = await source.kanso.transfer.export({ settings: false })
 
     const first = await target.kanso.transfer.import(bundleOf(bundle), adminImport)
-    expect(first).toEqual({ created: 10, updated: 0, skipped: 0, warnings: [] })
+    expect(first).toEqual({ created: 11, updated: 0, skipped: 0, warnings: [] })
     expect(comparable(await target.kanso.transfer.export({ settings: false }))).toEqual(
       comparable(bundle),
     )
 
     const second = await target.kanso.transfer.import(bundleOf(bundle), adminImport)
-    expect(second).toEqual({ created: 0, updated: 0, skipped: 10, warnings: [] })
+    expect(second).toEqual({ created: 0, updated: 0, skipped: 11, warnings: [] })
   })
 
   it('renders imported content the same way the editor would', async () => {
