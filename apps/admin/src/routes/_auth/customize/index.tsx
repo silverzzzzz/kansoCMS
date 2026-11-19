@@ -15,6 +15,7 @@ import {
 } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
+import { isStaleError, StaleSaveNotice } from '../../../components/content/StaleSaveNotice.tsx'
 import {
   defaultSettings,
   SectionSettingsForm,
@@ -41,6 +42,8 @@ export const Route = createFileRoute('/_auth/customize/')({
 function CustomizePage() {
   const search = Route.useSearch()
   const navigate = useNavigate({ from: Route.fullPath })
+  const queryClient = useQueryClient()
+  const [reloads, setReloads] = useState(0)
   const pages = useQuery(pagesListQuery({ perPage: '100' }))
   const catalog = useQuery(sectionCatalogQuery)
   const themeSettings = useQuery({ ...themeSettingsQuery, retry: false })
@@ -96,13 +99,18 @@ function CustomizePage() {
         </div>
       ) : detail.data?.item && catalog.data && !themeSettings.isLoading ? (
         <Editor
-          // Remount on theme change so theme-settings drafts never cross namespaces.
-          key={`${detail.data.item.id}:${catalog.data.theme}`}
+          // Remount on theme change so theme-settings drafts never cross namespaces,
+          // and after a reload so the editor starts from the refetched page.
+          key={`${detail.data.item.id}:${catalog.data.theme}:${reloads}`}
           page={detail.data.item}
           catalog={catalog.data.items}
           theme={catalog.data.theme}
           settingsFields={catalog.data.settings}
           themeAll={themeSettings.data?.theme ?? null}
+          onReload={async () => {
+            await queryClient.invalidateQueries({ queryKey: ['pages'] })
+            setReloads((count) => count + 1)
+          }}
         />
       ) : (
         <p className="mt-8">読み込み中…</p>
@@ -125,6 +133,7 @@ function Editor({
   theme,
   settingsFields,
   themeAll,
+  onReload,
 }: {
   page: PageItem
   catalog: SectionCatalogItem[]
@@ -132,6 +141,8 @@ function Editor({
   settingsFields: SectionFieldDef[]
   /** All themes' stored settings, or null when the account cannot read them. */
   themeAll: Record<string, Record<string, unknown>> | null
+  /** Refetch the page and start over from it (drops unsaved edits). */
+  onReload: () => void
 }) {
   const queryClient = useQueryClient()
   const [sections, setSections] = useState<PageSection[]>(page.sections ?? [])
@@ -197,16 +208,22 @@ function Editor({
     }
   }, [sectionsJson, themeJson, themeAll, page.title])
 
+  // The version this editor last loaded or saved; a save from an older one is refused.
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState(page.updatedAt)
   const save = useMutation({
-    mutationFn: (value: PageSection[] | null) =>
+    mutationFn: ({ value, overwrite }: { value: PageSection[] | null; overwrite?: boolean }) =>
       unwrap(
-        api.pages[':id'].$patch({ param: { id: String(page.id) }, json: { sections: value } }),
+        api.pages[':id'].$patch({
+          param: { id: String(page.id) },
+          json: { sections: value, ...(overwrite ? {} : { baseUpdatedAt }) },
+        }),
       ),
-    onSuccess: async (data, value) => {
+    onSuccess: async (data, { value }) => {
       if (value === null) {
         setSections([])
         setSelectedId(null)
       }
+      setBaseUpdatedAt(data.item.updatedAt)
       setSavedJson(JSON.stringify(data.item.sections ?? []))
       setDetachOpen(false)
       await queryClient.invalidateQueries({ queryKey: ['pages'] })
@@ -224,7 +241,7 @@ function Editor({
       await queryClient.invalidateQueries({ queryKey: ['settings', 'theme'] })
     },
   })
-  const saveError = save.error instanceof ApiError ? save.error : null
+  const saveError = save.error instanceof ApiError && !isStaleError(save.error) ? save.error : null
   const saveThemeError = saveTheme.error instanceof ApiError ? saveTheme.error : null
 
   function updateThemeDraft(name: string, value: unknown) {
@@ -272,6 +289,18 @@ function Editor({
             このページは現在リッチテキスト本文で表示されています。セクションを追加して保存すると、本文の代わりにセクションが表示されます
             (本文は保持され、いつでも戻せます)。
           </Alert>
+        </div>
+      )}
+      {isStaleError(save.error) && save.variables && (
+        <div className="mb-4">
+          <StaleSaveNotice
+            what="ページ"
+            pending={save.isPending}
+            onReload={onReload}
+            onOverwrite={() => {
+              if (save.variables) save.mutate({ value: save.variables.value, overwrite: true })
+            }}
+          />
         </div>
       )}
       {saveError && (
@@ -460,7 +489,7 @@ function Editor({
               <Button
                 type="button"
                 disabled={sectionsJson === savedJson || save.isPending}
-                onClick={() => save.mutate(JSON.parse(sectionsJson))}
+                onClick={() => save.mutate({ value: JSON.parse(sectionsJson) })}
               >
                 {save.isPending ? '保存中…' : '保存'}
               </Button>
@@ -502,7 +531,7 @@ function Editor({
         confirmLabel="本文に戻す"
         pending={save.isPending}
         onClose={() => setDetachOpen(false)}
-        onConfirm={() => save.mutate(null)}
+        onConfirm={() => save.mutate({ value: null })}
       />
     </div>
   )

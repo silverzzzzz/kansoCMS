@@ -11,7 +11,7 @@ import { EMPTY_DOCUMENT, plainText, renderRichText } from '../content/index.ts'
 import type { Db } from '../db/client.ts'
 import { media, pages, postTypes } from '../db/schema/index.ts'
 import { contains, startsWith } from '../db/search.ts'
-import { isUniqueViolation, KansoError } from '../errors.ts'
+import { assertUnchangedSince, isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists } from './media.ts'
 import { computePaths, hasAncestorCycle } from './page-tree.ts'
 import { redirectsService } from './redirects.ts'
@@ -185,6 +185,7 @@ export function pagesService(db: Db) {
 
   async function update(id: number, input: UpdatePageInput, context: UpdateContext) {
     const current = await get(id)
+    assertUnchangedSince('Page', current.updatedAt, input.baseUpdatedAt)
     const snapshot: PageRevisionSnapshot = {
       title: current.title,
       slug: current.slug,

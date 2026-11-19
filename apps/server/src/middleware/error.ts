@@ -7,6 +7,7 @@ const STATUS_BY_CODE: Record<KansoErrorCode, ContentfulStatusCode> = {
   not_found: 404,
   validation: 400,
   conflict: 409,
+  stale: 409,
   unauthorized: 401,
   forbidden: 403,
   rate_limited: 429,

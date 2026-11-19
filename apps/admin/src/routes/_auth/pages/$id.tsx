@@ -15,6 +15,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
 import { RevisionList } from '../../../components/content/RevisionList.tsx'
 import { ShareLinks } from '../../../components/content/ShareLinks.tsx'
+import { isStaleError, StaleSaveNotice } from '../../../components/content/StaleSaveNotice.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { Alert, Button, Field, inputClass } from '../../../components/ui.tsx'
 import { fromDateTimeLocal, toDateTimeLocal } from '../../../lib/datetime.ts'
@@ -81,7 +82,16 @@ function EditPage() {
           </Alert>
         </div>
       )}
-      <EditPageForm key={formKey} id={id} item={item} pages={pages.data?.items ?? []} />
+      <EditPageForm
+        key={formKey}
+        id={id}
+        item={item}
+        pages={pages.data?.items ?? []}
+        onReload={async () => {
+          await queryClient.invalidateQueries({ queryKey: ['pages'] })
+          setFormKey((key) => key + 1)
+        }}
+      />
       <RevisionList
         items={revisions.data?.items ?? []}
         pending={restore.isPending}
@@ -102,7 +112,17 @@ function EditPage() {
   )
 }
 
-function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: PageListItem[] }) {
+function EditPageForm({
+  id,
+  item,
+  pages,
+  onReload,
+}: {
+  id: number
+  item: PageItem
+  pages: PageListItem[]
+  onReload: () => void
+}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate({ from: '/pages/$id' })
   const [content, setContent] = useState<ContentFormValue>(() => ({
@@ -118,15 +138,20 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
     noindex: item.noindex,
     canonicalUrl: item.canonicalUrl ?? '',
   }))
+  // The version this form was seeded from. Not `item.updatedAt` at save time:
+  // the query refetches (e.g. on window focus) without touching the form state.
+  const [baseUpdatedAt] = useState(item.updatedAt)
   const [parentId, setParentId] = useState<number | null>(item.parentId)
   const [sortOrder, setSortOrder] = useState(item.sortOrder)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const save = useMutation({
-    mutationFn: () =>
+    // `overwrite` drops the version check after the editor chose to overwrite.
+    mutationFn: (overwrite?: boolean) =>
       unwrap(
         api.pages[':id'].$patch({
           param: { id: String(id) },
           json: {
+            ...(overwrite ? {} : { baseUpdatedAt }),
             title: content.title,
             slug: content.slug,
             status: content.status,
@@ -203,7 +228,18 @@ function EditPageForm({ id, item, pages }: { id: number; item: PageItem; pages: 
           </>
         }
       />
-      {(remove.error || (save.error && Object.keys(errors).length === 0)) && (
+      {isStaleError(save.error) && (
+        <div className="mt-6">
+          <StaleSaveNotice
+            what="固定ページ"
+            pending={save.isPending}
+            onReload={onReload}
+            onOverwrite={() => save.mutate(true)}
+          />
+        </div>
+      )}
+      {(remove.error ||
+        (save.error && !isStaleError(save.error) && Object.keys(errors).length === 0)) && (
         <div className="mt-6">
           <Alert tone="error">
             {(remove.error ?? save.error) instanceof ApiError

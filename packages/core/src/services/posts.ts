@@ -37,7 +37,7 @@ import {
   users,
 } from '../db/schema/index.ts'
 import { contains } from '../db/search.ts'
-import { isUniqueViolation, KansoError } from '../errors.ts'
+import { assertUnchangedSince, isUniqueViolation, KansoError } from '../errors.ts'
 import { assertMediaExists, toSiteImage } from './media.ts'
 import { copySlug, copyTitle } from './pages.ts'
 import { redirectsService } from './redirects.ts'
@@ -481,6 +481,7 @@ export function postsService(db: Db) {
 
   async function update(id: number, input: UpdatePostInput, context: UpdateContext) {
     const current = await get(id)
+    assertUnchangedSince('Post', current.updatedAt, input.baseUpdatedAt)
     const snapshot: PostRevisionSnapshot = {
       title: current.title,
       slug: current.slug,

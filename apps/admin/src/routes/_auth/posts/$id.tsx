@@ -17,6 +17,7 @@ import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
 import { ContentForm, type ContentFormValue } from '../../../components/content/ContentForm.tsx'
 import { RevisionList } from '../../../components/content/RevisionList.tsx'
 import { ShareLinks } from '../../../components/content/ShareLinks.tsx'
+import { isStaleError, StaleSaveNotice } from '../../../components/content/StaleSaveNotice.tsx'
 import {
   defaultSettings,
   SectionSettingsForm,
@@ -76,7 +77,15 @@ function EditPostPage() {
           </Alert>
         </div>
       )}
-      <EditPostForm key={formKey} id={id} item={item} />
+      <EditPostForm
+        key={formKey}
+        id={id}
+        item={item}
+        onReload={async () => {
+          await queryClient.invalidateQueries({ queryKey: ['posts'] })
+          setFormKey((key) => key + 1)
+        }}
+      />
       <RevisionList
         items={revisions.data?.items ?? []}
         pending={restore.isPending}
@@ -97,7 +106,15 @@ function EditPostPage() {
   )
 }
 
-function EditPostForm({ id, item }: { id: number; item: PostItem }) {
+function EditPostForm({
+  id,
+  item,
+  onReload,
+}: {
+  id: number
+  item: PostItem
+  onReload: () => void
+}) {
   const queryClient = useQueryClient()
   const navigate = useNavigate({ from: '/posts/$id' })
   const types = useQuery(postTypesQuery)
@@ -117,6 +134,9 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
     noindex: item.noindex,
     canonicalUrl: item.canonicalUrl ?? '',
   }))
+  // The version this form was seeded from. Not `item.updatedAt` at save time:
+  // the query refetches (e.g. on window focus) without touching the form state.
+  const [baseUpdatedAt] = useState(item.updatedAt)
   const [coverMediaId, setCoverMediaId] = useState<number | null>(item.coverMediaId)
   const [pinned, setPinned] = useState(item.pinned)
   const [fields, setFields] = useState<Record<string, unknown> | null>(null)
@@ -126,11 +146,13 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
   )
   const [confirmOpen, setConfirmOpen] = useState(false)
   const save = useMutation({
-    mutationFn: () =>
+    // `overwrite` drops the version check after the editor chose to overwrite.
+    mutationFn: (overwrite?: boolean) =>
       unwrap(
         api.posts[':id'].$patch({
           param: { id: String(id) },
           json: {
+            ...(overwrite ? {} : { baseUpdatedAt }),
             title: content.title,
             slug: content.slug,
             status: content.status,
@@ -214,7 +236,18 @@ function EditPostForm({ id, item }: { id: number; item: PostItem }) {
           </>
         }
       />
-      {(remove.error || (save.error && Object.keys(errors).length === 0)) && (
+      {isStaleError(save.error) && (
+        <div className="mt-6">
+          <StaleSaveNotice
+            what="投稿"
+            pending={save.isPending}
+            onReload={onReload}
+            onOverwrite={() => save.mutate(true)}
+          />
+        </div>
+      )}
+      {(remove.error ||
+        (save.error && !isStaleError(save.error) && Object.keys(errors).length === 0)) && (
         <div className="mt-6">
           <Alert tone="error">
             {(remove.error ?? save.error) instanceof ApiError

@@ -2,6 +2,7 @@ export type KansoErrorCode =
   | 'not_found'
   | 'validation'
   | 'conflict'
+  | 'stale'
   | 'unauthorized'
   | 'forbidden'
   | 'rate_limited'
@@ -29,6 +30,11 @@ export class KansoError extends Error {
     return new KansoError('conflict', message)
   }
 
+  /** The item was saved by someone else after the caller loaded it (409). */
+  static stale(message: string) {
+    return new KansoError('stale', message)
+  }
+
   static validation(message: string, details?: unknown) {
     return new KansoError('validation', message, details)
   }
@@ -45,6 +51,22 @@ export class KansoError extends Error {
   static rateLimited(retryAfter: number, message = 'Too many requests. Try again later.') {
     return new KansoError('rate_limited', message, { retryAfter })
   }
+}
+
+/**
+ * Refuses an update that started from an older version of the item. Timestamps
+ * are stored in whole seconds, so both sides are compared at that precision.
+ * Without `baseUpdatedAt` (API clients, revision restores) nothing is checked.
+ */
+export function assertUnchangedSince(
+  what: string,
+  updatedAt: Date,
+  baseUpdatedAt: string | undefined,
+): void {
+  if (baseUpdatedAt === undefined) return
+  const current = Math.floor(updatedAt.getTime() / 1000)
+  const base = Math.floor(Date.parse(baseUpdatedAt) / 1000)
+  if (current !== base) throw KansoError.stale(`${what} was changed after it was opened`)
 }
 
 /**

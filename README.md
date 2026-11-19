@@ -273,6 +273,11 @@ Upload media with `curl -H "x-api-key: kanso_…" -F file=@photo.png -F alt="Pho
 
 Post bodies are ProseMirror JSON (`bodyJson`); the server validates them, renders `bodyHtml`, and derives an effective excerpt at render time when no explicit excerpt is stored. The admin UI is a plain client of this API — `hc<ApiType>` from `apps/server` gives it end-to-end types.
 
+`PATCH /api/v1/pages/:id` and `PATCH /api/v1/posts/:id` accept an optional `baseUpdatedAt`: the
+`updatedAt` you started editing from. If the item has been saved since, the update is refused
+with `409` and `error.code` `stale` instead of overwriting that save; send the update again
+without `baseUpdatedAt` to overwrite on purpose. The admin editors always send it.
+
 Search with `GET /api/v1/search?q=…` (`read` scope). After applying `0004_search.sql`, run
 `POST /api/v1/search/reindex` (`write` scope) to index existing bodies: the migration initially
 indexes only their titles and stored excerpts. New and edited bodies are indexed automatically.

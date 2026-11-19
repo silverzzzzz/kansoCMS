@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { contentFieldsSchema, seoFieldsSchema } from './content.ts'
+import { baseUpdatedAtSchema, contentFieldsSchema, seoFieldsSchema } from './content.ts'
 import { idSchema, listQuerySchema } from './query.ts'
 import { sectionFieldListSchema } from './sections.ts'
 import { slugSchema } from './slug.ts'
@@ -37,7 +37,10 @@ export const postFieldsSchema = contentFieldsSchema.extend(seoFieldsSchema.shape
 export const createPostSchema = postFieldsSchema
   .partial()
   .required({ postTypeId: true, title: true, slug: true })
-export const updatePostSchema = postFieldsSchema.partial().omit({ postTypeId: true })
+export const updatePostSchema = postFieldsSchema
+  .partial()
+  .omit({ postTypeId: true })
+  .extend({ baseUpdatedAt: baseUpdatedAtSchema })
 export const postListQuerySchema = listQuerySchema.extend({ type: slugSchema.optional() })
 
 export type CreatePostTypeInput = z.infer<typeof createPostTypeSchema>

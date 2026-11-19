@@ -33,3 +33,10 @@ export const contentFieldsSchema = z.object({
   status: contentStatusSchema,
   publishedAt: z.iso.datetime({ offset: true }).nullable(),
 })
+
+/**
+ * Optional on page and post updates: the `updatedAt` the editor started from.
+ * When the item has been saved since (another tab or person), the update is
+ * refused with 409 `stale` instead of silently overwriting that save.
+ */
+export const baseUpdatedAtSchema = z.iso.datetime({ offset: true }).optional()
