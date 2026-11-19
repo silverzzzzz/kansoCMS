@@ -12,7 +12,7 @@
 | T73 | 見つからなかった URL の記録と 410 | done | shared, core, server, admin |
 | T74 | robots.txt の AI 学習拒否スイッチ | done | shared, server, admin |
 | T75 | 毎日のバックアップを R2 に保存 | done | core, server, admin |
-| T76 | 依存とCIの強化、SECURITY.md | todo | .github, pnpm, docs |
+| T76 | 依存とCIの強化、SECURITY.md | done | .github, pnpm, docs |
 | T77 | デプロイ時の D1 / R2 の自動作成 | todo | server, docs, create-kanso |
 | T78 | アクセシビリティ検査 (axe) を E2E に入れる | done | e2e, admin, server |
 
@@ -212,7 +212,7 @@ Phase 13 の決定事項:
 
 ## T76. 依存と CI の強化、SECURITY.md
 
-状態: `todo`
+状態: `done` (2026-11-20)
 
 ### ゴール
 
@@ -230,6 +230,15 @@ Phase 13 の決定事項:
 - `pnpm install --frozen-lockfile` が通る。zizmor の指摘がない。ワークフローは push 後に GitHub で動くことを確かめる。
 
 ### 決定
+
+- 実装は Claude のサブエージェントが別の worktree で行い (`359255f`)、Claude が差分を確かめて main に取り込んだ (`b58c1a9`)。取り込み後、別の作業フォルダで `pnpm install --frozen-lockfile` と 4 ゲートが通ることを確かめた。
+- `pnpm-workspace.yaml`: `minimumReleaseAge: 1440`、`trustPolicy: no-downgrade`、`blockExoticSubdeps: true`。pnpm 12 は前 2 つを既定で持つが、明示すると `minimumReleaseAge` が厳格になる (新しすぎる版しかないときに古い版へ逃げず、インストールが失敗する)。`trustPolicy` に引っかかった 2 つ (`chokidar@4.0.3`、`undici-types@6.21.0`。依存元の範囲のどの版でも信頼度が下がる) は理由付きで除外し、`semver` 6 は 6.3.1 → 6.3.2 (trusted publishing あり) に上げた。
+- GitHub Actions: 全アクションをコミットの SHA に固定 (メジャーは据え置き)。6 つの SHA がタグと一致することを GitHub の API で確かめた (checkout v4.4.0、pnpm/action-setup v6.1.1、setup-node v4.4.0、upload-artifact v4.6.2、codeql-action v4.39.3、zizmor-action v0.8.1)。`permissions: contents: read` (security.yml は `{}` で、ジョブごとに必要な分だけ)、checkout は `persist-credentials: false`。
+- Dependabot: GitHub Actions と npm を週 1 回。待機は 3 日 (メジャーは 7 日) で、pnpm の 1 日より長い。マイナー / パッチは開発用と本番用でまとめる。**ただし pnpm 12 の lockfile (YAML の文書が 2 つ) は GitHub の依存グラフが読めないので、Dependabot の脆弱性アラートとセキュリティ更新は動かない** (GitHub のドキュメントより)。動くのは版の更新提案だけ。代わりに CI で `pnpm audit` を回す案はまだ入れていない。
+- `security.yml`: CodeQL (actions と javascript-typescript、ビルドなし) と zizmor (SARIF を上げないので `security-events` 権限が要らない)。CodeQL は公開リポジトリでしか無料でないので、create-kanso で作った非公開のサイトのリポジトリでは自分で飛ばす。zizmor の待機日数の推奨 (7 日) は、上の理由で 3 日に設定した (`.github/zizmor.yml`)。
+- `SECURITY.md`: GitHub の非公開の脆弱性報告で受け付ける。**2026-11-20 時点でリポジトリのその機能は無効** (API で確認)。オーナーが Settings → Code security で有効にするまで、案内先は使えない。
+- README に Security の節、AGENTS.md に「公開から 1 日たっていない版は pnpm が拒む」の 1 行。
+- 確かめていないこと: ワークフロー自体は push しないと GitHub で動かないので、CodeQL・zizmor・Dependabot の実行は未確認。
 
 ---
 
