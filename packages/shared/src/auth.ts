@@ -19,6 +19,16 @@ export const setupSchema = z.object({
 })
 export type SetupInput = z.infer<typeof setupSchema>
 
+/**
+ * Setup outside localhost needs the Worker secret `SETUP_TOKEN` (at least
+ * `SETUP_TOKEN_MIN_LENGTH` characters), sent in this header with both steps.
+ * `GET /api/v1/setup` reports which applies: `off` (localhost, no token
+ * configured), `required`, or `unset` (setup refused until one is configured).
+ */
+export const SETUP_TOKEN_HEADER = 'x-setup-token'
+export const SETUP_TOKEN_MIN_LENGTH = 16
+export type SetupTokenState = 'off' | 'required' | 'unset'
+
 export const passkeyNameSchema = z.string().trim().min(1).max(100)
 
 /** `PublicKeyCredential.toJSON()` of a `navigator.credentials.create()` result. */

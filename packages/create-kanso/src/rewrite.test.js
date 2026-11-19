@@ -83,7 +83,7 @@ describe('project rewrites', () => {
       'SITE_URL',
       'pnpm db:migrate',
       'pnpm run deploy',
-      'anyone who opens it becomes the administrator',
+      'pnpm setup:token --url https://your-domain',
       'docs/deploy.md',
       'AGENTS.md',
       'docs/architecture.md',

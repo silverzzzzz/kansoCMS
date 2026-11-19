@@ -98,6 +98,7 @@ kansoCMS/
 │   │   │   └── admin.ts            # /admin/* → ASSETS の /admin/index.html を返す (SPA fallback)
 │   │   ├── public/                 # themes/*.css、starter/ (サンプル画像)。public/admin/ は admin ビルド出力 (gitignore)
 │   │   ├── scripts/passkey-link.mjs   # `pnpm passkey:link` (パスキーの復旧リンクを D1 に発行)
+│   │   ├── scripts/setup-token.mjs    # `pnpm setup:token` (本番のセットアップ用トークンを secret に設定)
 │   │   ├── worker-configuration.d.ts  # `pnpm types` (wrangler types) 生成。手書き禁止
 │   │   ├── wrangler.jsonc          # DB (D1) / MEDIA (R2) / ASSETS / EMAIL / triggers.crons / vars.SITE_URL (AI はコメント)
 │   │   ├── vite.config.ts          # @cloudflare/vite-plugin
@@ -148,7 +149,7 @@ kansoCMS/
 ├── docs/
 │   ├── architecture.md             # 本書
 │   └── tasks/phase-N.md            # フェーズごとのタスクボード (仕様の正本 + 各タスクの決定)
-├── package.json                    # scripts: dev / build / deploy / typecheck / test / check / db:* / passkey:link
+├── package.json                    # scripts: dev / build / deploy / typecheck / test / check / db:* / passkey:link / setup:token
 ├── pnpm-workspace.yaml
 ├── tsconfig.base.json
 ├── biome.json                      # lint + format (ESLint+Prettier の代替)
@@ -234,7 +235,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /preview/share/:token` | `site/preview` — 共有リンクで下書きを描画。`noindex, nofollow` + `no-store` | 公開 (有効なリンクのみ) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`。縮小版も同じ経路 | 公開 |
-| `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す) | 公開 (ユーザー 0 人のときだけ) |
+| `GET /api/v1/health`, `GET /api/v1/setup`, `POST /api/v1/setup/options`, `POST /api/v1/setup` | 初期化。`/options` が入力 (サイト名・管理者・`starter`) を受けてパスキー作成オプションを返し、`POST /setup` がパスキーを検証して管理者を作る。`starter: true` でサンプルサイトも作る (失敗してもセットアップは成功し `starter.error` で返す)。`localhost` 以外では Worker のシークレット `SETUP_TOKEN` (16 文字以上) を `x-setup-token` ヘッダーで送らないと 403。未設定なら拒否 (`GET` の `token` が `off` / `required` / `unset` を返す) | 公開 (ユーザー 0 人のときだけ) |
 | `POST /api/v1/auth/passkey/options`, `POST /api/v1/auth/passkey` | パスキーでログイン (ユーザー名なし) → セッション Cookie | 公開 |
 | `POST /api/v1/auth/passkey-link/options`, `POST /api/v1/auth/passkey-link` | 登録リンク (`token`) でパスキーを追加してログイン | 公開 (有効なリンクのみ) |
 | `GET/POST /api/v1/auth/passkeys`, `POST /api/v1/auth/passkeys/options`, `PATCH/DELETE /api/v1/auth/passkeys/:id` | 自分のパスキーの一覧・追加・名前変更・削除 | セッションのみ (API キーは 403) |
@@ -269,6 +270,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 - ログイン: パスキーのみ (Phase 6、[tasks/phase-6.md](tasks/phase-6.md))。オプション発行 → ブラウザの `navigator.credentials` → 検証の 2 往復。ユーザー確認 (UV) 必須、discoverable credential でメールアドレスを聞かない。RP ID はリクエストのホスト名、origin はリクエストの origin (localhost だけは管理画面の開発サーバー経由を許すため、localhost の `Origin` を受け入れる)。
 - パスキーを失ったとき: `pnpm passkey:link <email> [--remote] [--url <サイト>]` が D1 (`DB` バインディング) に 1 時間有効・1 回限りの登録リンクを書き込み、`/admin/passkey-link?token=…` で新しいパスキーを登録してログインする。D1 に書ける = Cloudflare アカウントの管理者であることを本人確認とする。
+- 本番の初回セットアップ: デプロイしてから管理者を作るまでの間に他人が `/admin/setup` を開けないよう、`localhost` 以外ではシークレット `SETUP_TOKEN` がない限りセットアップを拒否する。`pnpm setup:token [--url <サイト>]` がランダムな値を `wrangler secret put` で設定し、`/admin/setup#token=…` のリンクを表示する (フラグメントなのでサーバーのログに残らない。管理画面が読み取ってアドレスバーから消す)。シークレットを書ける = Cloudflare アカウントの管理者であることを本人確認とする点は `passkey:link` と同じ。
 - セッション: Cookie `kanso_session` (`HttpOnly; SameSite=Lax`, 本番は `Secure`)。パスキーの検証後に発行。
 - API キー: `kanso_<base64url>` を `x-api-key` ヘッダで送る。D1 には SHA-256 ハッシュのみ保存。`scope` は `read` / `write`。
 - ロール: `admin` / `editor`。設定・ユーザー管理・API キー・サンプルサイトは `admin` のみ (`requireRole('admin')`)。生 HTML ブロックと、設定のエクスポート / インポートも `admin` のセッションだけ。

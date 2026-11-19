@@ -32,7 +32,7 @@ const credential = {
   response: { clientDataJSON: 'e30', attestationObject: 'oA' },
 }
 
-function testApp(setupInput: Record<string, unknown> = {}) {
+function testApp(setupInput: Record<string, unknown> = {}, secrets: Record<string, string> = {}) {
   const kanso: Kanso = Object.assign(Object.create(null), {
     settings: {
       site: vi.fn().mockResolvedValue({ title: 'kansoCMS', description: '', theme: 'default' }),
@@ -59,17 +59,21 @@ function testApp(setupInput: Record<string, unknown> = {}) {
     .onError(onError)
     .route('/api/v1/setup', setup)
   const assets = vi.fn().mockResolvedValue(new Response(new Uint8Array([1, 2, 3])))
-  const env = { ASSETS: { fetch: assets } } as unknown as Bindings
+  const env = { ASSETS: { fetch: assets } as unknown, ...secrets } as unknown as Bindings
   return { app, env, kanso }
 }
 
-function postJson(body: unknown): RequestInit {
+function postJson(body: unknown, headers: Record<string, string> = {}): RequestInit {
   return {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   }
 }
+
+const TOKEN = 'correct-horse-battery-staple'
+const PRODUCTION = 'https://cms.example.test'
+const firstAdmin = { email: 'admin@example.com', name: 'Admin' }
 
 beforeEach(() => {
   vi.mocked(installStarter).mockReset()
@@ -124,6 +128,103 @@ describe('setup options', () => {
       env,
     )
     expect(response.status).toBe(409)
+  })
+})
+
+describe('setup token', () => {
+  it('is not needed on localhost while no token is configured', async () => {
+    const { app, env } = testApp()
+    const response = await app.request('/api/v1/setup', {}, env)
+    expect(await response.json()).toEqual({ needed: true, token: 'off' })
+  })
+
+  it('locks setup on a deployed site until a token is configured', async () => {
+    const { app, env, kanso } = testApp()
+    const status = await app.request(`${PRODUCTION}/api/v1/setup`, {}, env)
+    expect(await status.json()).toEqual({ needed: true, token: 'unset' })
+
+    const options = await app.request(
+      `${PRODUCTION}/api/v1/setup/options`,
+      postJson(firstAdmin),
+      env,
+    )
+    expect(options.status).toBe(403)
+    expect(await options.text()).toContain('SETUP_TOKEN')
+    const finish = await app.request(`${PRODUCTION}/api/v1/setup`, postJson({ credential }), env)
+    expect(finish.status).toBe(403)
+    expect(kanso.passkeys.setupOptions).not.toHaveBeenCalled()
+    expect(kanso.passkeys.finishSetup).not.toHaveBeenCalled()
+    expect(kanso.cacheVersion.bump).not.toHaveBeenCalled()
+  })
+
+  it('treats a token shorter than 16 characters as missing, even on localhost', async () => {
+    const { app, env, kanso } = testApp({}, { SETUP_TOKEN: 'short-token' })
+    const status = await app.request('/api/v1/setup', {}, env)
+    expect(await status.json()).toEqual({ needed: true, token: 'unset' })
+    const response = await app.request(
+      '/api/v1/setup/options',
+      postJson(firstAdmin, { 'x-setup-token': 'short-token' }),
+      env,
+    )
+    expect(response.status).toBe(403)
+    expect(kanso.passkeys.setupOptions).not.toHaveBeenCalled()
+  })
+
+  it('requires the configured token in both steps', async () => {
+    const { app, env, kanso } = testApp({}, { SETUP_TOKEN: TOKEN })
+    const status = await app.request(`${PRODUCTION}/api/v1/setup`, {}, env)
+    expect(await status.json()).toEqual({ needed: true, token: 'required' })
+
+    const wrongHeaders: Record<string, string>[] = [
+      {},
+      { 'x-setup-token': `${TOKEN}x` },
+      { 'x-setup-token': '' },
+    ]
+    for (const headers of wrongHeaders) {
+      const options = await app.request(
+        `${PRODUCTION}/api/v1/setup/options`,
+        postJson(firstAdmin, headers),
+        env,
+      )
+      expect(options.status).toBe(403)
+      const finish = await app.request(
+        `${PRODUCTION}/api/v1/setup`,
+        postJson({ credential }, headers),
+        env,
+      )
+      expect(finish.status).toBe(403)
+    }
+    expect(kanso.passkeys.setupOptions).not.toHaveBeenCalled()
+    expect(kanso.passkeys.finishSetup).not.toHaveBeenCalled()
+
+    const options = await app.request(
+      `${PRODUCTION}/api/v1/setup/options`,
+      postJson(firstAdmin, { 'x-setup-token': TOKEN }),
+      env,
+    )
+    expect(options.status).toBe(200)
+    const finish = await app.request(
+      `${PRODUCTION}/api/v1/setup`,
+      postJson({ credential }, { 'x-setup-token': ` ${TOKEN} ` }),
+      env,
+    )
+    expect(finish.status).toBe(200)
+    expect(finish.headers.get('set-cookie')).toContain('new-session')
+  })
+
+  it('also requires a token configured for local development', async () => {
+    const { app, env } = testApp({}, { SETUP_TOKEN: TOKEN })
+    const status = await app.request('/api/v1/setup', {}, env)
+    expect(await status.json()).toEqual({ needed: true, token: 'required' })
+    const response = await app.request('/api/v1/setup/options', postJson(firstAdmin), env)
+    expect(response.status).toBe(403)
+  })
+
+  it('reports nothing about the token once setup is done', async () => {
+    const { app, env, kanso } = testApp()
+    vi.mocked(kanso.auth.countUsers).mockResolvedValue(1)
+    const response = await app.request(`${PRODUCTION}/api/v1/setup`, {}, env)
+    expect(await response.json()).toEqual({ needed: false, token: 'off' })
   })
 })
 

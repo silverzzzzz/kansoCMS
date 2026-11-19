@@ -51,6 +51,7 @@
 
   // Secrets (set with `wrangler secret put`, or copy .dev.vars.example to .dev.vars locally):
   //   TURNSTILE_SECRET_KEY=...
+  //   SETUP_TOKEN=...   /admin/setup outside localhost refuses to run without it (`pnpm setup:token`)
 
   "observability": {
     "enabled": true

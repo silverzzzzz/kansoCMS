@@ -2,6 +2,8 @@ import type { Bindings } from './env.ts'
 
 export interface Secrets {
   TURNSTILE_SECRET_KEY?: string
+  /** Required by first-run setup outside localhost (see api/setup-token.ts). */
+  SETUP_TOKEN?: string
 }
 
 function hasSecret(env: Bindings, name: keyof Secrets): env is Bindings & Secrets {

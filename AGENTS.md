@@ -21,11 +21,14 @@ deployment steps in one of the two files, change the other as well.
 
 - Every step acts on the user's Cloudflare account and publishes a site. Ask before each of:
   `wrangler login`, creating or deleting a D1 database or R2 bucket, `pnpm db:migrate`,
-  `pnpm run deploy`, `wrangler secret put`, and any command with `--remote`.
+  `pnpm run deploy`, `pnpm setup:token`, `wrangler secret put`, and any command with `--remote`.
 - You cannot finish the setup yourself. The user creates the first administrator's passkey in
-  their own browser with their own authenticator. Until that user exists, **anyone** who opens
-  `/admin/setup` becomes the administrator (`apps/server/src/api/setup.ts`). Deploy only when the
-  user is ready to open `/admin/setup` right away, and tell them to do it.
+  their own browser with their own authenticator.
+- Outside `localhost`, setup is locked until the Worker has a `SETUP_TOKEN` secret of at least 16
+  characters (`apps/server/src/api/setup-token.ts`); `GET /api/v1/setup` reports
+  `"token":"unset"` until then. `pnpm setup:token --url https://<host>` stores a random token and
+  prints `https://<host>/admin/setup#token=…`. Whoever has that link can create the
+  administrator: give it only to the user and never write it to files, commits or logs.
 - Passkeys are bound to the hostname they were created on (`apps/server/src/api/relying-party.ts`).
   Passkeys from `localhost` or `*.workers.dev` do not work on another domain, so the user creates
   the administrator on the final production domain.
@@ -66,23 +69,25 @@ Run everything from the repository root.
    add `"routes": [{ "pattern": "<host>", "custom_domain": true }]`, or let the user add the
    domain in the dashboard.
 6. Run the gates. All four must pass.
-7. With the user ready: `pnpm db:migrate` (wrangler asks for confirmation), then
-   `pnpm run deploy`. Note the URL it prints. If `SITE_URL` was still unknown (workers.dev), set it
-   now and run `pnpm run deploy` again.
-8. Tell the user to open `https://<host>/admin/setup` now: site name, name and email; untick
-   「サンプルサイトを入れる」 if local content will be imported; create the passkey when the
-   browser asks.
+7. `pnpm db:migrate` (wrangler asks for confirmation), then `pnpm run deploy`. Note the URL it
+   prints. If `SITE_URL` was still unknown (workers.dev), set it now and run `pnpm run deploy`
+   again. Setup stays locked; `GET /api/v1/setup` returns `{"needed":true,"token":"unset"}`.
+8. `pnpm setup:token --url https://<host>` with the final hostname (or let the user run it). Hand
+   the printed link to the user and tell them to open it: the token is filled in; they enter site
+   name, name and email, untick 「サンプルサイトを入れる」 if local content will be imported, and
+   create the passkey when the browser asks. If the user prefers their own token, they run
+   `pnpm --filter @kanso/server exec wrangler secret put SETUP_TOKEN` (16+ characters) and type
+   it on the setup page.
 9. Verify:
 
    ```sh
-   curl -s https://<host>/api/v1/setup                               # {"needed":false} once the admin exists
+   curl -s https://<host>/api/v1/setup                               # {"needed":false,"token":"off"} once the admin exists
    curl -s https://<host>/api/v1/health                              # {"ok":true,...}
    curl -s -o /dev/null -w "%{http_code}\n" https://<host>/admin/    # 200
    ```
 
-   If `needed` turned `false` before the user finished setup, stop and tell them that someone
-   else became the administrator. The fix is to delete the D1 database and the R2 bucket (empty
-   it first), then repeat from step 4.
+   If the link leaked before the administrator existed, run `pnpm setup:token` again: the new
+   token replaces the old one.
 10. Optional features, described in the README:
     - Turnstile: the user saves the site key under 設定 → フォーム and runs
       `pnpm --filter @kanso/server exec wrangler secret put TURNSTILE_SECRET_KEY`.

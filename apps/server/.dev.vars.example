@@ -1,3 +1,7 @@
 # Copy this file to .dev.vars for local development. Never commit real secret values.
 # Required only when a form has Turnstile enabled.
 TURNSTILE_SECRET_KEY=
+
+# Not needed on localhost. When set (16+ characters), /admin/setup asks for it locally too.
+# Deployed sites refuse setup until it exists: run `pnpm setup:token` there.
+# SETUP_TOKEN=

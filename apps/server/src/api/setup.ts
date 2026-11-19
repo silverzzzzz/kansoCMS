@@ -1,5 +1,11 @@
 import { zValidator } from '@hono/zod-validator'
-import { finishSetupSchema, SETTINGS_KEYS, setupSchema, siteSettingsSchema } from '@kanso/shared'
+import {
+  finishSetupSchema,
+  SETTINGS_KEYS,
+  type SetupTokenState,
+  setupSchema,
+  siteSettingsSchema,
+} from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { bumpSiteCacheVersion } from '../middleware/cache.ts'
@@ -7,6 +13,7 @@ import { starterImageLoader } from '../starter/assets.ts'
 import { installStarter } from '../starter/install.ts'
 import { startSession } from './auth.ts'
 import { relyingParty } from './relying-party.ts'
+import { requireSetupToken, setupTokenState } from './setup-token.ts'
 import { validationHook } from './validate.ts'
 
 type StarterOutcome = { installed: boolean; error: string | null }
@@ -15,20 +22,32 @@ type StarterOutcome = { installed: boolean; error: string | null }
  * First-run setup in two steps, both only while there are no users:
  * `POST /options` takes who the first admin is and returns passkey creation
  * options; `POST /` verifies the new passkey and creates the admin with it.
+ * Outside localhost both steps also need the setup token (setup-token.ts);
+ * `GET /` tells the admin whether to ask for it.
  */
 export const setup = new Hono<AppEnv>()
-  .get('/', async (c) => c.json({ needed: (await c.var.kanso.auth.countUsers()) === 0 }))
-  .post('/options', zValidator('json', setupSchema, validationHook), async (c) => {
-    const input = c.req.valid('json')
-    const name = input.siteTitle ?? (await c.var.kanso.settings.site()).title
-    return c.json({
-      options: await c.var.kanso.passkeys.setupOptions(input, relyingParty(c, name)),
-    })
+  .get('/', async (c) => {
+    const needed = (await c.var.kanso.auth.countUsers()) === 0
+    const token: SetupTokenState = needed ? setupTokenState(c) : 'off'
+    return c.json({ needed, token })
   })
+  .post(
+    '/options',
+    requireSetupToken,
+    zValidator('json', setupSchema, validationHook),
+    async (c) => {
+      const input = c.req.valid('json')
+      const name = input.siteTitle ?? (await c.var.kanso.settings.site()).title
+      return c.json({
+        options: await c.var.kanso.passkeys.setupOptions(input, relyingParty(c, name)),
+      })
+    },
+  )
   // Setup changes what the public site shows (site title, starter content), so
   // it rotates the cache generation like the protected write routes do.
   .post(
     '/',
+    requireSetupToken,
     bumpSiteCacheVersion,
     zValidator('json', finishSetupSchema, validationHook),
     async (c) => {

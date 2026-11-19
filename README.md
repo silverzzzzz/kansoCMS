@@ -73,7 +73,8 @@ pnpm dev                  # server on http://localhost:5173, admin dev server on
 - `http://localhost:5174/admin/` — admin UI with hot reload (proxies `/api` and `/media` to :5173)
 
 On first run open `/admin/setup`: enter the site name and the first admin, then create a passkey
-when the browser asks (there are no passwords). Sign in at `/admin/login` with that passkey, and add
+when the browser asks (there are no passwords). On `localhost` that is all; a deployed site also
+asks for a setup token (see [Deploy](#deploy)). Sign in at `/admin/login` with that passkey, and add
 passkeys for your other devices under **アカウント**. Passkeys work on `localhost` (any port) and on
 HTTPS domains, not on IP addresses such as `127.0.0.1`, and they belong to the domain they were
 created on. Setup installs the starter site unless you untick **サンプルサイトを入れる**; remove it (or add it later) under
@@ -290,13 +291,18 @@ pnpm exec wrangler r2 bucket create kanso-media
 cd ../..
 pnpm db:migrate                             # apply migrations to the remote D1
 pnpm run deploy
+pnpm setup:token --url https://example.com  # prints the /admin/setup link with a setup token
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
 
-Right after the first deploy, open `/admin/setup` on the production domain and create the
-administrator: until the first user exists, anyone who opens it becomes one. Passkeys belong to
-the domain they were created on, so connect a custom domain before that step. The full
+A deployed site refuses to create its first administrator until the Worker has a `SETUP_TOKEN`
+secret, so nobody else can take it between the deploy and the setup. `pnpm setup:token`
+generates one, stores it with `wrangler secret put` and prints a link that opens `/admin/setup`
+with the token filled in (or set your own value of 16+ characters with
+`wrangler secret put SETUP_TOKEN` and type it on the setup page). Open the link on the
+production domain: passkeys belong to the domain they were created on, so connect a custom
+domain before that step. Once the administrator exists the token does nothing. The full
 walkthrough — custom domains, the first administrator, moving local content, updates and lost
 passkeys — is in [docs/deploy.md](docs/deploy.md) (Japanese); AI agents follow
 [AGENTS.md](AGENTS.md).
@@ -346,6 +352,7 @@ or posts.
 | `pnpm db:generate` | Generate a SQL migration from the Drizzle schema |
 | `pnpm db:migrate:local` / `pnpm db:migrate` | Apply migrations to local / remote D1 |
 | `pnpm passkey:link <email> [--remote] [--url <site>]` | Issue a one-time link that registers a new passkey (account recovery) |
+| `pnpm setup:token [--url <site>]` | Set a random `SETUP_TOKEN` secret on the deployed Worker and print the setup link |
 
 CI (GitHub Actions, `.github/workflows/ci.yml`) runs the four gates and the Playwright E2E on every push to `main` and on pull requests.
 

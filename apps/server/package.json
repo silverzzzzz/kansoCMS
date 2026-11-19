@@ -19,7 +19,8 @@
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply kanso --local",
     "db:migrate": "wrangler d1 migrations apply kanso --remote",
-    "passkey:link": "node scripts/passkey-link.mjs"
+    "passkey:link": "node scripts/passkey-link.mjs",
+    "setup:token": "node scripts/setup-token.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.9.1",
