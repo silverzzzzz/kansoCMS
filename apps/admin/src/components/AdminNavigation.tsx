@@ -75,7 +75,7 @@ export function AdminNavigation({
 }) {
   return (
     <nav
-      className="min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3"
+      className="admin-nav-scroll min-h-0 flex-1 space-y-1 overflow-y-auto overscroll-contain p-3"
       aria-label={label}
     >
       {navigation
