@@ -120,7 +120,7 @@ function PagesPage() {
         </div>
       )}
       <form
-        className="my-6 flex gap-2"
+        className={`my-6 grid gap-2 ${trashed ? 'sm:grid-cols-[minmax(0,1fr)_auto]' : 'sm:grid-cols-[minmax(0,1fr)_12rem_auto]'}`}
         onSubmit={(event) => {
           event.preventDefault()
           setSearch(input.trim())
@@ -131,7 +131,7 @@ function PagesPage() {
         </label>
         <input
           id="page-search"
-          className={`${inputClass} mt-0 max-w-md`}
+          className={`${inputClass} mt-0! min-w-0`}
           value={input}
           onChange={(event) => setInput(event.target.value)}
           placeholder="タイトルで検索"
@@ -143,7 +143,7 @@ function PagesPage() {
             </label>
             <select
               id="page-status"
-              className={`${inputClass} mt-0`}
+              className={`${inputClass} mt-0!`}
               value={status}
               onChange={(event) =>
                 setStatus(event.target.value as '' | 'draft' | 'published' | 'scheduled')

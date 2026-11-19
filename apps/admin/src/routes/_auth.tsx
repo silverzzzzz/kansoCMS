@@ -1,26 +1,23 @@
 import { useMutation } from '@tanstack/react-query'
 import { createFileRoute, Link, Outlet, redirect, useNavigate } from '@tanstack/react-router'
+import { useState } from 'react'
 import { api } from '../api/client.ts'
 import { ApiError } from '../api/errors.ts'
 import { meQueryOptions, setupStatusQueryOptions } from '../api/queries.ts'
 import { unwrap } from '../api/request.ts'
+import { AdminNavigation, NavigationIcon } from '../components/AdminNavigation.tsx'
+import { MobileNavigation } from '../components/MobileNavigation.tsx'
 import { toAdminHref } from '../routing.ts'
 
-const navigation = [
-  { to: '/', label: 'ダッシュボード', exact: true },
-  { to: '/activity', label: 'アクティビティ' },
-  { to: '/analytics', label: 'アクセス解析' },
-  { to: '/pages', label: '固定ページ' },
-  { to: '/customize', label: 'カスタマイズ' },
-  { to: '/menus', label: 'メニュー' },
-  { to: '/posts', label: '投稿' },
-  { to: '/post-types', label: '投稿タイプ' },
-  { to: '/tags', label: 'タグ' },
-  { to: '/media', label: 'メディア' },
-  { to: '/forms', label: 'フォーム' },
-  { to: '/redirects', label: 'リダイレクト' },
-  { to: '/tools', label: 'ツール' },
-] as const
+const SIDEBAR_STORAGE_KEY = 'kanso:sidebar-collapsed'
+
+function readSidebarCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
 
 export const Route = createFileRoute('/_auth')({
   beforeLoad: async ({ context, location }) => {
@@ -46,6 +43,16 @@ function AuthLayout() {
   const { user } = Route.useRouteContext()
   const { queryClient } = Route.useRouteContext()
   const navigate = useNavigate()
+  const [collapsed, setCollapsed] = useState(readSidebarCollapsed)
+  const toggleSidebar = () => {
+    const next = !collapsed
+    setCollapsed(next)
+    try {
+      window.localStorage.setItem(SIDEBAR_STORAGE_KEY, String(next))
+    } catch {
+      // Keep the control usable when browser storage is unavailable.
+    }
+  }
   const logout = useMutation({
     mutationFn: () => unwrap(api.auth.logout.$post()),
     onSuccess: async () => {
@@ -56,72 +63,66 @@ function AuthLayout() {
   const logoutError = logout.error instanceof ApiError ? logout.error.message : null
 
   return (
-    <div className="min-h-screen bg-neutral-100 text-neutral-950">
-      <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-neutral-200 bg-white md:flex md:flex-col">
-        <div className="border-b border-neutral-200 px-6 py-5">
+    <div className="min-h-dvh bg-neutral-100 text-neutral-950">
+      <aside
+        id="admin-sidebar"
+        aria-label="サイドバー"
+        className={`fixed inset-y-0 left-0 z-30 hidden border-r border-neutral-200 bg-white lg:flex lg:flex-col ${collapsed ? 'w-18' : 'w-60'}`}
+      >
+        <div
+          className={`flex min-h-16 shrink-0 items-center border-b border-neutral-200 ${collapsed ? 'justify-center' : 'px-6'}`}
+        >
           <Link
             to="/"
+            aria-label="kansoCMS ダッシュボード"
+            title={collapsed ? 'kansoCMS' : undefined}
             className="text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-4"
           >
-            kansoCMS
+            {collapsed ? 'k' : 'kansoCMS'}
           </Link>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-5" aria-label="管理メニュー">
-          {navigation.map((item) => (
-            <NavLink key={item.to} {...item} />
-          ))}
-          {user.role === 'admin' && (
-            <>
-              <NavLink to="/settings" label="設定" />
-              <NavLink to="/users" label="ユーザー" />
-              <NavLink to="/api-keys" label="API キー" />
-            </>
-          )}
-          <NavLink to="/account" label="アカウント" />
-        </nav>
-        <p className="border-t border-neutral-200 px-6 py-4 text-xs leading-5 text-neutral-500">
-          シンプルに書き、確実に届ける。
-        </p>
+        <AdminNavigation isAdmin={user.role === 'admin'} collapsed={collapsed} />
+        {!collapsed && (
+          <p className="shrink-0 border-t border-neutral-200 px-6 py-4 text-xs leading-5 text-neutral-500">
+            シンプルに書き、確実に届ける。
+          </p>
+        )}
       </aside>
 
-      <div className="md:pl-60">
+      <div className={`min-w-0 ${collapsed ? 'lg:pl-18' : 'lg:pl-60'}`}>
         <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/95 backdrop-blur">
-          <div className="flex min-h-16 items-center gap-4 px-5 sm:px-8">
-            <details className="relative md:hidden">
-              <summary className="cursor-pointer list-none border border-neutral-300 px-3 py-2 text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-neutral-950">
-                メニュー
-              </summary>
-              <nav
-                className="absolute left-0 top-12 w-56 space-y-1 border border-neutral-200 bg-white p-3 shadow-lg"
-                aria-label="モバイル管理メニュー"
-              >
-                {navigation.map((item) => (
-                  <NavLink key={item.to} {...item} />
-                ))}
-                {user.role === 'admin' && (
-                  <>
-                    <NavLink to="/settings" label="設定" />
-                    <NavLink to="/users" label="ユーザー" />
-                    <NavLink to="/api-keys" label="API キー" />
-                  </>
-                )}
-                <NavLink to="/account" label="アカウント" />
-              </nav>
-            </details>
-
+          <div className="flex min-h-16 items-center gap-3 px-4 sm:gap-4 sm:px-8">
+            <button
+              id="admin-sidebar-toggle"
+              type="button"
+              onClick={toggleSidebar}
+              aria-label={collapsed ? 'サイドバーを展開' : 'サイドバーを折りたたむ'}
+              title={collapsed ? 'サイドバーを展開' : 'サイドバーを折りたたむ'}
+              aria-expanded={!collapsed}
+              aria-controls="admin-sidebar"
+              className="hidden size-11 shrink-0 items-center justify-center border border-neutral-300 text-neutral-700 outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 lg:flex"
+            >
+              <NavigationIcon name={collapsed ? 'expand' : 'collapse'} />
+            </button>
+            <MobileNavigation isAdmin={user.role === 'admin'} />
             <Link
               to="/"
-              className="text-base font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 md:hidden"
+              className="shrink-0 text-base font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 lg:hidden"
             >
               kansoCMS
             </Link>
-            <div className="ml-auto flex items-center gap-3">
-              <span className="hidden text-sm text-neutral-600 sm:inline">{user.name}</span>
+            <div className="ml-auto flex min-w-0 items-center gap-3">
+              <span
+                className="hidden truncate text-sm text-neutral-600 sm:inline"
+                title={user.name}
+              >
+                {user.name}
+              </span>
               <button
                 type="button"
                 disabled={logout.isPending}
                 onClick={() => logout.mutate()}
-                className="border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 outline-none hover:border-neutral-950 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-neutral-400"
+                className="min-h-11 shrink-0 border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 outline-none hover:border-neutral-950 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-neutral-400"
               >
                 {logout.isPending ? 'ログアウト中…' : 'ログアウト'}
               </button>
@@ -130,53 +131,17 @@ function AuthLayout() {
           {logoutError && (
             <p
               role="alert"
-              className="border-t border-red-200 bg-red-50 px-5 py-2 text-sm text-red-700 sm:px-8"
+              className="border-t border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700 sm:px-8"
             >
               {logoutError}
             </p>
           )}
         </header>
 
-        <main className="mx-auto max-w-6xl px-5 py-8 sm:px-8 sm:py-10">
+        <main className="mx-auto min-w-0 max-w-6xl px-4 py-6 [overflow-wrap:anywhere] sm:px-8 sm:py-10">
           <Outlet />
         </main>
       </div>
     </div>
-  )
-}
-
-type NavLinkProps = {
-  to:
-    | '/'
-    | '/activity'
-    | '/analytics'
-    | '/pages'
-    | '/customize'
-    | '/menus'
-    | '/posts'
-    | '/post-types'
-    | '/tags'
-    | '/media'
-    | '/forms'
-    | '/redirects'
-    | '/tools'
-    | '/settings'
-    | '/users'
-    | '/api-keys'
-    | '/account'
-  label: string
-  exact?: boolean
-}
-
-function NavLink({ to, label, exact = false }: NavLinkProps) {
-  return (
-    <Link
-      to={to}
-      activeOptions={{ exact }}
-      className="block border-l-2 border-transparent px-3 py-2 text-sm font-medium text-neutral-600 outline-none hover:bg-neutral-100 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-neutral-950"
-      activeProps={{ className: 'border-neutral-950 bg-neutral-100 text-neutral-950' }}
-    >
-      {label}
-    </Link>
   )
 }

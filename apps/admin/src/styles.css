@@ -1,6 +1,51 @@
 @import "tailwindcss";
 
 @layer components {
+  .admin-drawer {
+    position: fixed;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+    max-inline-size: none;
+    max-block-size: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--color-neutral-950);
+    overflow: visible;
+  }
+
+  .admin-drawer::backdrop {
+    background: rgb(0 0 0 / 35%);
+  }
+
+  .admin-drawer-sheet {
+    display: flex;
+    flex-direction: column;
+    inline-size: min(20rem, calc(100% - 3rem));
+    block-size: 100svh;
+    padding-block-start: env(safe-area-inset-top);
+    padding-block-end: env(safe-area-inset-bottom);
+    background: white;
+    border-inline-end: 1px solid var(--color-neutral-200);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .admin-drawer[open] .admin-drawer-sheet {
+      animation: admin-drawer-enter 180ms ease-out;
+    }
+  }
+
+  @keyframes admin-drawer-enter {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
   .editor-content .tiptap {
     min-height: 22rem;
     padding: 1rem;
