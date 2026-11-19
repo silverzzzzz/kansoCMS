@@ -51,7 +51,7 @@ docs/       architecture, task board and decisions
 ## Requirements
 
 - Node.js 22.16+ (24 recommended — the test suite runs on Node's built-in SQLite)
-- pnpm 11 or later (for example `npm install -g pnpm`). pnpm then runs the version pinned in
+- pnpm 12 or later (for example `npm install -g pnpm`). pnpm then runs the version pinned in
   `package.json` (`packageManager`). The repository is a pnpm workspace: npm, Yarn and Bun cannot
   install it.
 - A Cloudflare account only when you deploy — local dev runs on `workerd` with emulated D1/R2

@@ -71,7 +71,7 @@ describe('project rewrites', () => {
     const result = generateReadme(project)
     for (const text of [
       '# my-site',
-      'pnpm 11 or later',
+      'pnpm 12 or later',
       'npm install -g pnpm',
       'pnpm install',
       'wrangler d1 create site-db',
