@@ -289,7 +289,7 @@ pnpm exec wrangler d1 create kanso          # copy database_id into wrangler.jso
 pnpm exec wrangler r2 bucket create kanso-media
 cd ../..
 pnpm db:migrate                             # apply migrations to the remote D1
-pnpm deploy
+pnpm run deploy
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
@@ -330,7 +330,7 @@ or posts.
 | --- | --- |
 | `pnpm dev` | Run server and admin dev servers in parallel |
 | `pnpm build` | Build admin, then the Worker (`apps/server/dist`) |
-| `pnpm deploy` | Build and `wrangler deploy` |
+| `pnpm run deploy` | Build and `wrangler deploy` (`pnpm deploy` without `run` is pnpm's own command) |
 | `pnpm typecheck` | Type-check Playwright config/E2E and every package |
 | `pnpm test` | Vitest in every package that has tests |
 | `pnpm e2e` / `pnpm e2e:install` | Run Playwright E2E / install its Chromium browser |

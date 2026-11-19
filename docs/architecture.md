@@ -379,7 +379,7 @@ pnpm dev                                                    # server :5173 (work
 # → http://localhost:5174/admin/setup で初期ユーザー作成
 pnpm typecheck && pnpm check && pnpm test && pnpm build     # タスク完了時のゲート
 pnpm db:migrate                                             # 本番 D1 へ適用 (SITE_URL を実ドメインに変更後)
-pnpm deploy                                                 # admin build → server build → wrangler deploy
+pnpm run deploy                                             # admin build → server build → wrangler deploy
 ```
 
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。

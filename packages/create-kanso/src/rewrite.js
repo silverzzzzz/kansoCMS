@@ -83,7 +83,7 @@ starter site is installed unless you untick it; remove it later under 設定 →
 
 For production, set vars.SITE_URL in apps/server/wrangler.jsonc to your real domain, then:
 pnpm db:migrate
-pnpm deploy
+pnpm run deploy
 
 Open /admin/setup on the deployed site to create your production admin user and its passkey.
 Passkeys belong to the domain they were created on. If you lose them all, issue a recovery link:

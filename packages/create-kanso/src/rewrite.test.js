@@ -82,7 +82,7 @@ describe('project rewrites', () => {
       '/admin/setup',
       'SITE_URL',
       'pnpm db:migrate',
-      'pnpm deploy',
+      'pnpm run deploy',
       'docs/architecture.md',
       'https://github.com/silverzzzzz/kansoCMS',
     ]) {

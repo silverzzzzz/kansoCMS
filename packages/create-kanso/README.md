@@ -86,7 +86,7 @@ For production, set `vars.SITE_URL` in `apps/server/wrangler.jsonc` to your real
 
 ```sh
 pnpm db:migrate
-pnpm deploy
+pnpm run deploy
 ```
 
 Open `/admin/setup` on the deployed site to create the production admin account.
