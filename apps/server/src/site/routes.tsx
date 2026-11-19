@@ -221,7 +221,7 @@ async function renderFormState(
   c: Context<AppEnv>,
   resolved: Extract<ContentResolution, { kind: 'page' | 'post' }>,
   form: FormState,
-  status?: 422,
+  status?: 422 | 429,
 ) {
   if (resolved.kind === 'page') {
     return renderPage(c, resolved.page, { form, status })
@@ -255,11 +255,19 @@ async function handleFormPost(c: Context<AppEnv>, path: string) {
     if (result.redirectUrl) return c.redirect(result.redirectUrl, 303)
     return renderFormState(c, resolved, { slug, success: true })
   } catch (error) {
-    if (!(error instanceof KansoError) || error.code !== 'validation') throw error
+    if (!(error instanceof KansoError)) throw error
+    const values = draftValues(form, raw)
+    if (error.code === 'rate_limited') {
+      const retryAfter = (error.details as { retryAfter?: number } | undefined)?.retryAfter
+      if (retryAfter !== undefined) c.header('retry-after', String(Math.max(1, retryAfter)))
+      const errors = [{ path: '', message: error.message }]
+      return renderFormState(c, resolved, { slug, values, errors }, 429)
+    }
+    if (error.code !== 'validation') throw error
     const errors = Array.isArray(error.details)
       ? error.details.filter(isFormError)
       : [{ path: '', message: error.message }]
-    return renderFormState(c, resolved, { slug, values: draftValues(form, raw), errors }, 422)
+    return renderFormState(c, resolved, { slug, values, errors }, 422)
   }
 }
 

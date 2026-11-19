@@ -76,7 +76,7 @@ kansoCMS/
 │   │   │   ├── env.ts              # AppEnv (Bindings = worker-configuration.d.ts の Env, Variables = kanso/principal)
 │   │   │   ├── bindings.ts         # 任意の binding (Workers AI)。既定の Env には無い
 │   │   │   ├── scheduled.ts        # Cron Trigger: ゴミ箱の自動削除と期限切れデータの掃除
-│   │   │   ├── i18n.ts / secrets.ts
+│   │   │   ├── i18n.ts / secrets.ts / rate-limit.ts (公開エンドポイントのレート制限)
 │   │   │   ├── testing.ts          # テスト用: Worker 全体をメモリ上の D1 / R2 で動かす (createTestApp)
 │   │   │   ├── middleware/         # kanso (services 注入) / auth (session・API key・CSRF・role) / cache / pageviews / error
 │   │   │   ├── api/                # /api/v1 (JSON): setup, auth, users, api-keys, pages, post-types(+categories), posts, tags,
@@ -125,7 +125,7 @@ kansoCMS/
 │   │   │   ├── db/schema/          # drizzle テーブル定義 (§4)。db/client.ts = drizzle(d1)、db/search.ts (contains / startsWith)
 │   │   │   ├── services/           # auth, passkeys, users, pages (+page-tree), post-types, posts, taxonomies, revisions,
 │   │   │   │                       #   redirects, search, media, menus, forms, settings, starter, share-links, analytics,
-│   │   │   │                       #   activity, transfer, housekeeping, cache-version
+│   │   │   │                       #   activity, transfer, housekeeping, cache-version, rate-limits
 │   │   │   ├── content/            # ProseMirror JSON 検証 → HTML (render), sanitize (html), excerpt / plainText
 │   │   │   ├── auth/               # webauthn (登録・認証の検証), cbor, encoding, soft-authenticator (テスト用)
 │   │   │   ├── storage/            # R2 key 命名, MIME sniff, 画像サイズ取得 (EXIF の向きを考慮)
@@ -200,6 +200,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 | `revisions` | id, target_type (`page`/`post`), target_id, snapshot_json, user_id, created_at | 更新前の状態を対象ごとに最新 20 件。復元は update 経由 |
 | `redirects` | id, from_path (uniq), to, status (`301`/`302`), created_at, updated_at | 転送元は先頭・末尾 `/` なし。手動登録と公開コンテンツのパス変更で作成 |
 | `search_index` | kind (`page`/`post`, UNINDEXED), ref_id (UNINDEXED), title, excerpt, body | FTS5 (`trigram`) 仮想テーブル。pages / posts の INSERT・UPDATE・DELETE トリガで同期 |
+| `rate_limits` | key (pk、`種類:IP の SHA-256`), window_start (unix 秒), count | レート制限の固定窓カウンタ (Phase 13)。窓が変わると同じ行を 1 から数え直す。1 日たった行は定期処理で消す |
 
 `forms` / `form_submissions` はテーブルだけ初期マイグレーションに含まれ、Phase 2 でサービスと API を載せる。
 
@@ -314,7 +315,7 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 ### ゴミ箱と定期処理 (Phase 9, 11, 12)
 
 - 削除は `deleted_at` を入れるだけ。公開側のクエリ (`publishedNow()` / `postsPublishedNow()`) が `deleted_at IS NULL` を含むので、SSR・サイトマップ・フィード・検索は個別対応なしでゴミ箱を無視する。完全削除は `?force=true` のときだけ。
-- 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行を消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
+- 1 日 1 回の Cron Trigger (`triggers.crons`、UTC 18:00 = 日本時間 3:00) が `scheduled` ハンドラを呼ぶ。1 つの `db.batch()` で、30 日を過ぎたゴミ箱の行 (リビジョンと共有リンクごと)、期限切れの共有リンク・セッション・登録リンク・認証チャレンジ、400 日より古いアクセス解析の行、1 日たったレート制限の行を消す。ゴミ箱から消したときだけ操作ログに 1 行残す。
 
 ### エクスポート / インポート (Phase 10, 11)
 
@@ -354,7 +355,8 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 - CSRF: Cookie は `SameSite=Lax` + 変更系 API で `Origin` ヘッダ検証。
 - CSP: 現在は CSP ヘッダーを出力していない。追加する場合、公開サイトで Turnstile を使うときは `script-src` で `https://challenges.cloudflare.com` を許可する。管理画面は Vite の hash を許可する。
 - パスキー: 公開鍵 (SPKI) だけを保存し、署名は WebCrypto (ECDSA P-256 / RSASSA-PKCS1-v1_5) で検証する。チャレンジは 1 回限りで 5 分、署名カウンタが戻ったら拒否 (0 固定の同期パスキーは許可)。attestation は検証しない (`none` を要求)。API キーと登録リンクのトークンは SHA-256 ハッシュ保存。
-- フォーム: Turnstile + honeypot + サイズ上限 + (任意) Workers Rate Limiting binding。
+- フォーム: Turnstile + honeypot + サイズ上限 + IP ごとのレート制限。
+- レート制限 (Phase 13、`apps/server/src/rate-limit.ts`): 誰でも呼べて D1 に書く・メールを送るエンドポイントだけが対象。認証まわり (パスキーのログイン・登録リンク・セットアップの POST) は IP ごとに 10 分で 30 回、フォームの送信 (JSON API と HTML フォーム。honeypot に掛かった送信は数えない) は 10 分で 10 回。D1 の `rate_limits` に「種類:IP の SHA-256」をキーとした固定窓で数え、1 回の判定は 1 文の upsert。超えると 429 と `Retry-After` (HTML フォームはメッセージ付きで再描画)。IP は `CF-Connecting-IP` で、ない (Cloudflare を通っていない) 要求は数えない。KV・Durable Objects・Rate Limiting binding は使わない (§1 と決定 1)。
 - アップロード: MIME 許可リスト、拡張子正規化、`Content-Disposition` 制御。SVG は既定で不可。
 
 ### 可観測性

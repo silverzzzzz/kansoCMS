@@ -15,6 +15,7 @@ import { Hono } from 'hono'
 import { deleteCookie, setCookie } from 'hono/cookie'
 import type { AppEnv } from '../env.ts'
 import { requireAuth, requireSession, sessionUser } from '../middleware/auth.ts'
+import { rateLimit } from '../rate-limit.ts'
 import { logActivity } from './activity.ts'
 import { relyingParty } from './relying-party.ts'
 import { idParamSchema, validationHook } from './validate.ts'
@@ -47,57 +48,68 @@ async function siteRelyingParty(c: Context<AppEnv>) {
  * challenge; the matching POST verifies the browser's answer to it.
  */
 export const auth = new Hono<AppEnv>()
-  .post('/passkey/options', async (c) =>
+  .post('/passkey/options', rateLimit('auth'), async (c) =>
     c.json({ options: await c.var.kanso.passkeys.loginOptions(relyingParty(c)) }),
   )
-  .post('/passkey', zValidator('json', passkeyLoginSchema, validationHook), async (c) => {
-    const { credential } = c.req.valid('json')
-    const user = await c.var.kanso.passkeys
-      .finishLogin(credential, relyingParty(c))
-      .catch(async (err) => {
-        // Folded into one row per hour (public endpoint). Logging is best
-        // effort: whatever happens here, the caller gets the sign-in error.
-        try {
-          await c.var.kanso.activity.logFailedSignIn('パスキー認証に失敗')
-        } catch {}
-        throw err
+  .post(
+    '/passkey',
+    rateLimit('auth'),
+    zValidator('json', passkeyLoginSchema, validationHook),
+    async (c) => {
+      const { credential } = c.req.valid('json')
+      const user = await c.var.kanso.passkeys
+        .finishLogin(credential, relyingParty(c))
+        .catch(async (err) => {
+          // Folded into one row per hour (public endpoint). Logging is best
+          // effort: whatever happens here, the caller gets the sign-in error.
+          try {
+            await c.var.kanso.activity.logFailedSignIn('パスキー認証に失敗')
+          } catch {}
+          throw err
+        })
+      await startSession(c, user.id)
+      await logActivity(c, {
+        actor: user.name || user.email,
+        userId: user.id,
+        action: 'login',
+        targetType: 'auth',
+        summary: 'パスキーでログイン',
       })
-    await startSession(c, user.id)
-    await logActivity(c, {
-      actor: user.name || user.email,
-      userId: user.id,
-      action: 'login',
-      targetType: 'auth',
-      summary: 'パスキーでログイン',
-    })
-    return c.json({ user })
-  })
+      return c.json({ user })
+    },
+  )
   .post(
     '/passkey-link/options',
+    rateLimit('auth'),
     zValidator('json', passkeyLinkSchema, validationHook),
     async (c) => {
       const { token } = c.req.valid('json')
       return c.json(await c.var.kanso.passkeys.linkOptions(token, await siteRelyingParty(c)))
     },
   )
-  .post('/passkey-link', zValidator('json', finishPasskeyLinkSchema, validationHook), async (c) => {
-    const { token, credential, passkeyName } = c.req.valid('json')
-    const user = await c.var.kanso.passkeys.finishLink(
-      token,
-      credential,
-      relyingParty(c),
-      passkeyName,
-    )
-    await startSession(c, user.id)
-    await logActivity(c, {
-      actor: user.name || user.email,
-      userId: user.id,
-      action: 'create',
-      targetType: 'passkey',
-      summary: 'パスキーリンクでパスキーを登録',
-    })
-    return c.json({ user })
-  })
+  .post(
+    '/passkey-link',
+    rateLimit('auth'),
+    zValidator('json', finishPasskeyLinkSchema, validationHook),
+    async (c) => {
+      const { token, credential, passkeyName } = c.req.valid('json')
+      const user = await c.var.kanso.passkeys.finishLink(
+        token,
+        credential,
+        relyingParty(c),
+        passkeyName,
+      )
+      await startSession(c, user.id)
+      await logActivity(c, {
+        actor: user.name || user.email,
+        userId: user.id,
+        action: 'create',
+        targetType: 'passkey',
+        summary: 'パスキーリンクでパスキーを登録',
+      })
+      return c.json({ user })
+    },
+  )
   .post('/logout', requireAuth(), async (c) => {
     const principal = c.var.principal
     if (principal?.kind !== 'session') throw KansoError.unauthorized()

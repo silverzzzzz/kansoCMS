@@ -4,6 +4,7 @@ export type KansoErrorCode =
   | 'conflict'
   | 'unauthorized'
   | 'forbidden'
+  | 'rate_limited'
   | 'internal'
 
 /**
@@ -38,6 +39,11 @@ export class KansoError extends Error {
 
   static forbidden(message = 'Forbidden') {
     return new KansoError('forbidden', message)
+  }
+
+  /** Too many requests; `retryAfter` (seconds) becomes the `Retry-After` header. */
+  static rateLimited(retryAfter: number, message = 'Too many requests. Try again later.') {
+    return new KansoError('rate_limited', message, { retryAfter })
   }
 }
 

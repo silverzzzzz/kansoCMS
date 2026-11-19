@@ -124,6 +124,9 @@ export async function getPasskey(
 /** Japanese message for a failure anywhere in a passkey ceremony. */
 export function passkeyErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
+    if (error.status === 429) {
+      return '試行が続いたため、一時的に受け付けを止めています。10 分ほど待ってからもう一度お試しください。'
+    }
     if (error.status === 404)
       return 'このリンクは無効か、有効期限が切れています。新しいリンクを発行してください。'
     if (/challenge/i.test(error.message)) {

@@ -181,8 +181,8 @@ GIFs (animation) and AVIF files are served as they are.
 
 `apps/server/wrangler.jsonc` schedules the Worker once a day (`triggers.crons`, 18:00 UTC). The
 run purges pages and posts that have been in the trash for 30 days, expired share links,
-sessions, registration links and sign-in challenges, and pageview rows older than 400 days — one
-D1 batch. Locally a Cron Trigger does not fire by itself; call it with
+sessions, registration links and sign-in challenges, pageview rows older than 400 days and
+rate-limit counters older than a day — one D1 batch. Locally a Cron Trigger does not fire by itself; call it with
 `curl http://localhost:5173/cdn-cgi/handler/scheduled`.
 
 ### Form notifications (email)
@@ -192,6 +192,16 @@ submission inbox, and submissions can be downloaded as CSV. To enable Turnstile,
 key under **設定 → フォーム** and configure the Worker secret with
 `pnpm --filter @kanso/server exec wrangler secret put TURNSTILE_SECRET_KEY`.
 Insert a **フォーム** block from the editor toolbar to render a public form that works without JavaScript.
+
+### Rate limits
+
+Endpoints that anyone can call and that write to D1 or send mail are limited per client IP
+(`apps/server/src/rate-limit.ts`): passkey sign-in, registration links and first-run setup share
+30 requests per 10 minutes, and form submissions (the JSON API and the HTML forms alike) allow 10
+per 10 minutes. A client over the limit gets `429` with `Retry-After`; an HTML form is shown again
+with a message and the visitor's input. The counters live in the D1 table `rate_limits`, keyed by
+a hash of the address, and are cleared by the daily run. The client is `CF-Connecting-IP`, so
+requests that do not pass through Cloudflare (local development) are not counted.
 
 Notifications are sent only when **Settings → Forms** has a `fromEmail` and either the form
 or the Forms settings has at least one recipient. In local development the `EMAIL` binding is

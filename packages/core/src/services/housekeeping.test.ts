@@ -99,6 +99,17 @@ describe('housekeeping', () => {
     expect(summary.top).toEqual([{ path: '/', count: 5 }])
   })
 
+  it('drops rate-limit counters older than a day', async () => {
+    test.exec(`insert into rate_limits (key, window_start, count) values
+      ('auth:old', ${nowSeconds - 2 * 86_400}, 30), ('auth:recent', ${nowSeconds - 600}, 2)`)
+
+    const report = await test.kanso.housekeeping.run(now)
+
+    expect(report.rateLimitRows).toBe(1)
+    const keys = await test.d1.prepare('select key from rate_limits').all<{ key: string }>()
+    expect(keys.results.map((row) => row.key)).toEqual(['auth:recent'])
+  })
+
   it('does nothing on a tidy site', async () => {
     const report = await test.kanso.housekeeping.run(now)
     expect(report).toEqual({
@@ -109,6 +120,7 @@ describe('housekeeping', () => {
       passkeyLinks: 0,
       challenges: 0,
       pageviewRows: 0,
+      rateLimitRows: 0,
     })
   })
 })

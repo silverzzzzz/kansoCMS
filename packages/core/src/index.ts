@@ -15,6 +15,7 @@ import { pagesService } from './services/pages.ts'
 import { passkeyService } from './services/passkeys.ts'
 import { postTypesService } from './services/post-types.ts'
 import { postsService } from './services/posts.ts'
+import { rateLimitsService } from './services/rate-limits.ts'
 import { redirectsService } from './services/redirects.ts'
 import { revisionsService } from './services/revisions.ts'
 import { searchService } from './services/search.ts'
@@ -67,6 +68,7 @@ export function createKanso(bindings: KansoBindings) {
     passkeys: passkeyService(db),
     postTypes: postTypesService(db),
     posts: postsService(db),
+    rateLimits: rateLimitsService(db),
     redirects: redirectsService(db),
     revisions: revisionsService(db),
     search: searchService(db),
@@ -86,6 +88,7 @@ export type { ActivityEntry } from './services/activity.ts'
 export type { HousekeepingReport } from './services/housekeeping.ts'
 export type { PasskeyService, RelyingParty } from './services/passkeys.ts'
 export type { PostContentInput } from './services/posts.ts'
+export type { RateLimitResult, RateLimitRule } from './services/rate-limits.ts'
 export type {
   StarterBuild,
   StarterImage,

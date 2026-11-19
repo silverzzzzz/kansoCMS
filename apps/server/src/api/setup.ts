@@ -9,6 +9,7 @@ import {
 import { Hono } from 'hono'
 import type { AppEnv } from '../env.ts'
 import { bumpSiteCacheVersion } from '../middleware/cache.ts'
+import { rateLimit } from '../rate-limit.ts'
 import { starterImageLoader } from '../starter/assets.ts'
 import { installStarter } from '../starter/install.ts'
 import { startSession } from './auth.ts'
@@ -33,6 +34,7 @@ export const setup = new Hono<AppEnv>()
   })
   .post(
     '/options',
+    rateLimit('auth'),
     requireSetupToken,
     zValidator('json', setupSchema, validationHook),
     async (c) => {
@@ -47,6 +49,7 @@ export const setup = new Hono<AppEnv>()
   // it rotates the cache generation like the protected write routes do.
   .post(
     '/',
+    rateLimit('auth'),
     requireSetupToken,
     bumpSiteCacheVersion,
     zValidator('json', finishSetupSchema, validationHook),

@@ -28,6 +28,7 @@ export type SiteMessages = {
     genericError: string
     turnstileFailed: string
     turnstileUnconfigured: string
+    rateLimited: string
   }
   validation: SubmissionMessages
 }
@@ -64,6 +65,7 @@ export const en: SiteMessages = {
     genericError: 'Invalid submission',
     turnstileFailed: 'Turnstile verification failed',
     turnstileUnconfigured: 'Turnstile is not configured',
+    rateLimited: 'Too many submissions. Please wait a few minutes and try again.',
   },
   validation: DEFAULT_SUBMISSION_MESSAGES,
 }
@@ -105,6 +107,8 @@ export const ja: SiteMessages = {
     genericError: '入力内容に誤りがあります。',
     turnstileFailed: 'Turnstile の認証に失敗しました。もう一度お試しください。',
     turnstileUnconfigured: 'Turnstile が設定されていません。',
+    rateLimited:
+      '送信が続いたため、受け付けを一時的に止めています。数分たってからもう一度お試しください。',
   },
   validation: {
     required: '必須項目です',

@@ -79,6 +79,10 @@ function testSetup(form: typeof testForm | null = testForm, locale = 'en') {
       site: vi.fn().mockResolvedValue({ locale }),
       forms: settingsForms,
     },
+    // Requests carrying CF-Connecting-IP are counted; limits are tested in rate-limit.test.ts.
+    rateLimits: {
+      hit: vi.fn().mockResolvedValue({ allowed: true, count: 1, retryAfter: 600 }),
+    },
   })
   const app = new Hono<AppEnv>()
     .use('*', async (c, next) => {

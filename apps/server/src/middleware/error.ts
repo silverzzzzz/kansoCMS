@@ -9,7 +9,14 @@ const STATUS_BY_CODE: Record<KansoErrorCode, ContentfulStatusCode> = {
   conflict: 409,
   unauthorized: 401,
   forbidden: 403,
+  rate_limited: 429,
   internal: 500,
+}
+
+function retryAfterSeconds(details: unknown): number | null {
+  if (typeof details !== 'object' || details === null || !('retryAfter' in details)) return null
+  const value = details.retryAfter
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(1, Math.ceil(value)) : null
 }
 
 /**
@@ -22,6 +29,8 @@ export function onError(err: Error, c: Context<AppEnv>) {
 
   if (err instanceof KansoError) {
     const status = STATUS_BY_CODE[err.code]
+    const retryAfter = err.code === 'rate_limited' ? retryAfterSeconds(err.details) : null
+    if (retryAfter !== null) c.header('retry-after', String(retryAfter))
     if (wantsJson) {
       return c.json(
         { error: { code: err.code, message: err.message, details: err.details } },

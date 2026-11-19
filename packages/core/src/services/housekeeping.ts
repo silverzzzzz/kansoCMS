@@ -7,6 +7,7 @@ import {
   pageviewDaily,
   passkeyLinks,
   posts,
+  rateLimits,
   revisions,
   sessions,
   shareLinks,
@@ -15,6 +16,8 @@ import {
 const DAY_MS = 86_400_000
 /** Daily pageview rows are kept for a little over a year (year-on-year comparisons stay possible). */
 export const PAGEVIEW_RETENTION_DAYS = 400
+/** Rate-limit windows are minutes long; a day-old counter can never matter again. */
+const RATE_LIMIT_RETENTION_SECONDS = 86_400
 
 export type HousekeepingReport = {
   pages: number
@@ -24,6 +27,7 @@ export type HousekeepingReport = {
   passkeyLinks: number
   challenges: number
   pageviewRows: number
+  rateLimitRows: number
 }
 
 /**
@@ -60,6 +64,7 @@ export function housekeepingService(db: Db) {
       passkeyRows,
       challenges,
       views,
+      counters,
     ] = await db.batch([
       db
         .delete(revisions)
@@ -89,6 +94,15 @@ export function housekeepingService(db: Db) {
         .delete(pageviewDaily)
         .where(lt(pageviewDaily.day, pageviewCutoff))
         .returning({ day: pageviewDaily.day }),
+      db
+        .delete(rateLimits)
+        .where(
+          lt(
+            rateLimits.windowStart,
+            Math.floor(now.getTime() / 1000) - RATE_LIMIT_RETENTION_SECONDS,
+          ),
+        )
+        .returning({ key: rateLimits.key }),
     ])
 
     return {
@@ -99,6 +113,7 @@ export function housekeepingService(db: Db) {
       passkeyLinks: passkeyRows.length,
       challenges: challenges.length,
       pageviewRows: views.length,
+      rateLimitRows: counters.length,
     }
   }
 

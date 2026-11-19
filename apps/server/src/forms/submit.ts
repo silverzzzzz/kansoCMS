@@ -2,6 +2,7 @@ import { type Kanso, KansoError } from '@kanso/core'
 import type { Context } from 'hono'
 import type { AppEnv } from '../env.ts'
 import type { SiteMessages } from '../i18n.ts'
+import { enforceRateLimit } from '../rate-limit.ts'
 import { notifySubmission } from './notify.ts'
 import { turnstileConfig, verifyTurnstile } from './turnstile.ts'
 
@@ -49,6 +50,8 @@ export async function submitForm(
   if (honeypot !== undefined && honeypot !== null && honeypot !== '') {
     return successResult(form, null, messages)
   }
+  // After the honeypot (a caught bot writes nothing), before Turnstile's subrequest.
+  await enforceRateLimit(c, 'form', messages.form.rateLimited)
 
   const remoteIp = c.req.header('cf-connecting-ip') ?? null
   if (form.turnstile) {
