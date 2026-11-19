@@ -18,8 +18,8 @@ const wrangler = `{
     {
       "binding": "DB",
       "database_name": "kanso",
-      // Replace with the id printed by \`wrangler d1 create kanso\`.
-      "database_id": "00000000-0000-0000-0000-000000000000"
+      // Local development only: names the database file under .wrangler/state.
+      "preview_database_id": "00000000-0000-0000-0000-000000000000"
     }
   ],
   "r2_buckets": [
@@ -36,7 +36,7 @@ const wrangler = `{
 }`
 
 describe('project rewrites', () => {
-  it('changes exactly the four JSONC values while preserving comments and database_id', () => {
+  it('changes exactly the four JSONC values while preserving comments and preview_database_id', () => {
     /** @type {string[]} */
     const warnings = []
     const result = rewriteWrangler(wrangler, project, (message) => warnings.push(message))
@@ -74,9 +74,9 @@ describe('project rewrites', () => {
       'pnpm 12 or later',
       'npm install -g pnpm',
       'pnpm install',
-      'wrangler d1 create site-db',
-      'database_id',
-      'wrangler r2 bucket create site-media',
+      'D1 database site-db',
+      'R2 bucket site-media',
+      'wrangler d1 list',
       'pnpm db:migrate:local',
       'pnpm dev',
       '/admin/setup',

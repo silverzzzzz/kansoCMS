@@ -24,7 +24,11 @@ deployment steps in one of the two files, change the other as well.
 
 - Every step acts on the user's Cloudflare account and publishes a site. Ask before each of:
   `wrangler login`, creating or deleting a D1 database or R2 bucket, `pnpm db:migrate`,
-  `pnpm run deploy`, `pnpm setup:token`, `wrangler secret put`, and any command with `--remote`.
+  `pnpm run deploy` (the first one also creates the D1 database and R2 bucket, or connects to
+  existing ones with the same names), `pnpm setup:token`, `wrangler secret put`, and any command
+  with `--remote`.
+- `apps/server/wrangler.jsonc` has no `database_id`: wrangler provisions D1 and R2 by name on
+  deploy. `preview_database_id` only names the local database file; never remove it.
 - You cannot finish the setup yourself. The user creates the first administrator's passkey in
   their own browser with their own authenticator.
 - Outside `localhost`, setup is locked until the Worker has a `SETUP_TOKEN` secret of at least 16
@@ -41,7 +45,8 @@ deployment steps in one of the two files, change the other as well.
   it to files, commits or logs.
 - In the upstream repository (`silverzzzzz/kansoCMS`, public), do not commit a real
   `database_id`, `SITE_URL` or `routes`: `create-kanso` copies `apps/server/wrangler.jsonc` into
-  new sites. Suggest a separate site project instead:
+  new sites. An interactive `wrangler deploy` writes `database_id` back into that file (and
+  reformats it); discard that change upstream. Suggest a separate site project instead:
   `node packages/create-kanso/bin/create-kanso.mjs ../<dir> --from . --site-url https://<host>`.
   In a site's own repository, committing these values is normal.
 - `pnpm db:migrate:local` and `pnpm passkey:link` without `--remote` act on the local emulation;
@@ -59,22 +64,28 @@ Run everything from the repository root.
 3. Read `name`, `d1_databases[0].database_name` and `r2_buckets[0].bucket_name` from
    `apps/server/wrangler.jsonc`. The D1 name in the `db:migrate` and `db:migrate:local` scripts of
    `apps/server/package.json` must match `database_name`.
-4. Create the resources:
+4. Do not create D1 or R2 by hand. Check that the names are not used by another site in the
+   account (read-only):
 
    ```sh
-   pnpm --filter @kanso/server exec wrangler d1 create <database_name>
-   pnpm --filter @kanso/server exec wrangler r2 bucket create <bucket_name>
+   pnpm --filter @kanso/server exec wrangler d1 list
+   pnpm --filter @kanso/server exec wrangler r2 bucket list
    ```
 
-   Put the printed id into the existing `DB` entry in place of the placeholder `database_id`. Do
-   not pass `--update-config` or let wrangler add another D1 binding.
+   A deploy connects silently to an existing database or bucket with the same name. If a name is
+   taken, ask the user for new names and change `name`/`database_name`/`bucket_name` and the D1
+   name in the `db:migrate` scripts.
 5. Set `vars.SITE_URL` to the production origin (`https://<host>`, no path). For a custom domain,
    add `"routes": [{ "pattern": "<host>", "custom_domain": true }]`, or let the user add the
    domain in the dashboard.
 6. Run the gates. All four must pass.
-7. `pnpm db:migrate` (wrangler asks for confirmation), then `pnpm run deploy`. Note the URL it
-   prints. If `SITE_URL` was still unknown (workers.dev), set it now and run `pnpm run deploy`
-   again. Setup stays locked; `GET /api/v1/setup` returns `{"needed":true,"token":"unset"}`.
+7. First deploy: `pnpm run deploy`, which creates the D1 database and R2 bucket, then
+   `pnpm db:migrate` (wrangler asks for confirmation). This order applies only the first time,
+   because the database does not exist before the deploy; until the migration the site answers
+   500. Agent runs are non-interactive, so wrangler does not write `database_id` back. Note the
+   URL it prints. If `SITE_URL` was still unknown (workers.dev), set it now and run
+   `pnpm run deploy` again. Setup stays locked; `GET /api/v1/setup` returns
+   `{"needed":true,"token":"unset"}`.
 8. `pnpm setup:token --url https://<host>` with the final hostname (or let the user run it). Hand
    the printed link to the user and tell them to open it: the token is filled in; they enter site
    name, name and email, untick 「サンプルサイトを入れる」 if local content will be imported, and
@@ -109,7 +120,7 @@ missing in production are cleared and listed as warnings, so those images must b
 ### Updating a deployment
 
 `pnpm install`, the gates, `pnpm db:migrate`, then `pnpm run deploy`. Apply migrations before
-deploying.
+deploying (only the very first deploy goes the other way round).
 
 ### Recovering access
 

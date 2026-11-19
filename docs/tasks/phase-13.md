@@ -13,7 +13,7 @@
 | T74 | robots.txt の AI 学習拒否スイッチ | done | shared, server, admin |
 | T75 | 毎日のバックアップを R2 に保存 | done | core, server, admin |
 | T76 | 依存とCIの強化、SECURITY.md | done | .github, pnpm, docs |
-| T77 | デプロイ時の D1 / R2 の自動作成 | todo | server, docs, create-kanso |
+| T77 | デプロイ時の D1 / R2 の自動作成 | done | server, docs, create-kanso |
 | T78 | アクセシビリティ検査 (axe) を E2E に入れる | done | e2e, admin, server |
 
 Phase 13 の決定事項:
@@ -21,6 +21,8 @@ Phase 13 の決定事項:
 1. **無料プランで動く範囲に収める** (Phase 11・12 と同じ)。追加のリソース (KV・Durable Objects・Queues) は使わない。レート制限も D1 の表で数える。
 2. **方針外のものは入れない**: スキーマビルダー、コンテンツの多言語化、プラグイン、同時編集、公開ページ上での直接編集、外部 IdP・メールのログインリンク、5 段階の権限。
 3. Phase 13 の実装は Claude が行う。T76 の実装と T77 の調査は Claude のサブエージェントに任せ、差分は Claude が確かめてから入れる。
+
+結果 (2026-11-20): 4 ゲート green (テスト 691 件: seo 13 / create-kanso 47 / shared 107 / core 170 / server 315 / admin 39)。E2E は新しい D1 で 23/23 (CSP とアクセシビリティの検査を含む)。各タスクは `vite preview` (本番と同じ静的ファイルの扱い) か開発サーバーで、実ブラウザでも確かめた。途中で既存の不具合 (別オリジンから `/media` の画像を埋め込めない) を見つけて T71 で直した。本番へのデプロイと GitHub 上のワークフローの実行は未確認。
 
 ---
 
@@ -238,13 +240,15 @@ Phase 13 の決定事項:
 - `security.yml`: CodeQL (actions と javascript-typescript、ビルドなし) と zizmor (SARIF を上げないので `security-events` 権限が要らない)。CodeQL は公開リポジトリでしか無料でないので、create-kanso で作った非公開のサイトのリポジトリでは自分で飛ばす。zizmor の待機日数の推奨 (7 日) は、上の理由で 3 日に設定した (`.github/zizmor.yml`)。
 - `SECURITY.md`: GitHub の非公開の脆弱性報告で受け付ける。**2026-11-20 時点でリポジトリのその機能は無効** (API で確認)。オーナーが Settings → Code security で有効にするまで、案内先は使えない。
 - README に Security の節、AGENTS.md に「公開から 1 日たっていない版は pnpm が拒む」の 1 行。
+- zizmor 1.32.0 をローカルで実行して指摘 0 件 (変更前の `ci.yml` は 14 件)。YAML はすべて構文と SchemaStore のスキーマで確かめた (サブエージェントの報告)。
+- push 直後、Dependabot はメジャー更新の PR を 5 つ出すはず (checkout・setup-node・upload-artifact の v7、CodeQL v5、zizmor-action v1)。
 - 確かめていないこと: ワークフロー自体は push しないと GitHub で動かないので、CodeQL・zizmor・Dependabot の実行は未確認。
 
 ---
 
 ## T77. デプロイ時の D1 / R2 の自動作成
 
-状態: `todo`
+状態: `done` (2026-11-20)
 
 ### ゴール
 
@@ -259,6 +263,16 @@ Phase 13 の決定事項:
 - ローカルと `--dry-run` で確かめられる範囲を確かめ、実アカウントでしか確かめられないことを明記する。
 
 ### 決定
+
+- 調査は Claude のサブエージェントが別の worktree で行った。Cloudflare には一切つながず、wrangler のソースを読み、ローカルの偽の Cloudflare API (127.0.0.1、ダミーのトークン) に対して実際の `wrangler deploy` を動かして確かめた。結論は「3 つ変えれば採用できる」。
+- **wrangler を 4.130 → 4.160.0 に上げた** (`@cloudflare/vite-plugin` 1.54 → 1.69.1、`@cloudflare/workers-types` → 5.20261110.1)。4.130 には、対話的なデプロイが ID を `wrangler.jsonc` に書き戻すとき、ビルド出力の `migrations_dir` (`../../../../packages/core/migrations`) まで写して `pnpm db:migrate` を壊す不具合がある (4.150 で修正。調査で 4.165 では正しく書き戻されることを確認)。版は pnpm の「公開から 1 日」に掛からないよう、公開から 8〜10 日たったものを選び、Vite プラグインが中で使う wrangler (4.160.0) と揃えた。`pnpm add` が core の `@cloudflare/workers-types` を `devDependencies` に移し、版を固定で書いたので、元の場所と `^` に戻した。型定義 (`worker-configuration.d.ts`) は新しい workerd のランタイム型で作り直された (`Env` は変わらない)。
+- **`database_id` を消し、`preview_database_id` に同じ仮の ID を固定した**。ID がないとローカルの D1 は binding 名から別のファイル名になり、開発中のデータが見えなくなる (調査で確認)。`preview_database_id` はローカルのコマンドと開発サーバーが優先して使うので、ファイル名は今までと同じになる。作業用フォルダと手元の両方で、変更前のデータ (ユーザー 1 人) がそのまま読め、適用待ちのマイグレーションもないことを確かめた。`deploy --dry-run` の表示では `env.DB` の横にこの仮の ID が出るが、デプロイには使われない (`wrangler.jsonc` のコメントに書いた)。
+- **初回だけ「デプロイ → マイグレーション」**。D1 はデプロイで作られるので、先に `pnpm db:migrate` すると「Couldn't find a D1 DB named …」で失敗する。マイグレーションまでの間、公開サイトと API は 500 を返すが、セットアップはロックされている (トークン未設定) ので管理者を作られることはない。2 回目以降は今までどおり「マイグレーション → デプロイ」。
+- **同じ名前の D1・R2 があると何も言わずにつなぐ** (wrangler の仕様)。`d1 create` なら重複で失敗していたところなので、手順書に「名前が重ならないか `wrangler d1 list` / `wrangler r2 bucket list` で確かめる」を足した。
+- 対話のない実行 (CI、エージェント) では ID は書き戻されず、2 回目以降のデプロイは前回の binding を引き継ぐ。対話的な実行では書き戻され、ファイル全体の書式も変わる (`pnpm format` で整える。本家リポジトリでは捨てる)。
+- 直した文書: `docs/deploy.md` (手順 3・5・更新・うまくいかないとき)、`AGENTS.md` (規則・手順 4・7・更新)、README の Deploy、`docs/architecture.md` (開発手順・決定事項)、create-kanso の次の手順・テスト・README。
+- 確かめたこと: 4 ゲート、`wrangler deploy --dry-run` (exit 0、書き戻しなし)、E2E 23 件 (新しい wrangler と Vite プラグインの開発サーバー)、ローカルのデータの引き継ぎ。
+- **実アカウントでしか確かめられないこと**: 実際の作成と名前での接続、作成直後の `pnpm db:migrate` が名前で見つけられるか、`wrangler login` の権限で足りるか (API トークンなら D1 と R2 の編集権限が要る)、Workers Builds (Git 連携) でのデプロイ。この Phase では本番へのデプロイはしていない。
 
 ---
 

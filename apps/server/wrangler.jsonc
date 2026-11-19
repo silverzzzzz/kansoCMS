@@ -14,12 +14,18 @@
     "not_found_handling": "none"
   },
 
+  // D1 and R2 need no ids: the first `pnpm run deploy` creates the database and the bucket
+  // under these names, or silently connects to existing ones with the same names in the account,
+  // so give each site its own names. An interactive deploy writes the real `database_id` back
+  // into this file (and reformats it): commit it in a site's repository, never upstream.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "kanso",
-      // Replace with the id printed by `wrangler d1 create kanso`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Local development only: names the database file under .wrangler/state, so local data
+      // stays where it is with or without a production `database_id`. The deploy output lists
+      // this placeholder next to env.DB, but the deployed Worker uses the real database.
+      "preview_database_id": "00000000-0000-0000-0000-000000000000",
       "migrations_dir": "../../packages/core/migrations"
     }
   ],

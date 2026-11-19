@@ -70,11 +70,6 @@ export function rewriteRootPackage(text, project, warn) {
 export function nextSteps(project) {
   return `npm install -g pnpm   # only without pnpm 12 or later
 pnpm install
-pnpm --filter @kanso/server exec wrangler d1 create ${project.d1}
-
-Paste the printed database_id into apps/server/wrangler.jsonc.
-
-pnpm --filter @kanso/server exec wrangler r2 bucket create ${project.r2}
 pnpm db:migrate:local
 pnpm dev
 
@@ -82,9 +77,13 @@ Open http://localhost:5174/admin/setup to create your local admin user and its p
 starter site is installed unless you untick it; remove it later under 設定 → サンプルサイト).
 
 For production, set vars.SITE_URL in apps/server/wrangler.jsonc to your real domain, then:
-pnpm db:migrate
-pnpm run deploy
+pnpm run deploy    # the first deploy creates the D1 database ${project.d1} and the R2 bucket ${project.r2}
+pnpm db:migrate    # creates the tables; until then the deployed site answers with errors
 pnpm setup:token --url https://your-domain
+
+A deploy connects to an existing D1 database or R2 bucket of the same name in your account, so
+keep these names unique (check with wrangler d1 list and wrangler r2 bucket list). Later updates
+run pnpm db:migrate before pnpm run deploy.
 
 Open the printed link on your real domain to create your production admin user and its passkey.
 The deployed site refuses setup until that token exists, so nobody else can take it; keep the

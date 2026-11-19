@@ -57,7 +57,7 @@ Unsafe archive paths and destination symlinks are rejected, including with `--fo
 
 The CLI changes only deployment identifiers in `apps/server/wrangler.jsonc`, the two migration
 scripts in `apps/server/package.json`, and the root package name, then replaces the root README.
-JSONC comments and the placeholder `database_id` are preserved. Missing rewrite patterns produce
+JSONC comments and the local-only `preview_database_id` are preserved. Missing rewrite patterns produce
 warnings and a final list of files to edit manually. Other code identifiers stay unchanged.
 
 Git is initialized without a commit unless `--no-git` is given, Git is unavailable, or the target
@@ -70,13 +70,6 @@ For the default names of a `my-site` project:
 ```sh
 cd my-site
 pnpm install
-pnpm --filter @kanso/server exec wrangler d1 create my-site
-```
-
-Paste the printed `database_id` into `apps/server/wrangler.jsonc`, then:
-
-```sh
-pnpm --filter @kanso/server exec wrangler r2 bucket create my-site-media
 pnpm db:migrate:local
 pnpm dev
 ```
@@ -85,9 +78,12 @@ Open `http://localhost:5174/admin/setup` to create your local admin account.
 For production, set `vars.SITE_URL` in `apps/server/wrangler.jsonc` to your real domain, then:
 
 ```sh
+pnpm run deploy    # the first deploy creates the D1 database my-site and the R2 bucket my-site-media
 pnpm db:migrate
-pnpm run deploy
+pnpm setup:token --url https://your-domain
 ```
 
-Open `/admin/setup` on the deployed site to create the production admin account.
-See the generated `docs/architecture.md` for the CMS design and deployment details.
+A deploy connects to an existing D1 database or R2 bucket of the same name, so keep the names
+unique in your account. Open the link printed by `pnpm setup:token` on your real domain to create
+the production admin account. Later updates run `pnpm db:migrate` before `pnpm run deploy`.
+See the generated `docs/deploy.md` for the full deployment guide.

@@ -385,14 +385,12 @@ Worker / D1 / R2 名と `SITE_URL`、migration コマンド、root 名と README
 
 ```bash
 pnpm i
-pnpm --filter @kanso/server exec wrangler d1 create kanso   # database_id を wrangler.jsonc へ
-pnpm --filter @kanso/server exec wrangler r2 bucket create kanso-media
 pnpm db:migrate:local                                       # wrangler d1 migrations apply --local
 pnpm dev                                                    # server :5173 (workerd) + admin :5174 (proxy)
 # → http://localhost:5174/admin/setup で初期ユーザー作成
 pnpm typecheck && pnpm check && pnpm test && pnpm build     # タスク完了時のゲート
-pnpm db:migrate                                             # 本番 D1 へ適用 (SITE_URL を実ドメインに変更後)
-pnpm run deploy                                             # admin build → server build → wrangler deploy
+pnpm run deploy                                             # 初回は D1 / R2 を名前で作成 (または同名につなぐ)
+pnpm db:migrate                                             # 本番 D1 へ適用。2 回目以降はデプロイの前に
 ```
 
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。
@@ -423,6 +421,7 @@ pnpm run deploy                                             # admin build → se
 | 10. 構造化と分析 | **done (2026-11-11)** | 軽量アクセス解析 (`pageview_daily` 日次集計・Cookie/JS 不使用・`executionCtx` で非同期記録)、投稿タイプ別カスタムフィールド (field DSL・`<dl>` 描画)、ページテンプレート (section プリセット)、AI アシスト (Workers AI・抜粋/説明文/alt 生成)、著者アーカイブ (`/{type}/author/{slug}`) + プロフィール編集 + 関連記事 + 目次 (h2/h3 自動 ID)、JSON エクスポート/インポート (slug upsert・冪等・メディアはメタのみ)、アクティビティログ (`activity_log`・2,000 件上限・全変更系ハンドラ計測) ([tasks/phase-10.md](tasks/phase-10.md)) | 構造化コンテンツとサイト内分析を持つ CMS になる |
 | 11. 安定化 | **done (2026-11-12)** | Phase 7〜10 を実サーバーで動かして見つかった不具合の修正: Workers AI を任意設定に (既定では Cloudflare のログインなしで `pnpm dev` と CI が動く)、インポートの一括処理化 (Workers Free の 50 クエリに収まる) と設定の管理者限定、アクセス解析の計測位置、ログイン失敗ログの集約、ゴミ箱の完全削除条件、LIKE 50 バイト制限。実 DB を使うテストの土台 (`@kanso/core/testing`) ([tasks/phase-11.md](tasks/phase-11.md)) | 実サーバーと E2E で全機能が動き、複数行を書く経路がクエリ上限に収まる |
 | 12. 運用機能 | **done (2026-11-12)** | ユーザーの招待と権限管理 (登録リンク方式)、Cron Trigger による定期処理 (ゴミ箱 30 日・期限切れデータ)、画像の最適化 (縮小版をブラウザで作って R2 に保存、`srcset`)、Phase 7〜12 の E2E、バックアップ手順 ([tasks/phase-12.md](tasks/phase-12.md)) | 複数人で運用でき、放置しても溜まり続けるものがない |
+| 13. 守りと運用 | **done (2026-11-20)** | EmDash との比較から: 公開エンドポイントのレート制限 (D1)、管理画面の CSP とメディアの sandbox・CORP、上書き事故の防止 (`baseUpdatedAt`)、404 の記録と 410、robots.txt の AI 学習拒否、R2 への毎日のバックアップ、依存と CI の強化 (pnpm の公開日・信頼度、SHA 固定、Dependabot、CodeQL、zizmor、SECURITY.md)、D1 / R2 のデプロイ時自動作成 (wrangler 4.160)、axe のアクセシビリティ検査 ([tasks/phase-13.md](tasks/phase-13.md)) | 公開したサイトが荒らされにくく、壊れにくく、戻しやすい |
 
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
@@ -430,7 +429,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 
 ## 9. 決定事項
 
-- **サイト生成は GitHub リポジトリのコピーにする** (2026-09-24)。`create-kanso` は ESM + JSDoc の Node.js CLI、runtime 依存なし。`@kanso/*` の npm 公開は前提にせず、ustar を直接展開して `docs/tasks/` 以外の workspace・CI・例を保つ。ローカル checkout / tarball も指定可能。JSONC のコメントと `database_id` を保持してデプロイ識別子だけを書き換え、Cloudflare / Wrangler は実行せず次の手順を表示する。
+- **サイト生成は GitHub リポジトリのコピーにする** (2026-09-24)。`create-kanso` は ESM + JSDoc の Node.js CLI、runtime 依存なし。`@kanso/*` の npm 公開は前提にせず、ustar を直接展開して `docs/tasks/` 以外の workspace・CI・例を保つ。ローカル checkout / tarball も指定可能。JSONC のコメントと `preview_database_id` を保持してデプロイ識別子 (名前) だけを書き換え、Cloudflare / Wrangler は実行せず次の手順を表示する。
 - **固定ページと投稿は別テーブル** (2026-09-10)。WP 式の単一テーブルは採らない。
 - **API は常に認証必須** (2026-09-10)。公開コンテンツは SSR で見せ、headless 利用は `read` スコープの API キーを発行する。唯一の例外はフォーム送信エンドポイント (Phase 2, Turnstile で保護)。
 - **管理画面ルーターは TanStack Router** (file-based, `autoCodeSplitting`)。ルートファイルは `Route` 以外を export しない。
@@ -450,6 +449,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **Workers AI は既定で無効** (2026-11-12)。設定があるだけで開発サーバーが Cloudflare に接続するため、使う人だけが有効にする。
 - **画像は R2 だけに置き、縮小版はブラウザで作る** (2026-11-12、ユーザー判断)。Cloudflare Images / 画像変換には依存しない。
 - **ユーザーの招待はリンクで渡す** (2026-11-12)。メールサービスを前提にしない。パスキーの登録リンク (Phase 6) をそのまま使う。
+- **D1 と R2 は wrangler の自動作成に任せる** (2026-11-20、Phase 13 T77)。`wrangler.jsonc` に `database_id` を書かず、最初のデプロイが名前で作る (同じ名前があればそれにつなぐ)。初回だけ「デプロイ → マイグレーション」の順。ローカルのデータベースファイルの名前は `preview_database_id` (仮の ID) で固定し、本番の ID が書き戻されてもローカルのデータは同じファイルに残る。wrangler 4.150 より前は、書き戻しで `migrations_dir` を壊すため 4.160 以上にした。
 - **上書き事故は「開いた版」との比較で防ぐ** (2026-11-20、Phase 13 T72)。固定ページ・投稿の `PATCH` は任意の `baseUpdatedAt` を受け取り、現在の `updated_at` (秒単位) と違えば 409 `stale`。編集ロックや同時編集はしない。比較は書き込み前の読み出しで行うので、2 つの保存が同じ瞬間に届いたときまでは防がない (人の操作では起きにくい)。管理画面は編集を始めたときの版を固定して送る (TanStack Query がフォーカス時に読み直しても基準は変わらない)。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。

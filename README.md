@@ -310,16 +310,19 @@ To add a theme in your fork:
 ## Deploy
 
 ```sh
-cd apps/server
-pnpm exec wrangler d1 create kanso          # copy database_id into wrangler.jsonc
-pnpm exec wrangler r2 bucket create kanso-media
-cd ../..
+pnpm run deploy                             # the first deploy creates the D1 database and R2 bucket
 pnpm db:migrate                             # apply migrations to the remote D1
-pnpm run deploy
 pnpm setup:token --url https://example.com  # prints the /admin/setup link with a setup token
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
+
+`wrangler.jsonc` holds no `database_id`: wrangler creates the D1 database and the R2 bucket named
+there on the first deploy, or connects to existing ones with the same names, so give each site
+its own names (check with `wrangler d1 list` and `wrangler r2 bucket list`). That is why the
+first deploy comes before the migration; later updates migrate first, then deploy. An
+interactive deploy writes the real `database_id` back into `wrangler.jsonc`; `preview_database_id`
+only names the local database file and stays as it is.
 
 A deployed site refuses to create its first administrator until the Worker has a `SETUP_TOKEN`
 secret, so nobody else can take it between the deploy and the setup. `pnpm setup:token`

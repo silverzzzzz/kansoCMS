@@ -7,7 +7,7 @@
 ## 先に知っておくこと
 
 - **ローカルと本番は別物です。** `pnpm dev` が使うデータベース (D1) と画像置き場 (R2) は
-  `apps/server/.wrangler/` の中の模擬環境です。本番には空の D1 と R2 を新しく作ります。ローカルの記事・
+  `apps/server/.wrangler/` の中の模擬環境です。本番の空の D1 と R2 は、最初のデプロイで作られます。ローカルの記事・
   ユーザー・パスキーは自動では移りません (移し方は「[ローカルの内容を移す](#ローカルの内容を移す)」)。
 - **パスキーはドメインごとです。** パスキーは、作ったときに開いていたドメインでしか使えません。
   `localhost` で作ったものは本番で使えず、`*.workers.dev` で作ったものは独自ドメインで使えません。
@@ -53,16 +53,19 @@ pnpm --filter @kanso/server exec wrangler whoami   # ログインしたアカウ
 > node packages/create-kanso/bin/create-kanso.mjs ../my-site --from . --site-url https://cms.example.com
 > ```
 
-## 3. D1 と R2 を作る
+## 3. 名前がほかのサイトと重ならないか確かめる
+
+D1 と R2 は手で作りません。最初の `pnpm run deploy` (手順 5) が、手順 2 の名前で作ります。ただし、同じ
+アカウントに同じ名前の D1 や R2 がすでにあると、新しく作らずに**何も言わずにそれにつなぎます**。ほかの
+サイトとデータベースや画像を共有してしまわないよう、一覧で確かめてください。
 
 ```sh
-pnpm --filter @kanso/server exec wrangler d1 create <D1名>
-pnpm --filter @kanso/server exec wrangler r2 bucket create <R2名>
+pnpm --filter @kanso/server exec wrangler d1 list
+pnpm --filter @kanso/server exec wrangler r2 bucket list
 ```
 
-`d1 create` が表示する `database_id` で、`apps/server/wrangler.jsonc` の `DB` の項目にある
-`"database_id": "00000000-0000-0000-0000-000000000000"` を置き換えます。wrangler が設定ファイルへの追記を
-提案してきたら断り、既存の項目を手で書き換えてください。
+重なっていたら、手順 2 の名前を変えます (`db:migrate` と `db:migrate:local` の D1 名も)。`wrangler.jsonc` の
+`preview_database_id` はローカル開発用なので、そのままにします。
 
 ## 4. 公開 URL を決めて SITE_URL を書く
 
@@ -79,16 +82,25 @@ canonical・サイトマップ・フィード・招待リンクなどに使わ�
 - **workers.dev だけ**: URL は `https://<Worker名>.<アカウントのサブドメイン>.workers.dev` です。分からなければ、
   手順 5 のデプロイで表示された URL を書き、もう一度 `pnpm run deploy` します。
 
-## 5. テーブルを作ってデプロイする
+## 5. デプロイしてテーブルを作る
 
 ```sh
+pnpm run deploy        # 管理画面と Worker をビルドしてデプロイする。初回は D1 と R2 もここで作られる
 pnpm db:migrate        # 本番の D1 にテーブルを作る。確認されたら y
-pnpm run deploy        # 管理画面と Worker をビルドしてデプロイする
 ```
 
+初回だけこの順番です (テーブルを作る先の D1 がデプロイで作られるため)。`pnpm db:migrate` が終わるまで、
+公開サイトと API はエラー (500) を返します。セットアップはロックされているので、その間に管理者を作られる
+ことはありません。
+
 `pnpm deploy` (`run` なし) は pnpm 自身のコマンドで、このスクリプトは動きません。デプロイが終わると URL が
-表示されます。毎日の掃除 (Cron Trigger) もこのとき登録されます。無料プランの Cron Trigger はアカウント
-あたり 5 個までです。
+表示されます。毎日の掃除とバックアップ (Cron Trigger) もこのとき登録されます。無料プランの Cron Trigger は
+アカウントあたり 5 個までです。
+
+端末から `pnpm run deploy` すると、wrangler が本番の `database_id` を `apps/server/wrangler.jsonc` に書き足し、
+ファイル全体の書式も変えます。サイトのリポジトリなら `pnpm format` で整えてコミットします。kansoCMS 本体の
+リポジトリでは、この変更は捨ててください。どちらでも `preview_database_id` (ローカル開発用) は消しません。
+CI など対話のない実行では書き足されず、2 回目以降のデプロイは前回の D1 と R2 をそのまま使います。
 
 この時点で `/admin/setup` を開くと「セットアップはロックされています」と出ます。次の手順でトークンを設定します。
 
@@ -159,7 +171,7 @@ pnpm db:migrate        # 新しいマイグレーションがあれば適用す�
 pnpm run deploy
 ```
 
-マイグレーションはデプロイより先に適用します。
+2 回目以降は、マイグレーションをデプロイより先に適用します (初回だけ逆です)。
 
 ## パスキーをなくしたとき・ドメインを変えたとき
 
@@ -184,7 +196,12 @@ pnpm run deploy
 - **`pnpm setup:token` が失敗する**: `wrangler whoami` でログインを確認し、先に `pnpm run deploy` を済ませます。
 - **パスキーを作れない**: `http://127.0.0.1` のような IP アドレスでは使えません。本番は HTTPS のドメインで
   開いてください。
-- **`pnpm db:migrate` が失敗する**: `database_id` を置き換えたか、`wrangler whoami` で正しいアカウントに
-  ログインしているかを確認します。
+- **初回の `pnpm db:migrate` が「Couldn't find a D1 DB named …」で失敗する**: まだデプロイしていません。
+  先に `pnpm run deploy` を実行します (デプロイが D1 を作ります)。デプロイ済みなら、`wrangler whoami` で
+  正しいアカウントにログインしているかを確認します。
+- **`pnpm check` が `apps/server/wrangler.jsonc` の書式で失敗する**: デプロイが `database_id` を書き足したためです。
+  `pnpm format` で整えます。
+- **デプロイで D1 や R2 の作成が「権限がない」と出る**: API トークンで動かしているなら、D1 と R2 の編集権限が
+  必要です。`wrangler login` なら足ります。
 
 バックアップと復元は README の「[Backups and recovery](../README.md#backups-and-recovery)」にあります。
