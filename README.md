@@ -45,7 +45,7 @@ packages/
   seo/      JSON-LD builders, <head> metadata, sitemap and Atom helpers (pure functions)
 examples/
   astro-blog/  Astro SSG blog reading the headless API
-docs/       architecture, task board and decisions
+docs/       architecture, deployment guide, task board and decisions
 ```
 
 ## Requirements
@@ -293,6 +293,13 @@ pnpm run deploy
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
+
+Right after the first deploy, open `/admin/setup` on the production domain and create the
+administrator: until the first user exists, anyone who opens it becomes one. Passkeys belong to
+the domain they were created on, so connect a custom domain before that step. The full
+walkthrough — custom domains, the first administrator, moving local content, updates and lost
+passkeys — is in [docs/deploy.md](docs/deploy.md) (Japanese); AI agents follow
+[AGENTS.md](AGENTS.md).
 
 The Workers Free plan is enough. Its limit of 50 D1 queries per request is what the write paths
 are built around — the sample-site install, the JSON import and the daily cleanup each run as a

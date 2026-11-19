@@ -83,6 +83,9 @@ describe('project rewrites', () => {
       'SITE_URL',
       'pnpm db:migrate',
       'pnpm run deploy',
+      'anyone who opens it becomes the administrator',
+      'docs/deploy.md',
+      'AGENTS.md',
       'docs/architecture.md',
       'https://github.com/silverzzzzz/kansoCMS',
     ]) {

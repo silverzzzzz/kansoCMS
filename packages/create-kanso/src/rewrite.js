@@ -85,9 +85,12 @@ For production, set vars.SITE_URL in apps/server/wrangler.jsonc to your real dom
 pnpm db:migrate
 pnpm run deploy
 
-Open /admin/setup on the deployed site to create your production admin user and its passkey.
+Right away, open /admin/setup on your real domain to create your production admin user and its
+passkey: until the first user exists, anyone who opens it becomes the administrator.
 Passkeys belong to the domain they were created on. If you lose them all, issue a recovery link:
-pnpm passkey:link you@example.com --remote --url https://your-domain`
+pnpm passkey:link you@example.com --remote --url https://your-domain
+
+The full deployment guide is docs/deploy.md (Japanese); AI agents follow AGENTS.md.`
 }
 
 /** @param {Project} project */
