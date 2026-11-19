@@ -26,6 +26,12 @@ export const siteSettingsSchema = z.object({
   bodyEndHtml: z.string().max(16_000).nullable().default(null),
   /** Extra robots.txt rules appended before the `Sitemap:` line (admin-only). */
   robotsExtra: z.string().max(4096).nullable().default(null),
+  /**
+   * Asks AI crawlers not to train on the site: robots.txt gains
+   * `Content-Signal: search=yes, ai-train=no` and `Disallow: /` for the known
+   * training crawlers. Search engines are unaffected.
+   */
+  disallowAiTraining: z.boolean().default(false),
   /** Published page rendered as the custom 404 body; null = built-in message. */
   notFoundPageId: z.number().int().positive().nullable().default(null),
   /** Maintenance mode: public GETs return 503; signed-in users still see the site. */

@@ -121,13 +121,34 @@ function normalizeRobotsExtra(extra: string): string[] {
   return lines
 }
 
+/**
+ * AI training crawlers and opt-out tokens, as listed in Cloudflare's managed
+ * robots.txt (the same list EmDash uses). Search crawlers are not in it.
+ */
+export const AI_TRAINING_CRAWLERS = [
+  'Amazonbot',
+  'Applebot-Extended',
+  'Bytespider',
+  'CCBot',
+  'ClaudeBot',
+  'Google-Extended',
+  'GPTBot',
+  'meta-externalagent',
+] as const
+
 export async function robotsResponse(c: Context<AppEnv>) {
   const settings = await c.var.kanso.settings.site()
+  const optOut = settings.disallowAiTraining
   const body = [
     'User-agent: *',
+    // A signal, not a rule: it stays inside the `*` group, which keeps its Disallow lines.
+    ...(optOut ? ['Content-Signal: search=yes, ai-train=no'] : []),
     'Disallow: /admin',
     'Disallow: /api',
     'Disallow: /preview',
+    ...(optOut
+      ? AI_TRAINING_CRAWLERS.flatMap((agent) => ['', `User-agent: ${agent}`, 'Disallow: /'])
+      : []),
     ...(settings.robotsExtra ? ['', ...normalizeRobotsExtra(settings.robotsExtra)] : []),
     '',
     `Sitemap: ${absoluteUrl(c.env.SITE_URL, '/sitemap.xml')}`,

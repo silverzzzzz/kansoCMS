@@ -10,7 +10,7 @@
 | T71 | セキュリティヘッダー (メディア配信の sandbox、管理画面の CSP) | done | shared, server, admin, e2e |
 | T72 | 上書き事故の防止 (古い版からの保存を拒否) | done | shared, core, server, admin |
 | T73 | 見つからなかった URL の記録と 410 | done | shared, core, server, admin |
-| T74 | robots.txt の AI 学習拒否スイッチ | todo | shared, server, admin |
+| T74 | robots.txt の AI 学習拒否スイッチ | done | shared, server, admin |
 | T75 | 毎日のバックアップを R2 に保存 | todo | core, server, admin |
 | T76 | 依存とCIの強化、SECURITY.md | todo | .github, pnpm, docs |
 | T77 | デプロイ時の D1 / R2 の自動作成 | todo | server, docs, create-kanso |
@@ -154,7 +154,7 @@ Phase 13 の決定事項:
 
 ## T74. robots.txt の AI 学習拒否スイッチ
 
-状態: `todo`
+状態: `done` (2026-11-20)
 
 ### ゴール
 
@@ -170,6 +170,11 @@ Phase 13 の決定事項:
 - 4 ゲート green。オン・オフそれぞれの robots.txt をテストと実サーバーで確かめる。
 
 ### 決定
+
+- 一覧は EmDash と同じく Cloudflare の管理 robots.txt に載っている学習用クローラー 8 種 (`AI_TRAINING_CRAWLERS`: Amazonbot、Applebot-Extended、Bytespider、CCBot、ClaudeBot、Google-Extended、GPTBot、meta-externalagent)。検索用のクローラー (Googlebot、Bingbot など) は入れない。
+- `Content-Signal` は既存の `User-agent: *` のグループの中に置く。EmDash は `*` のグループをもう 1 つ作り、空の `Disallow:` で閉じているが、kansoCMS の `*` グループには元から `Disallow` 行があるので 1 つにまとめた (グループが 2 つあると、解釈の違うクローラーで結合のされ方が変わる)。追加ルール (`robotsExtra`) と `Sitemap:` はその後ろ。
+- 既定はオフ。設定画面には「従うかどうかはクローラー次第」と書いた (robots.txt は強制力を持たない)。
+- テスト: server `robots.integration.test.ts` (2 件。既定では何も出ない、オンのときの全文)。実ブラウザ (`vite preview`、新しい D1): 設定でチェックして保存すると、次の robots.txt から反映された (キャッシュの世代が更新されるため)。再読み込みしてもチェックは残る。
 
 ---
 

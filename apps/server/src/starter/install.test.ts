@@ -18,6 +18,7 @@ const site: SiteSettings = {
   headHtml: null,
   bodyEndHtml: null,
   robotsExtra: null,
+  disallowAiTraining: false,
   notFoundPageId: null,
   maintenance: false,
   maintenanceMessage: '',

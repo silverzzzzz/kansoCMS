@@ -72,6 +72,9 @@ function SettingsForms() {
   const [headHtml, setHeadHtml] = useState(initial?.site.headHtml ?? '')
   const [bodyEndHtml, setBodyEndHtml] = useState(initial?.site.bodyEndHtml ?? '')
   const [robotsExtra, setRobotsExtra] = useState(initial?.site.robotsExtra ?? '')
+  const [disallowAiTraining, setDisallowAiTraining] = useState(
+    initial?.site.disallowAiTraining ?? false,
+  )
   const [notFoundPageId, setNotFoundPageId] = useState(String(initial?.site.notFoundPageId ?? ''))
   const [maintenance, setMaintenance] = useState(initial?.site.maintenance ?? false)
   const [maintenanceMessage, setMaintenanceMessage] = useState(
@@ -110,6 +113,7 @@ function SettingsForms() {
             headHtml: headHtml.trim() ? headHtml : null,
             bodyEndHtml: bodyEndHtml.trim() ? bodyEndHtml : null,
             robotsExtra: robotsExtra.trim() ? robotsExtra : null,
+            disallowAiTraining,
             notFoundPageId: notFoundPageId ? Number(notFoundPageId) : null,
             maintenance,
             maintenanceMessage,
@@ -298,6 +302,19 @@ function SettingsForms() {
             onChange={(event) => setRobotsExtra(event.target.value)}
           />
         </Field>
+        <label className="flex items-start gap-2 text-sm font-medium text-neutral-800">
+          <input
+            type="checkbox"
+            checked={disallowAiTraining}
+            onChange={(event) => setDisallowAiTraining(event.target.checked)}
+          />
+          AI の学習に使わないよう求める
+        </label>
+        <p className="-mt-3 text-xs text-neutral-500">
+          robots.txt に「検索は可、AI の学習は不可」の表明 (Content-Signal)
+          を加え、主な学習用クローラー (GPTBot、ClaudeBot、Google-Extended など)
+          のクロールを断ります。検索エンジンへの登録には影響しません。従うかどうかはクローラー次第です。
+        </p>
         <label className="flex items-start gap-2 text-sm font-medium text-neutral-800">
           <input
             type="checkbox"

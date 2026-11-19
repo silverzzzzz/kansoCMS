@@ -233,7 +233,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
 | `GET /:type/category/:slug`, `GET /:type/tag/:slug` | `site` — 絞込一覧 | 公開 |
 | `GET /:type/author/:slug` | `site` — 著者ページ。その投稿タイプに公開済みの投稿がない著者は 404 | 公開 |
-| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
+| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。robots.txt は `site.disallowAiTraining` のとき `*` グループに `Content-Signal: search=yes, ai-train=no` を入れ、学習用クローラー (`AI_TRAINING_CRAWLERS`、Cloudflare の管理 robots.txt と同じ一覧) を `Disallow: /` にする (Phase 13)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /preview/share/:token` | `site/preview` — 共有リンクで下書きを描画。`noindex, nofollow` + `no-store` | 公開 (有効なリンクのみ) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`、sandbox の CSP、`Cross-Origin-Resource-Policy: cross-origin`。縮小版も同じ経路 | 公開 |

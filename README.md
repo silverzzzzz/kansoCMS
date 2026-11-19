@@ -244,7 +244,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |
 | `/blog/author/jane` | Author archive — exists only for authors with published posts in that post type (404 otherwise) |
 | `/blog/feed.xml` | Atom feed of the 20 latest posts, `X-Robots-Tag: noindex` |
-| `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex |
+| `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex. With **設定 → AI の学習に使わないよう求める**, robots.txt adds `Content-Signal: search=yes, ai-train=no` and disallows the known AI training crawlers (GPTBot, ClaudeBot, Google-Extended …) while search stays open |
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
 | `/preview/share/<token>` | A draft shared through a link issued in the editor: no sign-in, valid 7 days, revocable, `noindex, nofollow`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
