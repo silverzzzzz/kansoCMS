@@ -60,3 +60,22 @@ jobs:
           # Print the findings and fail the job instead of uploading SARIF, so the job needs no
           # security-events permission and also runs in private repositories.
           advanced-security: false
+
+  # GitHub's dependency graph cannot read pnpm 12's lockfile, so Dependabot raises no security
+  # alerts here. This job checks the lockfile against the npm advisory database instead; the
+  # weekly run catches advisories published after the last change.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      # Reads only pnpm-lock.yaml (no install) and fails on an advisory of any severity.
+      - run: pnpm audit

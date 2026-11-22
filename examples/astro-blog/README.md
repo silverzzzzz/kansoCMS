@@ -1,6 +1,6 @@
 # kansoCMS + Astro blog
 
-A small Astro 5 static site that reads the kansoCMS JSON API at build time. It uses
+A small Astro 7 static site that reads the kansoCMS JSON API at build time. It uses
 plain `fetch`, hand-written types and CSS, with no adapter or `@kanso/*` dependency.
 You can copy this folder out of the monorepo.
 

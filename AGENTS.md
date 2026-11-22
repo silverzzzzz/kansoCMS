@@ -13,6 +13,10 @@ deployment steps in one of the two files, change the other as well.
   `pnpm-workspace.yaml`). When an install fails because a version is too new, wait or pick an
   older version; do not add an exclusion just to get past it.
 - Gates: `pnpm typecheck && pnpm check && pnpm test && pnpm build`.
+- `pnpm audit` must report nothing; `.github/workflows/security.yml` runs it on every push and
+  pull request and weekly. Fix an advisory by raising the dependency (`pnpm update -r <name>`
+  also updates an indirect one within its dependents' ranges). Only when a dependent's range
+  keeps the vulnerable version, add an `overrides` entry with the reason to `pnpm-workspace.yaml`.
 - Local development: `pnpm db:migrate:local`, then `pnpm dev` (server on :5173, admin on :5174).
   Local D1 and R2 are emulated under `apps/server/.wrangler/`; nothing local reaches Cloudflare.
 - Run the deploy script as `pnpm run deploy`. `pnpm deploy` is pnpm's built-in "deploy a

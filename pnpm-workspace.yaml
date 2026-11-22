@@ -19,6 +19,12 @@ trustPolicyExclude:
 # Only direct dependencies may come from git or tarball URLs; subdependencies use the registry.
 blockExoticSubdeps: true
 
+# Replaces vulnerable versions that the dependents' own ranges keep.
+overrides:
+  # drizzle-kit declares @esbuild-kit/esm-loader but never loads it. Its core-utils pins esbuild
+  # ~0.18.20 (GHSA-67mh-4wv8-2f99, fixed in 0.25.0); use the esbuild drizzle-kit itself requires.
+  '@esbuild-kit/core-utils>esbuild': ^0.25.4
+
 # Dependencies that may run their install scripts. pnpm stops the install when
 # a dependency with such a script is not listed here.
 allowBuilds:

@@ -1,4 +1,4 @@
-import type { PublicUser } from '@kanso/shared'
+import type { PublicUser, RichTextDoc } from '@kanso/shared'
 import { queryOptions } from '@tanstack/react-query'
 import { api } from './client.ts'
 import { unwrap } from './request.ts'
@@ -22,8 +22,17 @@ async function getPages(params: ListParams) {
   return unwrap(api.pages.$get({ query: params }))
 }
 
+/**
+ * Hono's client types turn a recursive type into `JSONValue` where it refers to itself, so the
+ * nested blocks of a body lose their type. The server sends the stored `RichTextDoc` unchanged.
+ */
+type WithRichTextBody<T extends { item: { bodyJson: unknown } }> = Omit<T, 'item'> & {
+  item: Omit<T['item'], 'bodyJson'> & { bodyJson: RichTextDoc | null }
+}
+
 async function getPage(id: number) {
-  return unwrap(api.pages[':id'].$get({ param: { id: String(id) } }))
+  const data = await unwrap(api.pages[':id'].$get({ param: { id: String(id) } }))
+  return data as WithRichTextBody<typeof data>
 }
 
 async function getPageRevisions(id: number) {
@@ -47,7 +56,8 @@ async function getPosts(params: PostsListParams) {
 }
 
 async function getPost(id: number) {
-  return unwrap(api.posts[':id'].$get({ param: { id: String(id) } }))
+  const data = await unwrap(api.posts[':id'].$get({ param: { id: String(id) } }))
+  return data as WithRichTextBody<typeof data>
 }
 
 async function getPostRevisions(id: number) {

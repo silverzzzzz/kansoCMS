@@ -50,7 +50,8 @@ docs/       architecture, deployment guide, task board and decisions
 
 ## Requirements
 
-- Node.js 22.16+ (24 recommended — the test suite runs on Node's built-in SQLite)
+- Node.js 22.23.4+ (24 recommended). The test suite runs on Node's built-in SQLite, and Astro 7 in
+  `examples/astro-blog` needs 22.23.4.
 - pnpm 12 or later (for example `npm install -g pnpm`). pnpm then runs the version pinned in
   `package.json` (`packageManager`). The repository is a pnpm workspace: npm, Yarn and Bun cannot
   install it.
@@ -256,7 +257,7 @@ Public HTML is cached in the Workers Cache API for 60 s (`x-kanso-cache: HIT|MIS
 
 ## Using the API
 
-For a complete headless frontend, see [examples/astro-blog](examples/astro-blog): an Astro 5 static blog that reads the API with a read key at build time. Its README covers setup, local development and static hosting.
+For a complete headless frontend, see [examples/astro-blog](examples/astro-blog): an Astro 7 static blog that reads the API with a read key at build time. Its README covers setup, local development and static hosting.
 
 Every `/api/v1` route except `health`, `setup` and the passkey sign-in routes (`auth/passkey*`, `auth/passkey-link*`) requires either the admin session cookie or an API key in `x-api-key`. Sessions come from signing in with a passkey in the browser, so scripts use API keys. Keys are created in the admin UI (or `POST /api/v1/api-keys`) with a `read` or `write` scope; `write` is required for `POST`/`PATCH`/`PUT`/`DELETE`.
 
@@ -398,8 +399,10 @@ issues.
 pnpm refuses dependency versions published less than a day ago, versions published with weaker
 provenance than earlier ones, and git or tarball URLs below the direct dependencies
 (`pnpm-workspace.yaml`). The workflows pin every action to a commit SHA, Dependabot proposes
-action and npm updates weekly, and `.github/workflows/security.yml` runs CodeQL and
-[zizmor](https://docs.zizmor.sh/).
+action and npm updates weekly, and `.github/workflows/security.yml` runs CodeQL,
+[zizmor](https://docs.zizmor.sh/) and `pnpm audit`. GitHub's dependency graph cannot read pnpm
+12's lockfile, so Dependabot raises no security alerts; the audit job, on every push and pull
+request and every Monday, takes their place.
 
 ## License
 
