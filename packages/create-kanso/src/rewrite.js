@@ -98,7 +98,7 @@ The full deployment guide is docs/deploy.md (Japanese); AI agents follow AGENTS.
 export function generateReadme(project) {
   return `# ${project.name}
 
-A kansoCMS site. Requires Node.js 22+, pnpm 12 or later and a Cloudflare account for deployment.
+A kansoCMS site. Requires Node.js 26+, pnpm 12 or later and a Cloudflare account for deployment.
 The project is a pnpm workspace, so npm, Yarn and Bun cannot install it.
 
 ## Next steps

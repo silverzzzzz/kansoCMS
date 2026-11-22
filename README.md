@@ -50,8 +50,7 @@ docs/       architecture, deployment guide, task board and decisions
 
 ## Requirements
 
-- Node.js 22.23.4+ (24 recommended). The test suite runs on Node's built-in SQLite, and Astro 7 in
-  `examples/astro-blog` needs 22.23.4.
+- Node.js 26 or later (CI runs on 26).
 - pnpm 12 or later (for example `npm install -g pnpm`). pnpm then runs the version pinned in
   `package.json` (`packageManager`). The repository is a pnpm workspace: npm, Yarn and Bun cannot
   install it.

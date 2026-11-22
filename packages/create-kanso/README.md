@@ -1,7 +1,7 @@
 # create-kanso
 
 Create a kansoCMS site from the [upstream repository](https://github.com/silverzzzzz/kansoCMS).
-Requires Node.js 22+. The CLI runs from any package manager; the generated project is a pnpm
+Requires Node.js 26+. The CLI runs from any package manager; the generated project is a pnpm
 workspace and needs pnpm 12 or later (`npm install -g pnpm`).
 The CLI has no runtime dependencies and runs directly as JavaScript.
 

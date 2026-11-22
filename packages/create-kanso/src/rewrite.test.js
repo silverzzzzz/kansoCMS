@@ -71,6 +71,7 @@ describe('project rewrites', () => {
     const result = generateReadme(project)
     for (const text of [
       '# my-site',
+      'Node.js 26+',
       'pnpm 12 or later',
       'npm install -g pnpm',
       'pnpm install',
