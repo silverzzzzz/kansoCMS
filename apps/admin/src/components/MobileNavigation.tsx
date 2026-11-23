@@ -1,6 +1,7 @@
 import { Link, useRouter } from '@tanstack/react-router'
 import { useEffect, useId, useRef, useState } from 'react'
 import { AdminNavigation, NavigationIcon } from './AdminNavigation.tsx'
+import { BrandLogo } from './BrandLogo.tsx'
 
 /** A separate mobile dialog keeps the desktop sidebar's landmark semantics intact. */
 export function MobileNavigation({ isAdmin }: { isAdmin: boolean }) {
@@ -82,9 +83,9 @@ export function MobileNavigation({ isAdmin }: { isAdmin: boolean }) {
             </button>
             <Link
               to="/"
-              className="text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-4"
+              className="flex min-h-11 items-center outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-4"
             >
-              kansoCMS
+              <BrandLogo />
             </Link>
           </div>
           <AdminNavigation isAdmin={isAdmin} label="モバイル管理メニュー" />

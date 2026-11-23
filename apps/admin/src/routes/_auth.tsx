@@ -6,6 +6,7 @@ import { ApiError } from '../api/errors.ts'
 import { meQueryOptions, setupStatusQueryOptions } from '../api/queries.ts'
 import { unwrap } from '../api/request.ts'
 import { AdminNavigation, NavigationIcon } from '../components/AdminNavigation.tsx'
+import { BrandLogo } from '../components/BrandLogo.tsx'
 import { MobileNavigation } from '../components/MobileNavigation.tsx'
 import { toAdminHref } from '../routing.ts'
 
@@ -76,9 +77,9 @@ function AuthLayout() {
             to="/"
             aria-label="kansoCMS ダッシュボード"
             title={collapsed ? 'kansoCMS' : undefined}
-            className="text-lg font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-4"
+            className="flex min-h-11 min-w-11 items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-4"
           >
-            {collapsed ? 'k' : 'kansoCMS'}
+            <BrandLogo markOnly={collapsed} className={collapsed ? 'size-8' : 'h-9 w-36'} />
           </Link>
         </div>
         <AdminNavigation isAdmin={user.role === 'admin'} collapsed={collapsed} />
@@ -107,9 +108,10 @@ function AuthLayout() {
             <MobileNavigation isAdmin={user.role === 'admin'} />
             <Link
               to="/"
-              className="shrink-0 text-base font-semibold tracking-tight outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 lg:hidden"
+              className="flex min-h-11 min-w-11 shrink-0 items-center outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 lg:hidden"
             >
-              kansoCMS
+              <BrandLogo markOnly className="size-8 sm:hidden" />
+              <BrandLogo className="hidden h-8 w-32 sm:block" />
             </Link>
             <div className="ml-auto flex min-w-0 items-center gap-3">
               <span

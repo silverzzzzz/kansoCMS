@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <title>kansoCMS</title>
+  <style>
+    :root { color: #0a0a0a; }
+    @media (prefers-color-scheme: dark) { :root { color: #ffffff; } }
+  </style>
+  <path fill="currentColor" d="M8 7h10v50H8z M26 32L45 12Q51 12 58 10L38 32Z M26 38H39L54 53Q56 55 59 56Q52 58 45 57Z"/>
+</svg>

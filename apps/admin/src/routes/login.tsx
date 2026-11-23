@@ -3,6 +3,7 @@ import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { api } from '../api/client.ts'
 import { meQueryOptions, setupStatusQueryOptions } from '../api/queries.ts'
 import { unwrap } from '../api/request.ts'
+import { BrandLogo } from '../components/BrandLogo.tsx'
 import { getPasskey, passkeyErrorMessage, passkeysSupported } from '../lib/passkey.ts'
 import { safeAdminRedirect } from '../routing.ts'
 
@@ -41,7 +42,7 @@ function LoginPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-neutral-100 px-5 py-12 text-neutral-950">
       <section className="w-full max-w-md border border-neutral-200 bg-white p-6 shadow-sm sm:p-8">
-        <p className="text-sm font-medium text-neutral-500">kansoCMS</p>
+        <BrandLogo />
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">管理画面にログイン</h1>
         <p className="mt-2 text-sm leading-6 text-neutral-600">
           登録したパスキーでログインします。この端末の指紋・顔認証・PIN
