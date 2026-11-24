@@ -42,15 +42,16 @@ test.describe('admin content security policy', () => {
     })
 
     for (const path of [
-      '/admin/pages',
-      '/admin/posts/new',
-      '/admin/customize',
-      '/admin/media',
-      '/admin/settings',
-      '/admin/tools',
+      '/_admin/pages',
+      '/_admin/posts/new',
+      '/_admin/customize',
+      '/_admin/media',
+      '/_admin/settings',
+      '/_admin/tools',
     ]) {
       const response = await page.goto(path)
       expect(response?.headers()['content-security-policy'], path).toContain("script-src 'self'")
+      expect(response?.headers()['x-robots-tag'], path).toBe('noindex')
       await expect(page.locator('main')).toBeVisible()
       await page.waitForLoadState('networkidle')
       expect(await page.evaluate(() => window.__cspViolations), path).toEqual([])

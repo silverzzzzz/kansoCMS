@@ -52,7 +52,7 @@ test('desktop sidebar collapses, keeps navigation usable, and remembers the choi
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 })
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   const sidebar = page.getByRole('complementary', { name: 'サイドバー' })
   const nav = page.getByRole('navigation', { name: '管理メニュー', exact: true })
   await expect(sidebar).toHaveCSS('width', '240px')
@@ -82,7 +82,7 @@ test('desktop sidebar collapses, keeps navigation usable, and remembers the choi
   const pages = nav.getByRole('link', { name: '固定ページ', exact: true })
   await expect(pages).toHaveAttribute('title', '固定ページ')
   await pages.click()
-  await expect(page).toHaveURL(/\/admin\/pages\/?$/)
+  await expect(page).toHaveURL(/\/_admin\/pages\/?$/)
   await expect(pages).toHaveAttribute('aria-current', 'page')
   await expect(nav.getByRole('link', { name: 'ダッシュボード' })).not.toHaveAttribute(
     'aria-current',
@@ -107,7 +107,7 @@ test('sidebar remains usable when local storage is blocked', async ({ page }) =>
       },
     })
   })
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   await page.getByRole('button', { name: 'サイドバーを折りたたむ' }).click()
   await expect(page.getByRole('button', { name: 'サイドバーを展開' })).toBeVisible()
   await page.getByRole('button', { name: 'サイドバーを展開' }).click()
@@ -118,7 +118,7 @@ test('mobile drawer contains focus, scrolls, and restores focus on each dismissa
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 667 })
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   const trigger = page.getByRole('button', { name: 'メニューを開く' })
   const drawer = page.getByRole('dialog', { name: '管理メニュー', exact: true })
   const close = drawer.getByRole('button', { name: 'メニューを閉じる' })
@@ -178,7 +178,7 @@ test('mobile navigation closes on route changes, current-page links, and browser
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 812 })
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   const trigger = page.getByRole('button', { name: 'メニューを開く' })
   const drawer = page.getByRole('dialog', { name: '管理メニュー', exact: true })
   await trigger.click()
@@ -196,7 +196,7 @@ test('mobile navigation closes on route changes, current-page links, and browser
 })
 
 test('resizing closes the modal and preserves the desktop preference', async ({ page }) => {
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   await page.getByRole('button', { name: 'サイドバーを折りたたむ' }).click()
   await page.setViewportSize({ width: 768, height: 700 })
   const trigger = page.getByRole('button', { name: 'メニューを開く' })
@@ -220,7 +220,7 @@ test('editor navigation keeps administrator-only destinations hidden in both lay
   await page.route('**/api/v1/auth/me', (route) =>
     route.fulfill({ json: { principal: { kind: 'session', user: { ...user, role: 'editor' } } } }),
   )
-  await page.goto('/admin/')
+  await page.goto('/_admin/')
   await page.getByRole('button', { name: 'サイドバーを折りたたむ' }).click()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 800 })
@@ -244,7 +244,7 @@ test('page controls fit small screens while the table scrolls within its contain
       json: { principal: { kind: 'session', user: { ...user, name: user.name.repeat(20) } } },
     }),
   )
-  await page.goto('/admin/pages')
+  await page.goto('/_admin/pages')
   for (const width of [320, 375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 800 })
     await expect(page.getByRole('heading', { name: '固定ページ', exact: true })).toBeVisible()

@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { pngBytes } from '@kanso/core/testing'
+import { ADMIN_PATH } from '@kanso/shared'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ADMIN_CSP, MEDIA_CSP } from './security-headers.ts'
+import { ADMIN_CSP, ADMIN_ROBOTS, MEDIA_CSP } from './security-headers.ts'
 import { createTestApp, type TestApp } from './testing.ts'
 
 const HEADERS_FILE = new URL('../public/_headers', import.meta.url)
@@ -40,14 +41,22 @@ describe('security headers', () => {
     test.close()
   })
 
-  it('serves the same admin CSP from _headers and from the SPA fallback', async () => {
+  it('serves the same admin CSP and noindex from _headers and from the SPA fallback', async () => {
     const rules = parseHeadersFile(readFileSync(HEADERS_FILE, 'utf8'))
-    expect(rules['/admin/*']?.['content-security-policy']).toBe(ADMIN_CSP)
+    expect(rules[`${ADMIN_PATH}/*`]?.['content-security-policy']).toBe(ADMIN_CSP)
+    expect(rules[`${ADMIN_PATH}/*`]?.['x-robots-tag']).toBe(ADMIN_ROBOTS)
 
-    const response = await test.request('/admin/posts/12')
+    const response = await test.request(`${ADMIN_PATH}/posts/12`)
     expect(response.status).toBe(200)
     expect(response.headers.get('content-security-policy')).toBe(ADMIN_CSP)
+    expect(response.headers.get('x-robots-tag')).toBe('noindex')
     expect(response.headers.get('x-frame-options')).toBe('SAMEORIGIN')
+  })
+
+  it('serves no admin under /admin', async () => {
+    const response = await test.request('/admin/posts/12')
+    expect(response.status).toBe(404)
+    expect(response.headers.get('content-security-policy')).not.toBe(ADMIN_CSP)
   })
 
   it('keeps script to the admin bundle and forbids framing the admin', () => {

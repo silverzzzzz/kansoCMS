@@ -1,5 +1,5 @@
 import { buildSubmissionNotification } from '@kanso/core'
-import { notifyToAddresses, type SubmissionValues } from '@kanso/shared'
+import { ADMIN_PATH, notifyToAddresses, type SubmissionValues } from '@kanso/shared'
 import type { Context } from 'hono'
 import type { AppEnv } from '../env.ts'
 import type { PublicForm, Submission } from './submit.ts'
@@ -59,7 +59,7 @@ export async function notifySubmission(
     if (recipients.length === 0) return { skipped: 'no_recipients' }
 
     const site = await c.var.kanso.settings.site()
-    const adminUrl = `${c.env.SITE_URL}/admin/forms/${form.id}/submissions/${submission.id}`
+    const adminUrl = `${c.env.SITE_URL}${ADMIN_PATH}/forms/${form.id}/submissions/${submission.id}`
     const notification = buildSubmissionNotification({
       form: { name: form.name, fields: form.fieldsJson },
       values: notificationValues(form, submission),

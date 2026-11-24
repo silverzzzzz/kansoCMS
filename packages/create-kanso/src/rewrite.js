@@ -73,7 +73,7 @@ pnpm install
 pnpm db:migrate:local
 pnpm dev
 
-Open http://localhost:5174/admin/setup to create your local admin user and its passkey (a
+Open http://localhost:5174/_admin/setup to create your local admin user and its passkey (a
 starter site is installed unless you untick it; remove it later under 設定 → サンプルサイト).
 
 For production, set vars.SITE_URL in apps/server/wrangler.jsonc to your real domain, then:

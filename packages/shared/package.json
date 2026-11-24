@@ -6,6 +6,7 @@
   "description": "Shared zod schemas, types and constants for kansoCMS (browser-safe)",
   "exports": {
     ".": "./src/index.ts",
+    "./admin-path": "./src/admin-path.ts",
     "./zod-config": "./src/zod-config.ts"
   },
   "scripts": {

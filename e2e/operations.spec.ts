@@ -74,10 +74,10 @@ test.describe('editorial operations', () => {
     const slug = `${E2E_PREFIX}trash-${suffix}`
     const created = await createPage({ title, slug, status: 'published', bodyJson: body('trash') })
 
-    await page.goto(`/admin/pages/${created.id}`)
+    await page.goto(`/_admin/pages/${created.id}`)
     await page.getByRole('button', { name: '削除', exact: true }).click()
     await page.getByRole('dialog').getByRole('button', { name: '削除', exact: true }).click()
-    await expect(page).toHaveURL(/\/admin\/pages\/?$/)
+    await expect(page).toHaveURL(/\/_admin\/pages\/?$/)
     await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
     expect((await apiRequest.get(`/${slug}`)).status()).toBe(404)
 
@@ -102,7 +102,7 @@ test.describe('editorial operations', () => {
       bodyJson: body(text),
     })
 
-    await page.goto(`/admin/pages/${created.id}`)
+    await page.goto(`/_admin/pages/${created.id}`)
     await page.getByRole('button', { name: '共有リンクを発行', exact: true }).click()
     const issued = page.locator('input[readonly]')
     await expect(issued).toHaveValue(/\/preview\/share\//)
@@ -139,14 +139,14 @@ test.describe('editorial operations', () => {
     )
     const label = `E2E リンク ${uniqueSuffix()}`
 
-    await page.goto('/admin/menus/new')
+    await page.goto('/_admin/menus/new')
     await page.getByLabel('名前', { exact: true }).fill(`${E2E_MENU_NAME_PREFIX}ヘッダー`)
     await page.getByLabel(/^スラッグ/).fill('header')
     await page.getByRole('button', { name: '+ 項目を追加', exact: true }).click()
     await page.getByLabel('項目 1 のラベル', { exact: true }).fill(label)
     await page.getByLabel('項目 1 のリンク先', { exact: true }).fill('/search')
     await page.getByRole('button', { name: '保存', exact: true }).click()
-    await expect(page).toHaveURL(/\/admin\/menus\/?$/)
+    await expect(page).toHaveURL(/\/_admin\/menus\/?$/)
 
     const visitor = await browser.newContext({ baseURL })
     try {
@@ -171,7 +171,7 @@ test.describe('editorial operations', () => {
       bodyJson: body(`exported ${suffix}`),
     })
 
-    await page.goto('/admin/tools')
+    await page.goto('/_admin/tools')
     const downloading = page.waitForEvent('download')
     await page.getByRole('button', { name: 'JSON をダウンロード', exact: true }).click()
     const file = await (await downloading).path()
@@ -197,11 +197,11 @@ test.describe('editorial operations', () => {
     const name = `E2E Editor ${suffix}`
     const email = `${E2E_PREFIX}${suffix}@example.com`
 
-    await page.goto('/admin/users')
+    await page.goto('/_admin/users')
     await page.getByLabel('名前', { exact: true }).fill(name)
     await page.getByLabel('メールアドレス', { exact: true }).fill(email)
     await page.getByRole('button', { name: 'ユーザーを追加', exact: true }).click()
-    const link = page.locator('code').filter({ hasText: '/admin/passkey-link?token=' })
+    const link = page.locator('code').filter({ hasText: '/_admin/passkey-link?token=' })
     await expect(link).toBeVisible()
     const invitation = new URL((await link.innerText()).trim())
     const row = page.locator('tbody tr').filter({ hasText: email })
@@ -213,7 +213,7 @@ test.describe('editorial operations', () => {
       await addVirtualAuthenticator(inviteePage)
       await inviteePage.goto(`${invitation.pathname}${invitation.search}`)
       await inviteePage.getByRole('button', { name: 'パスキーを作成してログイン' }).click()
-      await expect(inviteePage).toHaveURL(/\/admin\/account\/?$/)
+      await expect(inviteePage).toHaveURL(/\/_admin\/account\/?$/)
       await expect(inviteePage.getByText(email)).toBeVisible()
       // An editor has the content screens, not the administrator's.
       const nav = inviteePage.getByRole('navigation', { name: '管理メニュー', exact: true })
@@ -233,13 +233,13 @@ test.describe('editorial operations', () => {
     const name = `E2E Admin ${suffix}`
     const email = `${E2E_PREFIX}admin-${suffix}@example.com`
 
-    await page.goto('/admin/users')
+    await page.goto('/_admin/users')
     await page.getByLabel('名前', { exact: true }).fill(name)
     await page.getByLabel('メールアドレス', { exact: true }).fill(email)
     // The only select of the invitation form (each row of the table has its own).
     await page.locator('form').getByRole('combobox').selectOption('admin')
     await page.getByRole('button', { name: 'ユーザーを追加', exact: true }).click()
-    const link = page.locator('code').filter({ hasText: '/admin/passkey-link?token=' })
+    const link = page.locator('code').filter({ hasText: '/_admin/passkey-link?token=' })
     await expect(link).toBeVisible()
     const invitation = new URL((await link.innerText()).trim())
 
@@ -249,15 +249,15 @@ test.describe('editorial operations', () => {
       await addVirtualAuthenticator(inviteePage)
       await inviteePage.goto(`${invitation.pathname}${invitation.search}`)
       await inviteePage.getByRole('button', { name: 'パスキーを作成してログイン' }).click()
-      await expect(inviteePage).toHaveURL(/\/admin\/account\/?$/)
+      await expect(inviteePage).toHaveURL(/\/_admin\/account\/?$/)
 
       // Giving up your own role asks first, then leaves the administrator's screens.
-      await inviteePage.goto('/admin/users')
+      await inviteePage.goto('/_admin/users')
       await inviteePage.getByLabel(`${name} の権限`, { exact: true }).selectOption('editor')
       const dialog = inviteePage.getByRole('dialog').filter({ hasText: '自分を編集者にする' })
       await expect(dialog).toBeVisible()
       await dialog.getByRole('button', { name: '編集者にする', exact: true }).click()
-      await expect(inviteePage).toHaveURL(/\/admin\/?$/)
+      await expect(inviteePage).toHaveURL(/\/_admin\/?$/)
       const nav = inviteePage.getByRole('navigation', { name: '管理メニュー', exact: true })
       await expect(nav.getByRole('link', { name: '固定ページ', exact: true })).toBeVisible()
       await expect(nav.getByRole('link', { name: 'ユーザー', exact: true })).toHaveCount(0)
@@ -276,7 +276,7 @@ test.describe('editorial operations', () => {
     const suffix = uniqueSuffix()
     const filename = `${E2E_PREFIX}photo-${suffix}.png`
 
-    await page.goto('/admin/media')
+    await page.goto('/_admin/media')
     await page.locator('input[type="file"]').waitFor({ state: 'attached' })
     // A real 1200x600 picture, drawn in the page and handed to the upload input.
     await page.evaluate(async (name) => {

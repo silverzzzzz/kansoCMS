@@ -71,7 +71,7 @@ test.describe('passkeys', () => {
 
     await test.step('add a passkey on the account screen', async () => {
       await shareSession(page.context(), apiRequest)
-      await page.goto('/admin/account')
+      await page.goto('/_admin/account')
       await expect(page.getByRole('heading', { name: 'アカウント' })).toBeVisible()
       await expect(page.getByText(E2E_EMAIL)).toBeVisible()
       await page.getByRole('button', { name: 'パスキーを追加' }).click()
@@ -81,13 +81,13 @@ test.describe('passkeys', () => {
 
     await test.step('sign out and sign in with the new passkey', async () => {
       await page.getByRole('button', { name: 'ログアウト' }).click()
-      await expect(page).toHaveURL(/\/admin\/login/)
+      await expect(page).toHaveURL(/\/_admin\/login/)
       await page.getByRole('button', { name: 'パスキーでログイン' }).click()
       await expect(page.getByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeAttached()
     })
 
     await test.step('the passkey shows when it was used, and can be removed', async () => {
-      await page.goto('/admin/account')
+      await page.goto('/_admin/account')
       const row = page.locator('tbody tr').filter({ hasText: name })
       await expect(row).toBeVisible()
       await expect(row.getByRole('cell', { name: '未使用' })).toHaveCount(0)
@@ -109,7 +109,7 @@ test.describe('passkeys', () => {
         await expect(page.getByRole('heading', { name: 'パスキーを登録' })).toBeVisible()
         await expect(page.getByText(`(${E2E_EMAIL})`)).toBeVisible()
         await page.getByRole('button', { name: 'パスキーを作成してログイン' }).click()
-        await expect(page).toHaveURL(/\/admin\/account$/)
+        await expect(page).toHaveURL(/\/_admin\/account$/)
         await renameNewestPasskey(page, name)
       })
 
@@ -119,7 +119,7 @@ test.describe('passkeys', () => {
       })
 
       await test.step('remove the passkey again', async () => {
-        await page.goto('/admin/account')
+        await page.goto('/_admin/account')
         await removePasskey(page, name)
       })
     } finally {

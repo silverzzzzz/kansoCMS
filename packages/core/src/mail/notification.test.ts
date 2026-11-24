@@ -22,7 +22,7 @@ describe('buildSubmissionNotification', () => {
       },
       submissionId: 42,
       siteTitle: 'Example <Site>',
-      adminUrl: 'https://example.com/admin/forms/7/submissions/42',
+      adminUrl: 'https://example.com/_admin/forms/7/submissions/42',
     })
 
     expect(notification.subject).toBe('[Example <Site>] Contact & Support')
@@ -35,7 +35,7 @@ describe('buildSubmissionNotification', () => {
         'Missing: ',
         '',
         'Submission #42',
-        'https://example.com/admin/forms/7/submissions/42',
+        'https://example.com/_admin/forms/7/submissions/42',
       ].join('\n'),
     )
     expect(notification.html).toContain('<!doctype html>')
@@ -49,7 +49,7 @@ describe('buildSubmissionNotification', () => {
     expect(notification.html.indexOf('I agree')).toBeLessThan(notification.html.indexOf('Updates'))
     expect(notification.html).toContain('<td>Yes</td>')
     expect(notification.html).toContain('<td>No</td>')
-    expect(notification.html).toContain('https://example.com/admin/forms/7/submissions/42')
+    expect(notification.html).toContain('https://example.com/_admin/forms/7/submissions/42')
     expect(notification.html).not.toContain('<script>')
   })
 })

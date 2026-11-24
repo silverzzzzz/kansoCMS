@@ -9,7 +9,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 
 - **Hono 1 本の Worker** に「公開サイト SSR」「REST API」「管理画面 SPA 配信」「R2 メディア配信」を同居させる。デプロイ単位は 1 つ。
 - 公開サイトは **hono/jsx** で SSR（クライアント JS ゼロが既定、JSON-LD / OG / sitemap / feed を標準装備）。
-- 管理画面は **React + Vite の SPA**（Tiptap エディタ、フォームビルダー）。ビルド成果物は Worker の Static Assets として `/admin/` 配下に載せる。
+- 管理画面は **React + Vite の SPA**（Tiptap エディタ、フォームビルダー）。ビルド成果物は Worker の Static Assets として `/_admin/` 配下に載せる。
 - データは **D1 + Drizzle ORM**、メディアは **R2**、通知メールは **Cloudflare Email Service (`send_email` binding)**、スパム対策は **Turnstile**。
 - 「microCMS 的な headless 利用」は同じ REST API を API キーで叩くだけ。公開サイトを自前 (Astro 等) で作りたい人はそちらを使う。
 
@@ -42,7 +42,7 @@ Phase 1 (2026-09-13 完了) 時点の実装に合わせて更新済み。タス�
 | DB | **D1 + Drizzle ORM** | drizzle-kit で SQL マイグレーション生成 → `wrangler d1 migrations apply` |
 | ストレージ | **R2** | Worker 経由 `/media/*` で配信 (Cache-Control 付与)。将来 R2 カスタムドメイン直配信に切替可能 |
 | バリデーション | zod | server / admin / 外部クライアントで共有 |
-| 認証 | パスキー (WebAuthn。CBOR / COSE の解析は自前、署名検証は WebCrypto)、D1 セッション、Cookie | パスワードなし (Phase 6)。外部 IdP・メール送信は不要。復旧は wrangler で発行する登録リンク。`/admin` に Cloudflare Access を被せる運用も可 |
+| 認証 | パスキー (WebAuthn。CBOR / COSE の解析は自前、署名検証は WebCrypto)、D1 セッション、Cookie | パスワードなし (Phase 6)。外部 IdP・メール送信は不要。復旧は wrangler で発行する登録リンク。`/_admin` に Cloudflare Access を被せる運用も可 |
 | メール | Cloudflare Email Service (`send_email` binding) | API キー不要。ドメイン onboarding だけ |
 | Bot 対策 | honeypot + Turnstile (任意) | honeypot は常時。Turnstile はフォームごとに ON/OFF (既定 OFF)、サイトキーは設定画面・シークレットは Worker secret |
 | エディタ | Tiptap (ProseMirror JSON を正) | サーバで JSON → HTML 生成し `body_html` にキャッシュ。クライアント HTML を信用しない |
@@ -72,7 +72,7 @@ kansoCMS/
 │   ├── server/                     # ★唯一のデプロイ単位 (Cloudflare Worker)
 │   │   ├── src/
 │   │   │   ├── index.ts            # export default { fetch, scheduled }
-│   │   │   ├── app.ts              # secureHeaders → kanso → /api/v1 → /media → /admin → /* (site)
+│   │   │   ├── app.ts              # secureHeaders → kanso → /api/v1 → /media → /_admin → /* (site)
 │   │   │   ├── env.ts              # AppEnv (Bindings = worker-configuration.d.ts の Env, Variables = kanso/principal)
 │   │   │   ├── bindings.ts         # 任意の binding (Workers AI)。既定の Env には無い
 │   │   │   ├── scheduled.ts        # Cron Trigger: ゴミ箱の自動削除と期限切れデータの掃除
@@ -95,8 +95,8 @@ kansoCMS/
 │   │   │   ├── forms/              # 公開フォームの送信・Turnstile・通知メール
 │   │   │   ├── starter/            # サンプルサイトの内容と投入
 │   │   │   ├── media/              # /media/:key+ → R2 (immutable Cache-Control)
-│   │   │   └── admin.ts            # /admin/* → ASSETS の /admin/index.html を返す (SPA fallback)
-│   │   ├── public/                 # themes/*.css、starter/ (サンプル画像)。public/admin/ は admin ビルド出力 (gitignore)
+│   │   │   └── admin.ts            # /_admin/* → ASSETS の /_admin/index.html を返す (SPA fallback)
+│   │   ├── public/                 # themes/*.css、starter/ (サンプル画像)。public/_admin/ は admin ビルド出力 (gitignore)
 │   │   ├── scripts/passkey-link.mjs   # `pnpm passkey:link` (パスキーの復旧リンクを D1 に発行)
 │   │   ├── scripts/setup-token.mjs    # `pnpm setup:token` (本番のセットアップ用トークンを secret に設定)
 │   │   ├── worker-configuration.d.ts  # `pnpm types` (wrangler types) 生成。手書き禁止
@@ -106,7 +106,7 @@ kansoCMS/
 │   │
 │   └── admin/                      # 管理画面 SPA (React 19 + Vite + Tailwind v4)
 │       ├── src/
-│       │   ├── main.tsx / router.tsx   # TanStack Router (basepath /admin), QueryClient
+│       │   ├── main.tsx / router.tsx   # TanStack Router (basepath /_admin), QueryClient
 │       │   ├── routes/             # file-based: setup, login, passkey-link, _auth/(index, activity, analytics, pages, customize,
 │       │   │                       #   menus, posts, post-types, tags, media, forms, redirects, tools, settings, users,
 │       │   │                       #   api-keys, account)。routeTree.gen.ts は生成物
@@ -114,7 +114,7 @@ kansoCMS/
 │       │   ├── components/         # ui, content/ (ContentForm, SeoPanel, ShareLinks, AI ボタン), editor/ (Tiptap),
 │       │   │                       #   customize/, forms/, media/ (picker, upload), starter/, MenuForm, PostFieldsEditor
 │       │   └── lib/                # datetime, page-tree, passkey, seo-check, schedule, ai, image-variants (縮小版をブラウザで生成)
-│       ├── vite.config.ts          # base: /admin/, outDir: ../server/public/admin, dev proxy /api,/media → :5173
+│       ├── vite.config.ts          # base: /_admin/, outDir: ../server/public/_admin, dev proxy /api,/media → :5173
 │       └── tsconfig.json           # jsxImportSource: "react"
 │
 ├── packages/
@@ -177,7 +177,7 @@ WordPress の `wp_posts` のような単一テーブル化はせず、**固定�
 
 | テーブル | 主な列 | 備考 |
 |---|---|---|
-| `users` | id, email (uniq), name, role (`admin`/`editor`), webauthn_user_id (uniq), slug (uniq), bio, avatar_media_id, timestamps | 1 人目は `/admin/setup`、2 人目以降は管理者の招待 (Phase 12)。パスワードは持たない。`slug`・`bio`・アバターは著者ページ用 |
+| `users` | id, email (uniq), name, role (`admin`/`editor`), webauthn_user_id (uniq), slug (uniq), bio, avatar_media_id, timestamps | 1 人目は `/_admin/setup`、2 人目以降は管理者の招待 (Phase 12)。パスワードは持たない。`slug`・`bio`・アバターは著者ページ用 |
 | `passkeys` | id, user_id, credential_id (uniq), public_key (SPKI), algorithm (ES256/RS256), sign_count, transports_json, backed_up, name, created_at, last_used_at | 1 ユーザー 10 個まで。最後の 1 つは削除不可 |
 | `auth_challenges` | id (= チャレンジ), purpose (`setup`/`login`/`register`/`link`), user_id, data_json, expires_at | 5 分、1 回限り (`delete … returning`) |
 | `passkey_links` | id (= トークンの SHA-256), user_id, expires_at, created_at | パスキーの登録リンク。1 回限り。CLI (`pnpm passkey:link`) は 1 時間、管理画面の招待・再発行は 7 日。再発行すると同じユーザーの古いリンクは消える |
@@ -233,7 +233,7 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET /:type/:slug` | `site` — 投稿詳細 | 公開 |
 | `GET /:type/category/:slug`, `GET /:type/tag/:slug` | `site` — 絞込一覧 | 公開 |
 | `GET /:type/author/:slug` | `site` — 著者ページ。その投稿タイプに公開済みの投稿がない著者は 404 | 公開 |
-| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。robots.txt は `site.disallowAiTraining` のとき `*` グループに `Content-Signal: search=yes, ai-train=no` を入れ、学習用クローラー (`AI_TRAINING_CRAWLERS`、Cloudflare の管理 robots.txt と同じ一覧) を `Disallow: /` にする (Phase 13)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
+| `GET /sitemap.xml`, `/robots.txt`, `/:type/feed.xml` | `site/feeds` — sitemap は index 可の公開コンテンツ全般 (下記 §6)。robots.txt は `/api` と `/preview` を `Disallow` にする (管理画面のパスは書かない。§9)。`site.disallowAiTraining` のとき `*` グループに `Content-Signal: search=yes, ai-train=no` を入れ、学習用クローラー (`AI_TRAINING_CRAWLERS`、Cloudflare の管理 robots.txt と同じ一覧) を `Disallow: /` にする (Phase 13)。feed は Atom 最新 20 件 + `X-Robots-Tag: noindex` | 公開 |
 | `GET /preview/:kind/:id` | `site/preview` — 下書きを描画。`noindex` + `cache-control: no-store` | セッションのみ (API キーは 401) |
 | `GET /preview/share/:token` | `site/preview` — 共有リンクで下書きを描画。`noindex, nofollow` + `no-store` | 公開 (有効なリンクのみ) |
 | `GET /media/:key+` | `media` — R2 → `Cache-Control: public, max-age=31536000, immutable`、sandbox の CSP、`Cross-Origin-Resource-Policy: cross-origin`。縮小版も同じ経路 | 公開 |
@@ -261,20 +261,20 @@ Phase 8〜10 で既存テーブルに足した列: `pages.deleted_at` / `posts.d
 | `GET/PATCH /api/v1/auth/profile` | 自分の著者プロフィール (slug・紹介文・アバター) | セッションのみ |
 | `GET/POST/DELETE /api/v1/starter` | サンプルサイトの状態取得・投入 (201、投入済みは 409)・削除 (`{ removed, kept }`、未投入は 404) | セッションの `admin` のみ |
 | `POST /api/v1/public/forms/:slug/submissions` | Phase 2: Turnstile 検証 → D1 保存 → `ctx.waitUntil(email.send)` | 公開 (Turnstile) |
-| `GET /admin/*` | Static Assets が先に解決。未ヒットは Worker が `/admin/index.html` を返す | SPA 自体は公開、API で守る |
+| `GET /_admin/*` | Static Assets が先に解決。未ヒットは Worker が `/_admin/index.html` を返す。どちらも `X-Robots-Tag: noindex` | SPA 自体は公開、API で守る |
 
 URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (同じ最上位 slug は作れないので一意)。実体のある公開コンテンツをリダイレクトより優先する。
 
 解決順序 (Static Assets は Worker より先に評価される):
-`assets (/admin/*.js, /themes/*.css …)` → `Hono: /api/v1` → `/media` → `/admin/*` (SPA fallback) → `/*` (site) → 404 (テーマの 404 ページ)。
+`assets (/_admin/*.js, /themes/*.css …)` → `Hono: /api/v1` → `/media` → `/_admin/*` (SPA fallback) → `/*` (site) → 404 (テーマの 404 ページ)。
 
 `wrangler.jsonc` の `assets.not_found_handling` は `"none"` にし、SPA fallback は Hono 側で行う（`single-page-application` にすると公開サイトの 404 まで admin の HTML になるため）。
 
 ### 認証 (実装済み)
 
 - ログイン: パスキーのみ (Phase 6、[tasks/phase-6.md](tasks/phase-6.md))。オプション発行 → ブラウザの `navigator.credentials` → 検証の 2 往復。ユーザー確認 (UV) 必須、discoverable credential でメールアドレスを聞かない。RP ID はリクエストのホスト名、origin はリクエストの origin (localhost だけは管理画面の開発サーバー経由を許すため、localhost の `Origin` を受け入れる)。
-- パスキーを失ったとき: `pnpm passkey:link <email> [--remote] [--url <サイト>]` が D1 (`DB` バインディング) に 1 時間有効・1 回限りの登録リンクを書き込み、`/admin/passkey-link?token=…` で新しいパスキーを登録してログインする。D1 に書ける = Cloudflare アカウントの管理者であることを本人確認とする。
-- 本番の初回セットアップ: デプロイしてから管理者を作るまでの間に他人が `/admin/setup` を開けないよう、`localhost` 以外ではシークレット `SETUP_TOKEN` がない限りセットアップを拒否する。`pnpm setup:token [--url <サイト>]` がランダムな値を `wrangler secret put` で設定し、`/admin/setup#token=…` のリンクを表示する (フラグメントなのでサーバーのログに残らない。管理画面が読み取ってアドレスバーから消す)。シークレットを書ける = Cloudflare アカウントの管理者であることを本人確認とする点は `passkey:link` と同じ。
+- パスキーを失ったとき: `pnpm passkey:link <email> [--remote] [--url <サイト>]` が D1 (`DB` バインディング) に 1 時間有効・1 回限りの登録リンクを書き込み、`/_admin/passkey-link?token=…` で新しいパスキーを登録してログインする。D1 に書ける = Cloudflare アカウントの管理者であることを本人確認とする。
+- 本番の初回セットアップ: デプロイしてから管理者を作るまでの間に他人が `/_admin/setup` を開けないよう、`localhost` 以外ではシークレット `SETUP_TOKEN` がない限りセットアップを拒否する。`pnpm setup:token [--url <サイト>]` がランダムな値を `wrangler secret put` で設定し、`/_admin/setup#token=…` のリンクを表示する (フラグメントなのでサーバーのログに残らない。管理画面が読み取ってアドレスバーから消す)。シークレットを書ける = Cloudflare アカウントの管理者であることを本人確認とする点は `passkey:link` と同じ。
 - セッション: Cookie `kanso_session` (`HttpOnly; SameSite=Lax`, 本番は `Secure`)。パスキーの検証後に発行。
 - API キー: `kanso_<base64url>` を `x-api-key` ヘッダで送る。D1 には SHA-256 ハッシュのみ保存。`scope` は `read` / `write`。
 - ロール: `admin` / `editor`。設定・ユーザー管理・API キー・サンプルサイトは `admin` のみ (`requireRole('admin')`)。生 HTML ブロックと、設定のエクスポート / インポートも `admin` のセッションだけ。
@@ -358,8 +358,8 @@ URL 解決順序は **ページ → 投稿タイプ → リダイレクト** (�
 
 - CSRF: Cookie は `SameSite=Lax` + 変更系 API で `Origin` ヘッダ検証。
 - CSP (Phase 13、`apps/server/src/security-headers.ts`):
-  - 管理画面 (`/admin/*`) は `ADMIN_CSP`。スクリプトは管理画面のバンドルだけ (`script-src 'self'`。inline も eval もなし)、他サイトへの埋め込み禁止 (`frame-ancestors 'none'`)、`object-src 'none'`、`base-uri 'self'` (カスタマイズのプレビューが `<base href>` を入れる)、`form-action 'self'`、`connect-src 'self'`。カスタマイズのプレビュー (`srcdoc`。スクリプトは動かない) はこの方針を引き継ぐので、公開ページの見た目を保つためにスタイル・画像・フォント・メディア・フレームは `https:` も許す。
-  - Static Assets が Worker より先に返す `/admin/` と `/admin/index.html` には `apps/server/public/_headers` で同じ値を付け、テストで一致を確かめる。`vite preview` と本番は `_headers` を適用するが、`vite dev` は適用しない (クライアント側のルートを直接開いたときは Worker の SPA fallback が付ける)。
+  - 管理画面 (`/_admin/*`) は `ADMIN_CSP`。スクリプトは管理画面のバンドルだけ (`script-src 'self'`。inline も eval もなし)、他サイトへの埋め込み禁止 (`frame-ancestors 'none'`)、`object-src 'none'`、`base-uri 'self'` (カスタマイズのプレビューが `<base href>` を入れる)、`form-action 'self'`、`connect-src 'self'`。カスタマイズのプレビュー (`srcdoc`。スクリプトは動かない) はこの方針を引き継ぐので、公開ページの見た目を保つためにスタイル・画像・フォント・メディア・フレームは `https:` も許す。
+  - Static Assets が Worker より先に返す `/_admin/` と `/_admin/index.html` には `apps/server/public/_headers` で同じ値を付け、テストで一致を確かめる。`vite preview` と本番は `_headers` を適用するが、`vite dev` は適用しない (クライアント側のルートを直接開いたときは Worker の SPA fallback が付ける)。
   - zod は `new Function` が使えるかを試し、CSP 下ではその試行が違反として報告される。管理画面は最初に `@kanso/shared/zod-config` の `disableZodJit()` (`jitless`) を呼んで試行させない。
   - 公開サイトには CSP を付けない (テーマ・head HTML・生 HTML ブロックの自由度のため)。付けるなら Turnstile 用に `script-src` で `https://challenges.cloudflare.com` を許可する。
 - メディア (`/media/*`): `Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox` で、ファイルを直接開いてもスクリプトは動かない (Chrome 157・Edge 157・Firefox 155 で画像も PDF も表示されることを確認)。`Cross-Origin-Resource-Policy` は `/media` だけ `cross-origin` (別オリジンの headless フロントエンドが `<img>` で埋め込めるように。Phase 12 までは Hono の `secureHeaders` の既定 `same-origin` が付いていて、ブラウザが別オリジンからの読み込みを拒んでいた)、それ以外の応答は `same-origin`。
@@ -387,14 +387,14 @@ Worker / D1 / R2 名と `SITE_URL`、migration コマンド、root 名と README
 pnpm i
 pnpm db:migrate:local                                       # wrangler d1 migrations apply --local
 pnpm dev                                                    # server :5173 (workerd) + admin :5174 (proxy)
-# → http://localhost:5174/admin/setup で初期ユーザー作成
+# → http://localhost:5174/_admin/setup で初期ユーザー作成
 pnpm typecheck && pnpm check && pnpm test && pnpm build     # タスク完了時のゲート
 pnpm run deploy                                             # 初回は D1 / R2 を名前で作成 (または同名につなぐ)
 pnpm db:migrate                                             # 本番 D1 へ適用。2 回目以降はデプロイの前に
 ```
 
 - `pnpm dev`: 2 プロセス並列。admin の Vite dev server が `/api` `/media` を server にプロキシ。5173 が使えない場合は `pnpm --filter @kanso/server exec vite dev --port 5199` で server 単体を起動できる。
-- `pnpm build`: admin → `apps/server/public/admin/` → server の `vite build` が `public/` ごと client 出力へ同梱。
+- `pnpm build`: admin → `apps/server/public/_admin/` → server の `vite build` が `public/` ごと client 出力へ同梱。
 - `pnpm test`: Vitest。モックだけでなく実 DB でも動かす。`@kanso/core/testing` が Node 組み込みの SQLite を D1 の API の裏に置き (全マイグレーション適用、バインド変数 100 個・LIKE 50 バイトの制限とクエリ数カウンタ付き)、`apps/server/src/testing.ts` が Worker 全体をその上で動かす。Cloudflare のアカウントも起動中のサーバーも要らない。
 - `e2e/`: Playwright の Chromium E2E。`pnpm e2e` で実行し、通常の `pnpm test` には含めない。 Phase 13 で、axe-core によるアクセシビリティ検査 (`accessibility.spec.ts`。公開ページと管理画面の主な画面、WCAG 2.1 A/AA の serious / critical で失敗) と、管理画面の CSP 違反の検査 (`security-headers.spec.ts`) を足した。
 - `.github/workflows/ci.yml`: 2 ジョブ (`gates`: typecheck/check/test/build、`e2e`: Chromium + ローカル D1 で Playwright)。デプロイは CI に含めない。
@@ -452,6 +452,7 @@ BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数
 - **D1 と R2 は wrangler の自動作成に任せる** (2026-11-20、Phase 13 T77)。`wrangler.jsonc` に `database_id` を書かず、最初のデプロイが名前で作る (同じ名前があればそれにつなぐ)。初回だけ「デプロイ → マイグレーション」の順。ローカルのデータベースファイルの名前は `preview_database_id` (仮の ID) で固定し、本番の ID が書き戻されてもローカルのデータは同じファイルに残る。wrangler 4.150 より前は、書き戻しで `migrations_dir` を壊すため 4.160 以上にした。
 - **上書き事故は「開いた版」との比較で防ぐ** (2026-11-20、Phase 13 T72)。固定ページ・投稿の `PATCH` は任意の `baseUpdatedAt` を受け取り、現在の `updated_at` (秒単位) と違えば 409 `stale`。編集ロックや同時編集はしない。比較は書き込み前の読み出しで行うので、2 つの保存が同じ瞬間に届いたときまでは防がない (人の操作では起きにくい)。管理画面は編集を始めたときの版を固定して送る (TanStack Query がフォーカス時に読み直しても基準は変わらない)。
 - **Node.js は 26 以上にする** (2026-11-22、ユーザー判断)。開発・テスト・ビルドに使う版で、本番の Worker (workerd) には関係しない。CI も 26 で回す。
+- **管理画面は `/_admin` に置き、検索結果に出さない** (2026-11-24、ユーザー判断)。パスは `packages/shared/src/admin-path.ts` の `ADMIN_PATH` で決め、Worker・管理画面のビルドとルーター・フォーム通知のリンク・予約スラッグが読む (`apps/server/public/_headers` は同じ値を書き、テストで一致を確かめる)。管理画面の HTML は `X-Robots-Tag: noindex` と `<meta name="robots" content="noindex">` を返す。robots.txt には管理画面のパスを書かない。noindex はクロールできるページでしか読まれず、書けば管理画面の場所を誰にでも知らせることになるため。旧パス `/admin` はリダイレクトせず 404 にし、予約スラッグには残す。
 
 タスク単位の細かい決定 (エディタの非制御化、スラッグ規則、purge 対象の詳細など) は [tasks/phase-1.md](tasks/phase-1.md) / [tasks/phase-2.md](tasks/phase-2.md) の各「決定」を参照。
 

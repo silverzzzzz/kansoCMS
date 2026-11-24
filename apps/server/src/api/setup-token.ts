@@ -12,7 +12,7 @@ import { secret } from '../secrets.ts'
  * - `required`: the `SETUP_TOKEN` secret, sent in the `x-setup-token` header.
  * - `unset`: setup is refused until a token of at least 16 characters is
  *   configured. Every deployed site starts here, which closes the window in
- *   which whoever opens /admin/setup first would become the administrator.
+ *   which whoever opens /_admin/setup first would become the administrator.
  */
 export function setupTokenState(c: Context<AppEnv>): SetupTokenState {
   const token = secret(c.env, 'SETUP_TOKEN')

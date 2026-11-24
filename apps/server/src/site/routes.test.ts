@@ -1043,7 +1043,6 @@ describe('robots.txt', () => {
     expect(body).toBe(
       [
         'User-agent: *',
-        'Disallow: /admin',
         'Disallow: /api',
         'Disallow: /preview',
         '',

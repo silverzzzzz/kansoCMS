@@ -13,7 +13,7 @@ const removeQuerySchema = z.object({ reassignTo: idSchema.optional() })
  * User management, for administrators signed in to the admin (never API
  * keys). A new user gets a one-time registration link instead of a password:
  * the response carries the raw token once, and the admin UI turns it into a
- * `/admin/passkey-link?token=…` URL on the origin the team signs in on (a
+ * `/_admin/passkey-link?token=…` URL on the origin the team signs in on (a
  * passkey belongs to the domain it is created on).
  */
 export const users = new Hono<AppEnv>()

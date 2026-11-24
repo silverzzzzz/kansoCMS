@@ -80,7 +80,7 @@ describe('project rewrites', () => {
       'wrangler d1 list',
       'pnpm db:migrate:local',
       'pnpm dev',
-      '/admin/setup',
+      '/_admin/setup',
       'SITE_URL',
       'pnpm db:migrate',
       'pnpm run deploy',

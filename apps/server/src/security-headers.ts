@@ -1,5 +1,5 @@
 /**
- * Content-Security-Policy for the admin SPA (`/admin/*`). The admin is the part
+ * Content-Security-Policy for the admin SPA (`/_admin/*`). The admin is the part
  * that holds a session able to change the site, so the policy is about script:
  * only the admin bundle itself may run, nothing may frame the admin, and
  * plugins, foreign `<base>` URLs and foreign form targets are off. (`base-uri
@@ -12,7 +12,7 @@
  * HTML and raw HTML blocks. That frame never runs script (no `allow-scripts`).
  *
  * Served twice with the same value: by `public/_headers` for files that Static
- * Assets answers before the Worker runs (`/admin/`, `/admin/index.html`), and
+ * Assets answers before the Worker runs (`/_admin/`, `/_admin/index.html`), and
  * by `admin.ts` for client-side routes. A test keeps the two identical.
  */
 export const ADMIN_CSP = [
@@ -29,6 +29,14 @@ export const ADMIN_CSP = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join('; ')
+
+/**
+ * Keeps every admin page out of search results. Served next to ADMIN_CSP (both
+ * places, same test) and repeated by the `<meta name="robots">` of the admin's
+ * index.html. robots.txt does not list the admin: a crawler only sees noindex
+ * on a page it may fetch, and the line would point everyone to the admin.
+ */
+export const ADMIN_ROBOTS = 'noindex'
 
 /**
  * Policy for an uploaded file opened directly (`/media/*`): a sandboxed

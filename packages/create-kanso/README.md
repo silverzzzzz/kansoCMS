@@ -50,7 +50,7 @@ Only `docs/tasks/` is omitted from the upstream archive. Workspace directories r
 the lockfile and CI can use `pnpm install --frozen-lockfile`.
 
 Local checkout copies additionally omit `node_modules/`, `.git/`, `dist/`, `.wrangler/`, `.astro/`,
-`apps/server/public/admin/`, `test-results/`, `playwright-report/`, `*.tsbuildinfo`, `.dev.vars`,
+`apps/server/public/_admin/`, `test-results/`, `playwright-report/`, `*.tsbuildinfo`, `.dev.vars`,
 `.dev.vars.*` (except `.dev.vars.example`) and `.env`. Symlinks are skipped in local sources;
 archive links and extended headers are skipped. Source and target directories must not overlap.
 Unsafe archive paths and destination symlinks are rejected, including with `--force`.
@@ -74,7 +74,7 @@ pnpm db:migrate:local
 pnpm dev
 ```
 
-Open `http://localhost:5174/admin/setup` to create your local admin account.
+Open `http://localhost:5174/_admin/setup` to create your local admin account.
 For production, set `vars.SITE_URL` in `apps/server/wrangler.jsonc` to your real domain, then:
 
 ```sh

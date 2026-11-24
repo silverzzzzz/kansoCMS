@@ -1,3 +1,4 @@
+import { ADMIN_PATH } from '@kanso/shared'
 import { Hono } from 'hono'
 import { secureHeaders } from 'hono/secure-headers'
 import { admin } from './admin.ts'
@@ -27,7 +28,7 @@ export const app = new Hono<AppEnv>()
   .onError(onError)
   .route('/api/v1', api)
   .route('/media', media)
-  .route('/admin', admin)
+  .route(ADMIN_PATH, admin)
   .route('/', site)
 
 export type { ApiType } from './api/index.ts'

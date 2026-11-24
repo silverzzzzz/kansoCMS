@@ -39,7 +39,6 @@ describe('robots.txt and AI training', () => {
       [
         'User-agent: *',
         'Content-Signal: search=yes, ai-train=no',
-        'Disallow: /admin',
         'Disallow: /api',
         'Disallow: /preview',
         ...AI_TRAINING_CRAWLERS.flatMap((agent) => ['', `User-agent: ${agent}`, 'Disallow: /']),

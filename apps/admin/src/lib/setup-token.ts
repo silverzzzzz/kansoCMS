@@ -1,7 +1,7 @@
 import { SETUP_TOKEN_HEADER } from '@kanso/shared'
 
 /**
- * `pnpm setup:token --url …` prints `/admin/setup#token=…`. The fragment is
+ * `pnpm setup:token --url …` prints `/_admin/setup#token=…`. The fragment is
  * never sent to the server, so the token stays out of request logs.
  */
 export function tokenFromHash(hash: string): string {

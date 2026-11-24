@@ -36,8 +36,8 @@ Design notes live in [docs/architecture.md](docs/architecture.md) and the per-ta
 
 ```
 apps/
-  server/   Hono Worker: public SSR site, /api/v1, /media (R2), /admin (static SPA), /preview
-  admin/    React + Vite admin UI, built into apps/server/public/admin
+  server/   Hono Worker: public SSR site, /api/v1, /media (R2), /_admin (static SPA), /preview
+  admin/    React + Vite admin UI, built into apps/server/public/_admin
 packages/
   create-kanso/  CLI for scaffolding a site from the upstream repository
   shared/   zod schemas & constants shared by server and admin
@@ -70,11 +70,11 @@ pnpm dev                  # server on http://localhost:5173, admin dev server on
 
 - `http://localhost:5173/` — public site (SSR)
 - `http://localhost:5173/api/v1/health` — API
-- `http://localhost:5174/admin/` — admin UI with hot reload (proxies `/api` and `/media` to :5173)
+- `http://localhost:5174/_admin/` — admin UI with hot reload (proxies `/api` and `/media` to :5173)
 
-On first run open `/admin/setup`: enter the site name and the first admin, then create a passkey
+On first run open `/_admin/setup`: enter the site name and the first admin, then create a passkey
 when the browser asks (there are no passwords). On `localhost` that is all; a deployed site also
-asks for a setup token (see [Deploy](#deploy)). Sign in at `/admin/login` with that passkey, and add
+asks for a setup token (see [Deploy](#deploy)). Sign in at `/_admin/login` with that passkey, and add
 passkeys for your other devices under **アカウント**. Passkeys work on `localhost` (any port) and on
 HTTPS domains, not on IP addresses such as `127.0.0.1`, and they belong to the domain they were
 created on. Setup installs the starter site unless you untick **サンプルサイトを入れる**; remove it (or add it later) under
@@ -108,7 +108,7 @@ Upgrading from a version with passwords: `pnpm db:migrate` applies `0006_passkey
 the stored password hashes. Sessions that are already signed in keep working, so add a passkey
 under **アカウント** before they expire; otherwise use `pnpm passkey:link`.
 
-To see the built admin served by the Worker itself, run `pnpm build` once; it lands in `apps/server/public/admin/` and is served at `http://localhost:5173/admin/`.
+To see the built admin served by the Worker itself, run `pnpm build` once; it lands in `apps/server/public/_admin/` and is served at `http://localhost:5173/_admin/`.
 
 If port 5173 is taken, start the server alone with a different port:
 `pnpm --filter @kanso/server exec vite dev --port 5199`.
@@ -245,7 +245,7 @@ Public-facing strings (404, form labels and validation messages) follow the site
 | `/blog/category/news`, `/blog/tag/cloudflare` | Filtered archives |
 | `/blog/author/jane` | Author archive — exists only for authors with published posts in that post type (404 otherwise) |
 | `/blog/feed.xml` | Atom feed of the 20 latest posts, `X-Robots-Tag: noindex` |
-| `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex. With **設定 → AI の学習に使わないよう求める**, robots.txt adds `Content-Signal: search=yes, ai-train=no` and disallows the known AI training crawlers (GPTBot, ClaudeBot, Google-Extended …) while search stays open |
+| `/sitemap.xml`, `/robots.txt` | Every indexable public URL — home, pages, posts, post-type/category/tag archives — with `lastmod`; empty when the site is set to noindex. With **設定 → AI の学習に使わないよう求める**, robots.txt adds `Content-Signal: search=yes, ai-train=no` and disallows the known AI training crawlers (GPTBot, ClaudeBot, Google-Extended …) while search stays open. It never names the admin, which answers `X-Robots-Tag: noindex` instead |
 | `/preview/page/:id`, `/preview/post/:id` | Draft preview — admin session only, `noindex`, never cached |
 | `/preview/share/<token>` | A draft shared through a link issued in the editor: no sign-in, valid 7 days, revocable, `noindex, nofollow`, never cached |
 | `/media/…` | Uploaded files from R2, `immutable` |
@@ -312,7 +312,7 @@ To add a theme in your fork:
 ```sh
 pnpm run deploy                             # the first deploy creates the D1 database and R2 bucket
 pnpm db:migrate                             # apply migrations to the remote D1
-pnpm setup:token --url https://example.com  # prints the /admin/setup link with a setup token
+pnpm setup:token --url https://example.com  # prints the /_admin/setup link with a setup token
 ```
 
 Set `SITE_URL` in `apps/server/wrangler.jsonc` to your production origin; it is used for canonical URLs, JSON-LD, the sitemap and feeds.
@@ -326,7 +326,7 @@ only names the local database file and stays as it is.
 
 A deployed site refuses to create its first administrator until the Worker has a `SETUP_TOKEN`
 secret, so nobody else can take it between the deploy and the setup. `pnpm setup:token`
-generates one, stores it with `wrangler secret put` and prints a link that opens `/admin/setup`
+generates one, stores it with `wrangler secret put` and prints a link that opens `/_admin/setup`
 with the token filled in (or set your own value of 16+ characters with
 `wrangler secret put SETUP_TOKEN` and type it on the setup page). Open the link on the
 production domain: passkeys belong to the domain they were created on, so connect a custom

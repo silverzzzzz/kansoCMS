@@ -1,3 +1,6 @@
+// The subpath, not '@kanso/shared': the entry chunk would otherwise build zod schemas before
+// zod-config.ts turns off zod's eval probe, which the admin CSP reports as a violation.
+import { ADMIN_PATH } from '@kanso/shared/admin-path'
 import { QueryClient } from '@tanstack/react-query'
 import { createRouter } from '@tanstack/react-router'
 import { ApiError } from './api/errors.ts'
@@ -16,7 +19,7 @@ export const queryClient = new QueryClient({
 
 export const router = createRouter({
   routeTree,
-  basepath: '/admin',
+  basepath: ADMIN_PATH,
   context: { queryClient },
   defaultPreload: 'intent',
 })

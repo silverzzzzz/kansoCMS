@@ -1,4 +1,5 @@
-const adminBasepath = '/admin'
+// The subpath keeps zod out of the entry chunk (see router.tsx).
+import { ADMIN_PATH as adminBasepath } from '@kanso/shared/admin-path'
 
 export function toAdminHref(value: string): string {
   const parsed = new URL(value, 'http://kanso.local')

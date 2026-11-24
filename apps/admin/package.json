@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "kansoCMS admin UI (React SPA). Built into apps/server/public/admin.",
+  "description": "kansoCMS admin UI (React SPA). Built into apps/server/public/_admin.",
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",

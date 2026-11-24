@@ -26,6 +26,7 @@ describe('template filesystem and download', () => {
       'apps/admin/dist/a',
       'apps/server/.wrangler/a',
       'examples/blog/.astro/a',
+      'apps/server/public/_admin/a',
       'apps/server/public/admin/a',
       'test-results/a',
       'playwright-report/a',

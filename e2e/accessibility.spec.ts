@@ -121,9 +121,9 @@ test.describe('accessibility', () => {
   })
 
   test('admin sign-in screen', async ({ page }) => {
-    await page.goto('/admin/login')
+    await page.goto('/_admin/login')
     await expect(page.getByRole('button', { name: /パスキー/ })).toBeVisible()
-    expectNone(await seriousViolations(page, '/admin/login'))
+    expectNone(await seriousViolations(page, '/_admin/login'))
   })
 
   test('admin screens', async ({ page }) => {
@@ -132,26 +132,26 @@ test.describe('accessibility', () => {
     await shareSession(page.context(), apiRequest)
     const findings: Finding[] = []
     for (const path of [
-      '/admin/',
-      '/admin/activity',
-      '/admin/analytics',
-      '/admin/pages',
-      `/admin/pages/${pageId}`,
-      '/admin/customize',
-      '/admin/menus',
-      '/admin/posts',
-      '/admin/posts?trashed=true',
-      '/admin/posts/new',
-      '/admin/post-types',
-      '/admin/tags',
-      '/admin/media',
-      '/admin/forms',
-      '/admin/redirects',
-      '/admin/tools',
-      '/admin/settings',
-      '/admin/users',
-      '/admin/api-keys',
-      '/admin/account',
+      '/_admin/',
+      '/_admin/activity',
+      '/_admin/analytics',
+      '/_admin/pages',
+      `/_admin/pages/${pageId}`,
+      '/_admin/customize',
+      '/_admin/menus',
+      '/_admin/posts',
+      '/_admin/posts?trashed=true',
+      '/_admin/posts/new',
+      '/_admin/post-types',
+      '/_admin/tags',
+      '/_admin/media',
+      '/_admin/forms',
+      '/_admin/redirects',
+      '/_admin/tools',
+      '/_admin/settings',
+      '/_admin/users',
+      '/_admin/api-keys',
+      '/_admin/account',
     ]) {
       await page.goto(path)
       await expect(page.locator('main')).toBeVisible()

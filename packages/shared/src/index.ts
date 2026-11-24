@@ -1,4 +1,5 @@
 export * from './activity.ts'
+export * from './admin-path.ts'
 export * from './ai.ts'
 export * from './auth.ts'
 export * from './content.ts'

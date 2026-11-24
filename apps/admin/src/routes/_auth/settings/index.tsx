@@ -292,7 +292,7 @@ function SettingsForms() {
         </Field>
         <Field
           label="robots.txt 追加ルール"
-          hint="既定のルール (Disallow: /admin 等) と Sitemap 行の間にそのまま出力されます。"
+          hint="既定のルール (Disallow: /api 等) と Sitemap 行の間にそのまま出力されます。"
         >
           <textarea
             className={`${inputClass} font-mono text-xs`}

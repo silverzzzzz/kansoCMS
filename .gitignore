@@ -5,7 +5,7 @@ node_modules/
 dist/
 .astro/
 examples/astro-blog/.env
-apps/server/public/admin/
+apps/server/public/_admin/
 
 # cloudflare local state
 .wrangler/

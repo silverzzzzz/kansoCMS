@@ -41,12 +41,12 @@ test.describe('admin form publishing and submission', () => {
 
     await test.step('open the admin signed in', async () => {
       await shareSession(page.context(), apiRequest)
-      await page.goto('/admin/')
+      await page.goto('/_admin/')
       await expect(page.getByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeAttached()
     })
 
     await test.step('create a form with two fields', async () => {
-      await page.goto('/admin/forms/new')
+      await page.goto('/_admin/forms/new')
       await page.getByLabel('名前', { exact: true }).fill(formName)
       await page.getByLabel(/^スラッグ/).fill(formSlug)
       await page.getByLabel('完了メッセージ', { exact: true }).fill('E2E thanks')
@@ -70,12 +70,12 @@ test.describe('admin form publishing and submission', () => {
       await emailField.getByLabel(/^名前/).fill('email')
 
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await expect(page).toHaveURL(/\/admin\/forms\/?$/)
+      await expect(page).toHaveURL(/\/_admin\/forms\/?$/)
       await expect(page.getByRole('link', { name: formName, exact: true })).toBeVisible()
     })
 
     await test.step('publish a page with the form-picker dialog', async () => {
-      await page.goto('/admin/pages/new')
+      await page.goto('/_admin/pages/new')
       await page.getByLabel('タイトル', { exact: true }).fill(pageTitle)
       await page.getByLabel('スラッグ', { exact: true }).fill(pageSlug)
       await page.getByLabel(/^状態/).selectOption('published')
@@ -91,7 +91,7 @@ test.describe('admin form publishing and submission', () => {
       await expect(page.locator('.editor-form-block')).toHaveText(`フォーム: ${formSlug}`)
 
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await expect(page).toHaveURL(/\/admin\/pages\/?$/)
+      await expect(page).toHaveURL(/\/_admin\/pages\/?$/)
       await expect(page.getByRole('link', { name: pageTitle, exact: true })).toBeVisible()
     })
 
@@ -146,7 +146,7 @@ test.describe('admin form publishing and submission', () => {
       const form = forms.items.find((item) => item.slug === formSlug)
       if (!form) throw new Error(`Created form was not found: ${formSlug}`)
 
-      await page.goto(`/admin/forms/${form.id}/submissions`)
+      await page.goto(`/_admin/forms/${form.id}/submissions`)
       const row = page
         .getByRole('row')
         .filter({ hasText: 'E2E Tester' })

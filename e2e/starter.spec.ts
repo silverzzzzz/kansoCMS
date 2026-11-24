@@ -57,12 +57,12 @@ test.describe('starter site', () => {
 
     await test.step('open the admin signed in', async () => {
       await shareSession(page.context(), apiRequest)
-      await page.goto('/admin/')
-      await expect(page).toHaveURL(/\/admin\/$/)
+      await page.goto('/_admin/')
+      await expect(page).toHaveURL(/\/_admin\/$/)
     })
 
     await test.step('install the starter site from the settings screen', async () => {
-      await page.goto('/admin/settings')
+      await page.goto('/_admin/settings')
       await expect(page.getByRole('heading', { name: 'サンプルサイト' })).toBeVisible()
       const installed = page.waitForResponse(
         (response) =>
@@ -100,14 +100,14 @@ test.describe('starter site', () => {
     })
 
     await test.step('point the dashboard at the starter site', async () => {
-      await page.goto('/admin/')
+      await page.goto('/_admin/')
       await expect(
         page.getByRole('heading', { name: 'サンプルサイトが入っています' }),
       ).toBeVisible()
       await expect(page.getByRole('link', { name: 'サイトを見る' })).toHaveAttribute('href', '/')
       if (!skipped('page', 'home')) {
         await page.getByRole('link', { name: 'トップページをカスタマイズ' }).click()
-        await expect(page).toHaveURL(/\/admin\/customize\?page=\d+/)
+        await expect(page).toHaveURL(/\/_admin\/customize\?page=\d+/)
         await expect(page.getByRole('heading', { name: 'カスタマイズ' })).toBeVisible()
         const preview = page.frameLocator('iframe[title="プレビュー"]')
         await expect(preview.getByRole('heading', { name: 'お気軽にご相談ください' })).toBeVisible()
@@ -115,7 +115,7 @@ test.describe('starter site', () => {
     })
 
     await test.step('remove the starter site from the settings screen', async () => {
-      await page.goto('/admin/settings')
+      await page.goto('/_admin/settings')
       await page.getByRole('button', { name: 'サンプルを削除' }).click()
       await page.getByRole('dialog').getByRole('button', { name: '削除', exact: true }).click()
       await expect(page.getByText('サンプルを削除しました')).toBeVisible()
@@ -129,7 +129,7 @@ test.describe('starter site', () => {
       if (!skipped('postType', 'news')) {
         expect((await apiRequest.get('/news/how-to-edit')).status()).toBe(404)
       }
-      await page.goto('/admin/')
+      await page.goto('/_admin/')
       await expect(page.getByRole('heading', { name: 'サンプルサイトが入っています' })).toHaveCount(
         0,
       )

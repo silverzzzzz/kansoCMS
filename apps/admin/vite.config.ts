@@ -1,3 +1,4 @@
+import { ADMIN_PATH } from '@kanso/shared/admin-path'
 import tailwindcss from '@tailwindcss/vite'
 import { tanstackRouter } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
@@ -8,13 +9,13 @@ export default defineConfig(({ mode }) => {
   const apiOrigin = env.KANSO_API_ORIGIN || 'http://localhost:5173'
 
   return {
-    // Served under /admin/ by the Worker's Static Assets.
-    base: '/admin/',
+    // Served under ADMIN_PATH by the Worker's Static Assets.
+    base: `${ADMIN_PATH}/`,
     plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react(), tailwindcss()],
     build: {
       // The server's Vite build copies public/ into its client output, so the
       // admin bundle ships as part of the single Worker deploy.
-      outDir: '../server/public/admin',
+      outDir: `../server/public${ADMIN_PATH}`,
       emptyOutDir: true,
     },
     server: {

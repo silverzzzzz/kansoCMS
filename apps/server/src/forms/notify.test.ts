@@ -125,7 +125,7 @@ describe('notifySubmission', () => {
       values: submissionValues,
       submissionId: submission.id,
       siteTitle: 'Example Site',
-      adminUrl: 'http://localhost:5199/admin/forms/7/submissions/42',
+      adminUrl: 'http://localhost:5199/_admin/forms/7/submissions/42',
     })
 
     const response = await app.request('/', undefined, env)

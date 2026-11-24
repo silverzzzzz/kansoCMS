@@ -58,12 +58,12 @@ test.describe('customize editor', () => {
 
     await test.step('open the admin signed in', async () => {
       await shareSession(page.context(), apiRequest)
-      await page.goto('/admin/')
-      await expect(page).toHaveURL(/\/admin\/$/)
+      await page.goto('/_admin/')
+      await expect(page).toHaveURL(/\/_admin\/$/)
     })
 
     await test.step('add hero and CTA sections with a live preview', async () => {
-      await page.goto(`/admin/customize?page=${pageId}`)
+      await page.goto(`/_admin/customize?page=${pageId}`)
       await expect(page.getByRole('heading', { name: 'カスタマイズ' })).toBeVisible()
 
       await page.getByLabel('追加するセクション').selectOption('hero')
@@ -88,7 +88,7 @@ test.describe('customize editor', () => {
       })
       await page.getByRole('link', { name: '固定ページ', exact: true }).click()
       expect(promptMessage).toContain('未保存の変更があります')
-      await expect(page).toHaveURL(/\/admin\/customize/)
+      await expect(page).toHaveURL(/\/_admin\/customize/)
       await expect(page.getByText('未保存の変更があります')).toBeVisible()
     })
 

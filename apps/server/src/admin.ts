@@ -1,18 +1,19 @@
+import { ADMIN_PATH } from '@kanso/shared'
 import { Hono } from 'hono'
 import type { AppEnv } from './env.ts'
-import { ADMIN_CSP } from './security-headers.ts'
+import { ADMIN_CSP, ADMIN_ROBOTS } from './security-headers.ts'
 
 /**
- * SPA fallback for the admin UI. Real files under /admin/* (JS, CSS, the
- * index itself) are served by Static Assets before the Worker runs; only
- * client-side routes like /admin/posts/12 reach here.
+ * SPA fallback for the admin UI, mounted at ADMIN_PATH. Real files under it
+ * (JS, CSS, the index itself) are served by Static Assets before the Worker
+ * runs; only client-side routes like /_admin/posts/12 reach here.
  */
 export const admin = new Hono<AppEnv>().get('/*', async (c) => {
   const url = new URL(c.req.url)
   // A hashed asset that no longer exists (stale tab after a deploy) must not
   // come back as index.html, or the browser reports a MIME-type error instead.
-  if (url.pathname.startsWith('/admin/assets/')) return c.notFound()
-  url.pathname = '/admin/index.html'
+  if (url.pathname.startsWith(`${ADMIN_PATH}/assets/`)) return c.notFound()
+  url.pathname = `${ADMIN_PATH}/index.html`
   const res = await c.env.ASSETS.fetch(new Request(url, { method: 'GET' }))
   if (res.status === 404) {
     return c.text('Admin UI is not built. Run `pnpm --filter @kanso/admin build`.', 503)
@@ -23,6 +24,7 @@ export const admin = new Hono<AppEnv>().get('/*', async (c) => {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
       'content-security-policy': ADMIN_CSP,
+      'x-robots-tag': ADMIN_ROBOTS,
     },
   })
 })

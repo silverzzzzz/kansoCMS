@@ -88,4 +88,4 @@ if (rows.length === 0) {
 }
 
 console.log(`Passkey link for ${email} (valid for 1 hour, single use):`)
-console.log(`${origin}/admin/passkey-link?token=${token}`)
+console.log(`${origin}/_admin/passkey-link?token=${token}`)

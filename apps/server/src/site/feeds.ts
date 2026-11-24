@@ -143,7 +143,8 @@ export async function robotsResponse(c: Context<AppEnv>) {
     'User-agent: *',
     // A signal, not a rule: it stays inside the `*` group, which keeps its Disallow lines.
     ...(optOut ? ['Content-Signal: search=yes, ai-train=no'] : []),
-    'Disallow: /admin',
+    // Not the admin: its pages say noindex (ADMIN_ROBOTS), which a crawler only
+    // sees when it may fetch them, and the line would point everyone to the admin.
     'Disallow: /api',
     'Disallow: /preview',
     ...(optOut

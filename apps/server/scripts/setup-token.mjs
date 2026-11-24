@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Unlocks first-run setup on a deployed site. Outside localhost, /admin/setup
+// Unlocks first-run setup on a deployed site. Outside localhost, /_admin/setup
 // refuses to create the first administrator until the Worker has a
 // SETUP_TOKEN secret, so nobody else can take the site between the deploy and
 // the setup. This generates a random token, stores it with
 // `wrangler secret put SETUP_TOKEN` (which needs access to the Cloudflare
-// account) and prints the link that opens /admin/setup with the token filled
+// account) and prints the link that opens /_admin/setup with the token filled
 // in.
 //
 //   pnpm setup:token [--url <site URL>]
@@ -69,10 +69,10 @@ console.log('')
 if (origin) {
   console.log('Open this link to create the first administrator. Anyone with it can, so keep it')
   console.log('private; it stops working once the administrator exists.')
-  console.log(`${origin}/admin/setup#token=${token}`)
+  console.log(`${origin}/_admin/setup#token=${token}`)
 } else {
   console.log('Setup token (keep it private; it stops working once the administrator exists):')
   console.log(token)
-  console.log('Open https://<your site>/admin/setup and enter it, or run this again with')
+  console.log('Open https://<your site>/_admin/setup and enter it, or run this again with')
   console.log('--url <site URL> to get a link (that replaces the token).')
 }

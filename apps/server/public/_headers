@@ -1,5 +1,6 @@
 # Headers for files served by Workers Static Assets (they never reach the Worker).
-# The CSP value must stay identical to ADMIN_CSP in src/security-headers.ts
-# (src/security-headers.test.ts checks it).
-/admin/*
+# The CSP and X-Robots-Tag values must stay identical to ADMIN_CSP and ADMIN_ROBOTS in
+# src/security-headers.ts, and the path to ADMIN_PATH (src/security-headers.test.ts checks them).
+/_admin/*
   Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: blob: https:; font-src 'self' data: https:; media-src 'self' https:; frame-src 'self' https:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Robots-Tag: noindex

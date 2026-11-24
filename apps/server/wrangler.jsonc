@@ -8,7 +8,7 @@
   // Static assets (admin SPA build + public/). The Vite plugin fills in
   // `directory` at build time. Assets are matched BEFORE the Worker runs;
   // `not_found_handling: none` hands every miss to Hono so the public site
-  // owns its own 404 and /admin/* falls back to the SPA shell in admin.ts.
+  // owns its own 404 and /_admin/* falls back to the SPA shell in admin.ts.
   "assets": {
     "binding": "ASSETS",
     "not_found_handling": "none"
@@ -57,7 +57,7 @@
 
   // Secrets (set with `wrangler secret put`, or copy .dev.vars.example to .dev.vars locally):
   //   TURNSTILE_SECRET_KEY=...
-  //   SETUP_TOKEN=...   /admin/setup outside localhost refuses to run without it (`pnpm setup:token`)
+  //   SETUP_TOKEN=...   /_admin/setup outside localhost refuses to run without it (`pnpm setup:token`)
 
   "observability": {
     "enabled": true

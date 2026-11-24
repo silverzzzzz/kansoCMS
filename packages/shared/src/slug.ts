@@ -1,10 +1,13 @@
 import { z } from 'zod'
+import { ADMIN_SEGMENT } from './admin-path.ts'
 
 /**
  * Top-level path segments owned by the system. Neither a page path nor a
- * post type slug may claim these.
+ * post type slug may claim these. `admin` stays reserved as well, so that no
+ * page can pass for the admin UI.
  */
 export const RESERVED_SLUGS = [
+  ADMIN_SEGMENT,
   'admin',
   'api',
   'media',

@@ -55,8 +55,10 @@ export function skipLocal(path) {
   const name = parts.at(-1) ?? ''
   return (
     isTaskBoard(path) ||
-    path === 'apps/server/public/admin' ||
-    path.startsWith('apps/server/public/admin/') ||
+    // Admin build output; builds before the move to /_admin wrote public/admin.
+    ['apps/server/public/_admin', 'apps/server/public/admin'].some(
+      (dir) => path === dir || path.startsWith(`${dir}/`),
+    ) ||
     parts.some((part) =>
       [
         'node_modules',

@@ -38,7 +38,7 @@ deployment steps in one of the two files, change the other as well.
 - Outside `localhost`, setup is locked until the Worker has a `SETUP_TOKEN` secret of at least 16
   characters (`apps/server/src/api/setup-token.ts`); `GET /api/v1/setup` reports
   `"token":"unset"` until then. `pnpm setup:token --url https://<host>` stores a random token and
-  prints `https://<host>/admin/setup#token=…`. Whoever has that link can create the
+  prints `https://<host>/_admin/setup#token=…`. Whoever has that link can create the
   administrator: give it only to the user and never write it to files, commits or logs.
 - Passkeys are bound to the hostname they were created on (`apps/server/src/api/relying-party.ts`).
   Passkeys from `localhost` or `*.workers.dev` do not work on another domain, so the user creates
@@ -101,7 +101,7 @@ Run everything from the repository root.
    ```sh
    curl -s https://<host>/api/v1/setup                               # {"needed":false,"token":"off"} once the admin exists
    curl -s https://<host>/api/v1/health                              # {"ok":true,...}
-   curl -s -o /dev/null -w "%{http_code}\n" https://<host>/admin/    # 200
+   curl -s -o /dev/null -w "%{http_code}\n" https://<host>/_admin/    # 200
    ```
 
    If the link leaked before the administrator existed, run `pnpm setup:token` again: the new
