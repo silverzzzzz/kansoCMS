@@ -42,7 +42,7 @@ test.describe('admin form publishing and submission', () => {
     await test.step('open the admin signed in', async () => {
       await shareSession(page.context(), apiRequest)
       await page.goto('/admin/')
-      await expect(page.getByRole('heading', { name: /^おかえりなさい、/ })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeAttached()
     })
 
     await test.step('create a form with two fields', async () => {

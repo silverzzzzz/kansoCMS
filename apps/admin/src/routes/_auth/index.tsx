@@ -1,8 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { api } from '../../api/client.ts'
 import { starterQuery } from '../../api/queries.ts'
-import { unwrap } from '../../api/request.ts'
 
 const featureLinks = [
   { to: '/pages', title: '固定ページ', description: 'サイトの基本ページを管理します。' },
@@ -21,33 +19,15 @@ export const Route = createFileRoute('/_auth/')({
 
 function DashboardPage() {
   const { user } = Route.useRouteContext()
-  const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => unwrap(api.health.$get()),
-  })
   const starter = useQuery({ ...starterQuery, enabled: user.role === 'admin' })
 
   return (
-    <div>
-      <div className="border-b border-neutral-200 pb-6">
-        {/* neutral-600: neutral-500 on the neutral-100 page background is below 4.5:1. */}
-        <p className="text-sm text-neutral-600">{health.data?.site ?? 'kansoCMS'}</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight">
-          おかえりなさい、{user.name}さん
-        </h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
-          管理する項目を選んでください。
-        </p>
-      </div>
-
-      {health.isError && (
-        <p role="alert" className="mt-6 border-l-2 border-red-600 pl-3 text-sm text-red-700">
-          サイト情報を取得できませんでした。
-        </p>
-      )}
+    <div className="flex flex-col gap-8">
+      {/* For screen readers; the navigation shows sighted users which screen this is. */}
+      <h1 className="sr-only">ダッシュボード</h1>
 
       {starter.data?.installed && (
-        <section className="mt-8 border border-neutral-200 bg-white p-5">
+        <section className="border border-neutral-200 bg-white p-5">
           <h2 className="font-semibold text-neutral-950">サンプルサイトが入っています</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-neutral-600">
             トップページや会社概要、お知らせのサンプルを、あなたのサイトの内容に書き換えていきましょう。不要になったら「設定」の「サンプルサイト」から削除できます。
@@ -80,7 +60,7 @@ function DashboardPage() {
         </section>
       )}
 
-      <div className="mt-8 grid gap-px overflow-hidden border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
+      <div className="grid gap-px overflow-hidden border border-neutral-200 bg-neutral-200 sm:grid-cols-2">
         {featureLinks.map((feature) => (
           <Link
             key={feature.to}

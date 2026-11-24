@@ -83,7 +83,7 @@ test.describe('passkeys', () => {
       await page.getByRole('button', { name: 'ログアウト' }).click()
       await expect(page).toHaveURL(/\/admin\/login/)
       await page.getByRole('button', { name: 'パスキーでログイン' }).click()
-      await expect(page.getByRole('heading', { name: /^おかえりなさい、/ })).toBeVisible()
+      await expect(page.getByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeAttached()
     })
 
     await test.step('the passkey shows when it was used, and can be removed', async () => {
