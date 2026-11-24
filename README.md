@@ -283,6 +283,27 @@ Search with `GET /api/v1/search?q=…` (`read` scope). After applying `0004_sear
 `POST /api/v1/search/reindex` (`write` scope) to index existing bodies: the migration initially
 indexes only their titles and stored excerpts. New and edited bodies are indexed automatically.
 
+### Connect an AI assistant with MCP
+
+For setup and a first draft, see [ChatGPT・Claude から kansoCMS を使う](docs/mcp.md).
+For tool arguments, results and call examples, see the [MCP agent reference](docs/mcp-agents.md).
+
+The Streamable HTTP endpoint is `https://<your-site>/api/mcp`. In **管理画面 → API キー**,
+create a dedicated key for each connection. Choose `read` to list and search posts and pages
+by title, read their content (including drafts), and list post types. Choose `write` to also
+create unpublished drafts from plain text. Review and publish drafts in the admin.
+The activity log records the name of the key that created each draft.
+
+| Client | Connection |
+| --- | --- |
+| Claude | Add the endpoint as a custom connector, choose **No sign in**, and set the request header `Authorization` to `Bearer <CMS API key>`. [Claude instructions](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp) |
+| ChatGPT | For a plugin integration that accepts a fixed credential, declare `auth.type` as `api_key` and `headerScheme` as `bearer`, and supply the key during connection setup. ChatGPT setups that require OAuth need an OAuth integration. [OpenAI authentication options](https://developers.openai.com/plugins/build/plugins#fixed-bearer-tokens-and-api-keys) |
+| MCP clients with custom headers | Set the same endpoint and `Authorization: Bearer <CMS API key>` in the client's connection settings. |
+
+For example, ask 「固定ページから『料金』を探して」 or, with a write key, 「投稿タイプを確認して、春のお知らせを下書きにして」.
+Store the key in the client's credential settings. It also grants its ordinary REST API permissions.
+Deleting the key in the admin revokes access on the next request.
+
 ## Themes
 
 Choose **Default** or **Paper** under **管理画面 → 設定 → サイト → テーマ** and save.

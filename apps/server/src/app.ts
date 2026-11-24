@@ -4,6 +4,7 @@ import { secureHeaders } from 'hono/secure-headers'
 import { admin } from './admin.ts'
 import { api } from './api/index.ts'
 import type { AppEnv } from './env.ts'
+import { serveMcp } from './mcp.ts'
 import { media } from './media/index.ts'
 import { onError } from './middleware/error.ts'
 import { kansoMiddleware } from './middleware/kanso.ts'
@@ -26,6 +27,7 @@ export const app = new Hono<AppEnv>()
   })
   .use(kansoMiddleware)
   .onError(onError)
+  .all('/api/mcp', serveMcp)
   .route('/api/v1', api)
   .route('/media', media)
   .route(ADMIN_PATH, admin)

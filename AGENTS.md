@@ -5,6 +5,9 @@ from it with `create-kanso`, which copies this file. People read [README.md](REA
 deployment guide for people is [docs/deploy.md](docs/deploy.md) (Japanese). When you change the
 deployment steps in one of the two files, change the other as well.
 
+When operating site content through MCP, use the [MCP agent reference](docs/mcp-agents.md).
+The [connection guide](docs/mcp.md) covers API key setup for people.
+
 ## Basics
 
 - The repository is a pnpm 12 workspace (`packageManager` in `package.json`). npm, Yarn and Bun

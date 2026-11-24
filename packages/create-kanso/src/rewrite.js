@@ -109,5 +109,6 @@ Site URL: ${project.siteUrl}
 
 The complete CMS workspace, themes, Astro example, tests and CI are included.
 See [Architecture](docs/architecture.md) and [kansoCMS](${UPSTREAM}).
+To connect an AI assistant, see the [MCP connection guide](docs/mcp.md) and [MCP agent reference](docs/mcp-agents.md).
 `
 }
