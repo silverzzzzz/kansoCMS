@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test'
+import { expect, type Locator, type Page, test } from '@playwright/test'
 
 const user = {
   id: 1,
@@ -38,6 +38,12 @@ async function mockAdmin(page: Page) {
   })
 }
 
+async function box(locator: Locator) {
+  const value = await locator.boundingBox()
+  if (!value) throw new Error('The element has no layout box.')
+  return value
+}
+
 test.beforeEach(async ({ page }) => {
   await mockAdmin(page)
 })
@@ -52,10 +58,27 @@ test('desktop sidebar collapses, keeps navigation usable, and remembers the choi
   await expect(sidebar).toHaveCSS('width', '240px')
   await page.screenshot({ path: testInfo.outputPath('desktop-expanded.png') })
 
-  await page.getByRole('button', { name: 'サイドバーを折りたたむ' }).click()
+  // The logo sits right of the sidebar toggle in the header, and the navigation starts the sidebar.
+  const collapse = page.getByRole('button', { name: 'サイドバーを折りたたむ' })
+  const toggle = await box(collapse)
+  const logo = page.getByRole('banner').getByRole('link', { name: 'kansoCMS ダッシュボード' })
+  expect((await box(logo)).x).toBeGreaterThan(toggle.x + toggle.width)
+  const dashboard = nav.getByRole('link', { name: 'ダッシュボード', exact: true })
+  expect((await box(dashboard)).y - (await box(sidebar)).y).toBeLessThanOrEqual(12)
+
+  // The navigation's scrollbar shows only while the pointer is over it.
+  const hiddenThumb = /^rgba\(0, 0, 0, 0\) /
+  await page.mouse.move(800, 400)
+  await expect(nav).toHaveCSS('scrollbar-color', hiddenThumb)
+  await nav.hover()
+  await expect(nav).not.toHaveCSS('scrollbar-color', hiddenThumb)
+
+  await collapse.click()
   const expand = page.getByRole('button', { name: 'サイドバーを展開' })
   await expect(expand).toHaveAttribute('aria-expanded', 'false')
   await expect(sidebar).toHaveCSS('width', '72px')
+  // The toggle stays where it was, so a second click undoes the first.
+  expect((await box(expand)).x).toBe(toggle.x)
   const pages = nav.getByRole('link', { name: '固定ページ', exact: true })
   await expect(pages).toHaveAttribute('title', '固定ページ')
   await pages.click()

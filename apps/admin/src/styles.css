@@ -20,12 +20,21 @@
     background: rgb(0 0 0 / 35%);
   }
 
-  /* Thin scrollbar for the navigation. neutral-500 keeps 3:1 contrast against the white sidebar. */
+  /* Thin scrollbar for the navigation. oklch(66% 0 0) keeps 3:1 contrast against the white sidebar.
+     Never transition scrollbar-color: WebKit redraws the scrollbar with a flicker on every change. */
   .admin-nav-scroll {
-    --scrollbar-thumb: var(--color-neutral-500);
+    --scrollbar-thumb: oklch(66% 0 0);
     --scrollbar-track: transparent;
     scrollbar-width: thin;
     scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  /* With a mouse, show it only while the pointer is over the navigation or focus is inside it,
+     like an overlay scrollbar. Without hover (touch screens) the thumb stays visible while scrolling. */
+  @media (hover: hover) and (prefers-contrast: no-preference) {
+    .admin-nav-scroll:not(:hover, :focus-within) {
+      --scrollbar-thumb: transparent;
+    }
   }
 
   @media (prefers-contrast: more) {
