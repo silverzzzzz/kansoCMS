@@ -22,7 +22,7 @@ Phase 13 の決定事項:
 2. **方針外のものは入れない**: スキーマビルダー、コンテンツの多言語化、プラグイン、同時編集、公開ページ上での直接編集、外部 IdP・メールのログインリンク、5 段階の権限。
 3. Phase 13 の実装は Claude が行う。T76 の実装と T77 の調査は Claude のサブエージェントに任せ、差分は Claude が確かめてから入れる。
 
-結果 (2026-11-20): 4 ゲート green (テスト 691 件: seo 13 / create-kanso 47 / shared 107 / core 170 / server 315 / admin 39)。E2E は新しい D1 で 23/23 (CSP とアクセシビリティの検査を含む)。各タスクは `vite preview` (本番と同じ静的ファイルの扱い) か開発サーバーで、実ブラウザでも確かめた。途中で既存の不具合 (別オリジンから `/media` の画像を埋め込めない) を見つけて T71 で直した。本番へのデプロイと GitHub 上のワークフローの実行は未確認。
+結果 (2026-11-20): 4 ゲート green (テスト 691 件: seo 13 / create-kanso 47 / shared 107 / core 170 / server 315 / admin 39)。E2E は新しい D1 で 23/23 (CSP とアクセシビリティの検査を含む)。各タスクは `vite preview` (本番と同じ静的ファイルの扱い) か開発サーバーで、実ブラウザでも確かめた。途中で既存の不具合 (別オリジンから `/media` の画像を埋め込めない) を見つけて T71 で直した。本番へのデプロイと GitHub 上のワークフローの実行は未確認 (ワークフローは push 後の 2026-11-25 に確認。T76)。
 
 ---
 
@@ -242,7 +242,8 @@ Phase 13 の決定事項:
 - README に Security の節、AGENTS.md に「公開から 1 日たっていない版は pnpm が拒む」の 1 行。
 - zizmor 1.32.0 をローカルで実行して指摘 0 件 (変更前の `ci.yml` は 14 件)。YAML はすべて構文と SchemaStore のスキーマで確かめた (サブエージェントの報告)。
 - push 直後、Dependabot はメジャー更新の PR を 5 つ出すはず (checkout・setup-node・upload-artifact の v7、CodeQL v5、zizmor-action v1)。
-- 確かめていないこと: ワークフロー自体は push しないと GitHub で動かないので、CodeQL・zizmor・Dependabot の実行は未確認。
+- push 後の確認 (2026-11-25 に GitHub の API で): `729ace9`・`f8f078f`・`3e72d66` の 3 回の push で、CI と Security の全ジョブ (gates、e2e、CodeQL 2 つ、zizmor、T79 で足した audit) が成功した。`3e72d66` では、どのジョブにも「Node.js 20 は非推奨」の警告が 1 件出ている (checkout と setup-node の v4 は Node 20 向けで、GitHub が Node 24 で動かしている)。
+- 確かめていないこと: CodeQL が見つけた指摘の有無 (一覧はログインしないと読めない)。Dependabot の実行 (2026-11-25 の時点で実行の記録もプルリクエストもなく、上で予想した PR は出ていない)。
 
 ---
 

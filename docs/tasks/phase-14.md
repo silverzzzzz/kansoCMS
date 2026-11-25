@@ -11,7 +11,7 @@
 | T81 | `read` の API キーでフォームの送信内容と操作ログを読めないようにする | todo | server, docs |
 | T82 | `.env.*` を git の管理と create-kanso のコピーから外す | todo | create-kanso, repo |
 
-GitHub 側はユーザーの操作が要る: 手元のコミット (Phase 13 と Phase 14) の push、非公開の脆弱性報告 (Private vulnerability reporting) の有効化、`main` の保護 (強制 push と削除の禁止)。
+GitHub 側はユーザーの操作が要る: 非公開の脆弱性報告 (Private vulnerability reporting) の有効化、`main` の保護 (強制 push と削除の禁止)。Phase 13 と T79 のコミットは 2026-11-24 に push 済み (`729ace9` まで)。
 
 ---
 
@@ -56,4 +56,5 @@ GitHub 側はユーザーの操作が要る: 手元のコミット (Phase 13 と
   - Astro の例: 同じ作業フォルダの開発サーバーにスターターコンテンツを入れて read キーを作り、`astro build` で 9 ページ (投稿 3、固定ページ 4、一覧、404) を生成。本文、ナビゲーション、CMS の絶対 URL の画像 (取得して 200)、フォームの注記への置き換えを確認し、API キーが出力に含まれないことも確かめた。`astro dev` でも一覧・投稿・固定ページが 200、存在しないパスは 404 ページ。
   - レビューで見つけた「認証なしの API で検証エラーが大量に返る」件: zod 4.6.7 は配列の上限を先に調べるので、5,000 個の null を送ったときのエラーは 5,001 件 → 1 件になった (zod 単体で確認)。本文のサイズと返すエラーの件数の上限は T80 で入れる。
   - Node 26 への変更 (手元の 26.13.0): 4 ゲート (テスト 691 件)。create-kanso で作ったサイトの `engines` (`>=26`)、README、CI の Node の版。zizmor の指摘 0 件。
-- 確かめていないこと: GitHub 上での `audit` ジョブの実行と、CI を Node 26 で回すこと (どちらも push 後に動く)。Astro の例を実際の静的ホストに置くこと。
+  - push 後の GitHub での実行 (2026-11-25 に API で確認): `audit` ジョブと、Node 26 での CI (gates、e2e) が、T79 を含む最初の push (`729ace9`) から `3e72d66` までの 3 回とも成功した。
+- 確かめていないこと: Astro の例を実際の静的ホストに置くこと。
