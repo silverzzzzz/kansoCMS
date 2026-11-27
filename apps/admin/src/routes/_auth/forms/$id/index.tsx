@@ -1,4 +1,3 @@
-import type { CreateFormInput } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -7,6 +6,7 @@ import { ApiError } from '../../../../api/errors.ts'
 import { formQuery, formsListQuery } from '../../../../api/queries.ts'
 import { unwrap } from '../../../../api/request.ts'
 import { ConfirmDialog } from '../../../../components/ConfirmDialog.tsx'
+import { useCreatedNotice } from '../../../../components/editing/created-notice.ts'
 import { FormEditor } from '../../../../components/forms/FormEditor.tsx'
 import { PageHeading } from '../../../../components/PageHeading.tsx'
 import { Alert, Button } from '../../../../components/ui.tsx'
@@ -31,19 +31,12 @@ function EditFormPage() {
   const form = useQuery(formQuery(id))
   const forms = useQuery(formsListQuery)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const save = useMutation({
-    mutationFn: (input: CreateFormInput) =>
-      unwrap(api.forms[':id'].$patch({ param: { id: String(id) }, json: input })),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['forms'] })
-      await navigate({ to: '/forms' })
-    },
-  })
+  const initialSaved = useCreatedNotice('forms', Number(id))
   const remove = useMutation({
     mutationFn: () => unwrap(api.forms[':id'].$delete({ param: { id: String(id) } })),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['forms'] })
-      await navigate({ to: '/forms' })
+      await navigate({ to: '/forms', ignoreBlocker: true })
     },
   })
   const item = form.data?.item
@@ -78,9 +71,11 @@ function EditFormPage() {
       <FormEditor
         initial={item}
         turnstileAvailable={forms.data?.turnstileAvailable ?? false}
-        pending={save.isPending}
-        error={save.error}
-        onSubmit={(input) => save.mutate(input)}
+        initialSaved={initialSaved}
+        onSubmit={async (input) => {
+          await unwrap(api.forms[':id'].$patch({ param: { id: idParam }, json: input }))
+          await queryClient.invalidateQueries({ queryKey: ['forms'] })
+        }}
       />
       <ConfirmDialog
         open={confirmOpen}

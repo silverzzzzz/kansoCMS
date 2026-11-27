@@ -9,6 +9,7 @@ import { suggestAlt } from '../../lib/ai.ts'
 import { backfillImageVariants, needsImageVariants } from '../../lib/image-variants.ts'
 import { ConfirmDialog } from '../ConfirmDialog.tsx'
 import { AiSuggestButton } from '../content/AiSuggestButton.tsx'
+import { MoreActions } from '../MoreActions.tsx'
 import { Pagination } from '../Pagination.tsx'
 import { Alert, Button, EmptyState, inputClass } from '../ui.tsx'
 
@@ -72,6 +73,7 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
         className="mb-5 flex gap-2"
         onSubmit={(event) => {
           event.preventDefault()
+          event.stopPropagation()
           setPage(1)
           setSearch(query.trim())
         }}
@@ -101,7 +103,7 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
           </Alert>
         </div>
       )}
-      {pending.length > 0 && (
+      {!onSelect && pending.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 border border-neutral-200 bg-white px-4 py-3 text-sm">
           <p className="text-neutral-700">
             このページの画像のうち {pending.length} 件に、表示サイズに合わせた縮小版がありません。
@@ -125,6 +127,7 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
             <button
               type="button"
               className="block aspect-video w-full overflow-hidden bg-neutral-100 text-left outline-none focus-visible:ring-2 focus-visible:ring-neutral-950"
+              aria-label={onSelect ? `${item.filename} を選択` : undefined}
               onClick={() => onSelect?.(item)}
               disabled={!onSelect}
             >
@@ -148,7 +151,11 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
               {item.width && item.height ? `${item.width}×${item.height}` : item.mime}
               {item.variants.length > 0 && ` ・ 縮小版 ${item.variants.length} 種`}
             </p>
-            {editing === item.id ? (
+            {onSelect ? (
+              <Button className="mt-3" type="button" size="small" onClick={() => onSelect(item)}>
+                選択
+              </Button>
+            ) : editing === item.id ? (
               <form
                 className="mt-3"
                 onSubmit={(event) => {
@@ -184,43 +191,27 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
                 </div>
               </form>
             ) : (
-              <div className="mt-3 flex flex-wrap gap-1">
-                {onSelect && (
-                  <Button type="button" size="small" onClick={() => onSelect(item)}>
-                    選択
-                  </Button>
-                )}
-                <Button
-                  type="button"
-                  size="small"
-                  variant="secondary"
-                  onClick={() => {
-                    setEditing(item.id)
-                    setAlt(item.alt ?? '')
-                  }}
-                >
-                  alt 編集
-                </Button>
-                <Button
-                  type="button"
-                  size="small"
-                  variant="secondary"
-                  onClick={() =>
-                    void navigator.clipboard.writeText(
-                      new URL(item.url, window.location.origin).href,
-                    )
-                  }
-                >
-                  URL コピー
-                </Button>
-                <Button
-                  type="button"
-                  size="small"
-                  variant="danger"
-                  onClick={() => setDeleting(item)}
-                >
-                  削除
-                </Button>
+              <div className="mt-3 flex justify-end">
+                <MoreActions
+                  label={`${item.filename} のその他の操作`}
+                  actions={[
+                    {
+                      label: 'alt 編集',
+                      run: () => {
+                        setEditing(item.id)
+                        setAlt(item.alt ?? '')
+                      },
+                    },
+                    {
+                      label: 'URL コピー',
+                      run: () =>
+                        void navigator.clipboard.writeText(
+                          new URL(item.url, window.location.origin).href,
+                        ),
+                    },
+                    { label: '削除', run: () => setDeleting(item) },
+                  ]}
+                />
               </div>
             )}
           </article>
@@ -229,14 +220,16 @@ export function MediaGrid({ onSelect }: { onSelect?: (item: MediaItem) => void }
       {media.data && (
         <Pagination page={page} perPage={40} total={media.data.total} onChange={setPage} />
       )}
-      <ConfirmDialog
-        open={deleting !== null}
-        title="メディアを削除"
-        description={`${deleting?.filename ?? ''} を削除します。この操作は取り消せません。`}
-        pending={remove.isPending}
-        onClose={() => setDeleting(null)}
-        onConfirm={() => deleting && remove.mutate(deleting)}
-      />
+      {!onSelect && (
+        <ConfirmDialog
+          open={deleting !== null}
+          title="メディアを削除"
+          description={`${deleting?.filename ?? ''} を削除します。この操作は取り消せません。`}
+          pending={remove.isPending}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => deleting && remove.mutate(deleting)}
+        />
+      )}
     </div>
   )
 }

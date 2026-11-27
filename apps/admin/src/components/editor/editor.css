@@ -1,0 +1,222 @@
+.editor-frame {
+  min-inline-size: 0;
+  border: 1px solid var(--color-neutral-300);
+  background: white;
+}
+
+.editor-sticky-tools {
+  position: sticky;
+  inset-block-start: var(--editor-toolbar-offset, 0px);
+  z-index: 10;
+  background: var(--color-neutral-50);
+  border-block-end: 1px solid var(--color-neutral-300);
+}
+
+.editor-tool-scroll,
+.editor-tool-buttons,
+.editor-link-panel > div,
+.editor-form-controls {
+  display: flex;
+  align-items: center;
+}
+
+.editor-tool-scroll {
+  flex-wrap: wrap;
+  padding: 0.25rem;
+}
+
+.editor-tool-scroll select {
+  flex: none;
+  inline-size: 5rem;
+  min-block-size: 2.25rem;
+  padding-inline: 0.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.editor-tool-scroll .editor-insert-select {
+  inline-size: 4.5rem;
+}
+
+.editor-tool-buttons {
+  gap: 0.125rem;
+}
+
+.editor-tool-buttons button {
+  display: grid;
+  place-items: center;
+  flex: none;
+  min-inline-size: 2.25rem;
+  min-block-size: 2.25rem;
+  color: var(--color-neutral-800);
+}
+
+.editor-tool-buttons svg {
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+}
+
+.editor-tool-buttons button:hover,
+.editor-slash-menu button[aria-selected="true"] {
+  background: var(--color-neutral-200);
+}
+
+.editor-tool-buttons button[aria-pressed="true"] {
+  color: white;
+  background: var(--color-neutral-900);
+}
+
+.editor-tool-buttons button[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+:is(.editor-frame, .editor-selection-menu)
+  :is(button, select, input, textarea, summary, .tiptap):focus-visible {
+  outline: 2px solid var(--color-neutral-700);
+  outline-offset: -2px;
+}
+
+.editor-selection-menu,
+.editor-slash-menu,
+.editor-link-panel {
+  background: white;
+  border: 1px solid var(--color-neutral-300);
+  box-shadow: 0 3px 10px rgb(0 0 0 / 12%);
+}
+
+.editor-selection-menu {
+  z-index: 12;
+  padding: 0.125rem;
+}
+
+.editor-link-panel,
+.editor-slash-menu {
+  position: fixed;
+  z-index: 22;
+  max-inline-size: calc(100vw - 1rem);
+  font-size: 0.875rem;
+}
+
+.editor-link-panel {
+  inline-size: 28rem;
+  padding: 0.75rem;
+}
+
+.editor-link-panel label,
+.editor-node-controls label {
+  display: block;
+  margin-block-end: 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.editor-link-panel > div,
+.editor-form-controls {
+  gap: 0.5rem;
+}
+
+.editor-link-panel input:not([type="checkbox"]),
+.editor-node-controls :is(input, textarea) {
+  min-inline-size: 0;
+  inline-size: 100%;
+  background: white;
+  border: 1px solid var(--color-neutral-400);
+  padding: 0.375rem;
+}
+
+.editor-link-panel button,
+.editor-form-controls button {
+  flex: none;
+  min-block-size: 2rem;
+  padding-inline: 0.375rem;
+  text-decoration: underline;
+}
+
+.editor-link-panel [role="alert"] {
+  margin-block-start: 0.375rem;
+  color: var(--color-red-700);
+}
+
+.editor-link-panel .editor-new-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0 0;
+}
+
+.editor-content .tiptap a {
+  color: var(--color-blue-800);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.editor-link-selection {
+  background: var(--color-blue-100);
+}
+
+.editor-slash-menu {
+  display: grid;
+  min-inline-size: min(13rem, 100%);
+  max-block-size: min(16rem, 35dvh);
+  padding: 0.25rem;
+  overflow: auto;
+}
+
+.editor-slash-menu button {
+  min-block-size: 2.25rem;
+  padding-inline: 0.625rem;
+  text-align: start;
+}
+
+.editor-node-controls {
+  border: 1px solid var(--color-neutral-300);
+  background: var(--color-neutral-50);
+  padding: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.editor-node-controls summary {
+  cursor: pointer;
+  padding-block: 0.25rem;
+}
+
+.editor-node-controls[open] summary {
+  margin-block-end: 0.375rem;
+}
+
+.editor-form-controls {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.editor-form-controls .editor-form-block {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.editor-frame .ProseMirror-selectednode {
+  outline: 2px solid var(--color-neutral-700);
+}
+
+.editor-content .tiptap,
+.editor-content .tiptap > * {
+  scroll-margin-block-start: calc(var(--editor-toolbar-offset, 0px) + 3.5rem);
+}
+
+.editor-hint,
+.editor-upload-marker {
+  color: var(--color-neutral-600);
+  font-size: 0.75rem;
+}
+
+.editor-hint {
+  padding: 0.5rem 1rem;
+}
+
+@media (pointer: coarse) {
+  .editor-tool-buttons button {
+    min-inline-size: 2.75rem;
+    min-block-size: 2.75rem;
+  }
+}

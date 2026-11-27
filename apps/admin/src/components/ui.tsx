@@ -1,4 +1,10 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import {
+  type ButtonHTMLAttributes,
+  cloneElement,
+  type ReactElement,
+  type ReactNode,
+  useId,
+} from 'react'
 
 export const inputClass =
   'mt-2 block w-full border border-neutral-300 bg-white px-3 py-2.5 text-base outline-none ' +
@@ -31,28 +37,61 @@ export function Field({
   label,
   error,
   hint,
+  counter,
   children,
 }: {
   label: string
   error?: string
   hint?: string
-  children: ReactNode
+  counter?: string
+  children: ReactElement<{ id?: string; 'aria-describedby'?: string; 'aria-invalid'?: boolean }>
 }) {
+  const generated = useId()
+  const id = children.props.id ?? generated
+  const describedBy =
+    [
+      children.props['aria-describedby'],
+      hint && `${id}-hint`,
+      counter && `${id}-count`,
+      error && `${id}-error`,
+    ]
+      .filter(Boolean)
+      .join(' ') || undefined
   return (
-    // biome-ignore lint/a11y/noLabelWithoutControl: the form control is supplied as children.
-    <label className="block text-sm font-medium text-neutral-800">
-      {label}
-      {children}
+    <div className="min-w-0 text-sm font-medium text-neutral-800">
+      <label htmlFor={id}>{label}</label>
+      {cloneElement(children, {
+        id,
+        'aria-describedby': describedBy,
+        'aria-invalid': error ? true : children.props['aria-invalid'],
+      })}
       {hint && (
         // neutral-600: fields also sit on the neutral-100 page background, where 500 is below 4.5:1.
-        <span className="mt-1 block text-xs font-normal leading-5 text-neutral-600">{hint}</span>
+        <span
+          id={`${id}-hint`}
+          className="mt-1 block text-xs font-normal leading-5 text-neutral-600"
+        >
+          {hint}
+        </span>
+      )}
+      {counter && (
+        <span
+          id={`${id}-count`}
+          className="mt-1 block text-right text-xs font-normal tabular-nums text-neutral-600"
+        >
+          {counter}
+        </span>
       )}
       {error && (
-        <span role="alert" className="mt-1 block text-xs font-normal text-red-700">
+        <span
+          id={`${id}-error`}
+          role="alert"
+          className="mt-1 block text-xs font-normal text-red-700"
+        >
           {error}
         </span>
       )}
-    </label>
+    </div>
   )
 }
 

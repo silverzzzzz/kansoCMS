@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useId, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import type { MediaItem } from '../../api/queries.ts'
 import { MediaGrid } from './MediaGrid.tsx'
 import { UploadDropzone } from './UploadDropzone.tsx'
@@ -13,6 +14,7 @@ export function MediaPicker({
   onClose: () => void
 }) {
   const ref = useRef<HTMLDialogElement>(null)
+  const heading = useId()
   useEffect(() => {
     const dialog = ref.current
     if (!dialog) return
@@ -20,15 +22,18 @@ export function MediaPicker({
     if (!open && dialog.open) dialog.close()
   }, [open])
 
-  return (
+  return createPortal(
     <dialog
       ref={ref}
+      aria-labelledby={heading}
       onCancel={onClose}
       onClose={onClose}
       className="m-auto h-[min(52rem,calc(100%-2rem))] w-[min(72rem,calc(100%-2rem))] border border-neutral-300 bg-white p-0 backdrop:bg-black/35"
     >
       <div className="sticky top-0 z-10 flex items-center justify-between border-b border-neutral-200 bg-white p-4">
-        <h2 className="text-lg font-semibold">メディアを選択</h2>
+        <h2 id={heading} className="text-lg font-semibold">
+          メディアを選択
+        </h2>
         <button type="button" onClick={onClose} className="text-sm underline">
           閉じる
         </button>
@@ -40,6 +45,7 @@ export function MediaPicker({
           <MediaGrid onSelect={onSelect} />
         </div>
       )}
-    </dialog>
+    </dialog>,
+    document.body,
   )
 }

@@ -1,5 +1,6 @@
 import { SECTION_FIELD_TYPES, type SectionField } from '@kanso/shared'
 import { useRef } from 'react'
+import { SelectField, TextField } from './fields.tsx'
 import { Button, Field, inputClass } from './ui.tsx'
 
 const smallButtonClass =
@@ -48,9 +49,11 @@ function moveItem<T>(list: T[], from: number, to: number): T[] {
 /** Editor for a post type's custom field definitions (the section field DSL). */
 export function PostFieldsEditor({
   fields,
+  errors,
   onChange,
 }: {
   fields: SectionField[]
+  errors: Record<string, string>
   onChange: (fields: SectionField[]) => void
 }) {
   const counter = useRef(0)
@@ -78,6 +81,11 @@ export function PostFieldsEditor({
       <p className="text-xs text-neutral-500">
         この投稿タイプの投稿が持つ追加項目です。公開ページでは本文の下に一覧表示されます。
       </p>
+      {errors.fields && (
+        <p role="alert" className="text-xs text-red-700">
+          {errors.fields}
+        </p>
+      )}
       {fields.length === 0 ? (
         <p className="border border-dashed border-neutral-300 p-4 text-sm text-neutral-500">
           フィールドがありません。「フィールドを追加」で項目を登録します。
@@ -87,23 +95,29 @@ export function PostFieldsEditor({
           {fields.map((field, index) => (
             <li key={keys[index]} className="space-y-2 border border-neutral-200 p-3">
               <div className="flex flex-wrap items-center gap-2">
-                <input
-                  className={`${inputClass} mt-0 w-44`}
+                <TextField
+                  label="表示名"
+                  error={errors[`fields.${index}.label`]}
+                  className={`${inputClass} w-44`}
                   value={field.label}
                   required
                   placeholder="表示名"
                   onChange={(event) => updateAt(index, { ...field, label: event.target.value })}
                 />
-                <input
-                  className={`${inputClass} mt-0 w-36 font-mono text-xs`}
+                <TextField
+                  label="フィールド名"
+                  error={errors[`fields.${index}.name`]}
+                  className={`${inputClass} w-36 font-mono text-xs`}
                   value={field.name}
                   required
                   pattern="[a-z][a-z0-9_]*"
                   placeholder="name"
                   onChange={(event) => updateAt(index, { ...field, name: event.target.value })}
                 />
-                <select
-                  className={`${inputClass} mt-0 w-36`}
+                <SelectField
+                  label="種類"
+                  error={errors[`fields.${index}.type`]}
+                  className={`${inputClass} w-36`}
                   value={field.type}
                   onChange={(event) =>
                     updateAt(
@@ -121,7 +135,7 @@ export function PostFieldsEditor({
                       {TYPE_LABELS[type]}
                     </option>
                   ))}
-                </select>
+                </SelectField>
                 <button
                   type="button"
                   className={smallButtonClass}
@@ -146,10 +160,10 @@ export function PostFieldsEditor({
                   削除
                 </button>
               </div>
-              <input
-                className={`${inputClass} mt-0`}
+              <TextField
+                label="説明（省略可）"
+                error={errors[`fields.${index}.help`]}
                 value={field.help ?? ''}
-                placeholder="説明（省略可）"
                 onChange={(event) =>
                   updateAt(index, {
                     ...field,
@@ -157,7 +171,12 @@ export function PostFieldsEditor({
                   })
                 }
               />
-              <FieldExtras field={field} onChange={(next) => updateAt(index, next)} />
+              <FieldExtras
+                field={field}
+                prefix={`fields.${index}`}
+                errors={errors}
+                onChange={(next) => updateAt(index, next)}
+              />
             </li>
           ))}
         </ul>
@@ -174,15 +193,19 @@ export function PostFieldsEditor({
 }
 
 function FieldExtras({
+  prefix,
+  errors,
   field,
   onChange,
 }: {
+  prefix: string
+  errors: Record<string, string>
   field: SectionField
   onChange: (field: SectionField) => void
 }) {
   if (field.type === 'text' || field.type === 'textarea') {
     return (
-      <Field label="最大文字数">
+      <Field label="最大文字数" error={errors[`${prefix}.maxLength`]}>
         <input
           className={`${inputClass} mt-0 w-32`}
           type="number"
@@ -196,7 +219,7 @@ function FieldExtras({
   if (field.type === 'number') {
     return (
       <div className="flex flex-wrap gap-4">
-        <Field label="最小値">
+        <Field label="最小値" error={errors[`${prefix}.min`]}>
           <input
             className={`${inputClass} mt-0 w-28`}
             type="number"
@@ -209,7 +232,7 @@ function FieldExtras({
             }
           />
         </Field>
-        <Field label="最大値">
+        <Field label="最大値" error={errors[`${prefix}.max`]}>
           <input
             className={`${inputClass} mt-0 w-28`}
             type="number"
@@ -222,7 +245,7 @@ function FieldExtras({
             }
           />
         </Field>
-        <Field label="ステップ">
+        <Field label="ステップ" error={errors[`${prefix}.step`]}>
           <input
             className={`${inputClass} mt-0 w-28`}
             type="number"
@@ -239,15 +262,26 @@ function FieldExtras({
     )
   }
   if (field.type === 'select') {
-    return <OptionsEditor field={field} onChange={onChange} />
+    return (
+      <OptionsEditor
+        field={field}
+        prefix={`${prefix}.options`}
+        errors={errors}
+        onChange={onChange}
+      />
+    )
   }
   return null
 }
 
 function OptionsEditor({
+  prefix,
+  errors,
   field,
   onChange,
 }: {
+  prefix: string
+  errors: Record<string, string>
   field: Extract<SectionField, { type: 'select' }>
   onChange: (field: SectionField) => void
 }) {
@@ -270,15 +304,19 @@ function OptionsEditor({
       <p className="text-xs font-medium text-neutral-600">選択肢</p>
       {options.map((option, index) => (
         <div key={keys[index]} className="flex flex-wrap items-center gap-2">
-          <input
-            className={`${inputClass} mt-0 w-40`}
+          <TextField
+            label="選択肢の表示名"
+            error={errors[`${prefix}.${index}.label`]}
+            className={`${inputClass} w-40`}
             value={option.label}
             required
             placeholder="表示名"
             onChange={(event) => updateAt(index, { ...option, label: event.target.value })}
           />
-          <input
-            className={`${inputClass} mt-0 w-40 font-mono text-xs`}
+          <TextField
+            label="選択肢の値"
+            error={errors[`${prefix}.${index}.value`]}
+            className={`${inputClass} w-40 font-mono text-xs`}
             value={option.value}
             required
             placeholder="値"

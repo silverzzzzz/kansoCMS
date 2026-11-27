@@ -13,11 +13,13 @@ export function isStaleError(error: unknown): boolean {
 export function StaleSaveNotice({
   what,
   pending,
+  reloadError = false,
   onReload,
   onOverwrite,
 }: {
   what: string
   pending: boolean
+  reloadError?: boolean
   onReload: () => void
   onOverwrite: () => void
 }) {
@@ -27,6 +29,11 @@ export function StaleSaveNotice({
         この{what}
         は、この画面を開いたあとに別の画面で保存されています。このまま保存すると、その変更を上書きします。
       </p>
+      {reloadError && (
+        <p className="mt-2">
+          最新の内容を読み込めませんでした。通信を確認して、もう一度お試しください。
+        </p>
+      )}
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           type="button"

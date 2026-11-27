@@ -1,9 +1,13 @@
-import { mergeAttributes, Node } from '@tiptap/react'
+import { mergeAttributes, Node, ReactNodeViewRenderer } from '@tiptap/react'
+import { FormView } from './BlockViews.tsx'
 
 export const FormBlock = Node.create({
   name: 'form',
   group: 'block',
   atom: true,
+  addNodeView() {
+    return ReactNodeViewRenderer(FormView)
+  },
   addAttributes() {
     return { slug: { default: '' } }
   },

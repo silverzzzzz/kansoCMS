@@ -13,7 +13,11 @@ export class ApiError extends Error {
 }
 
 export function fieldErrors(error: unknown): Record<string, string> {
-  if (!(error instanceof ApiError) || !Array.isArray(error.details)) return {}
+  if (!(error instanceof ApiError)) return {}
+  if (error.status === 409 && /slug already exists/i.test(error.message)) {
+    return { slug: 'このスラッグは使われています。別のスラッグを入力してください。' }
+  }
+  if (!Array.isArray(error.details)) return {}
 
   const result: Record<string, string> = {}
   for (const detail of error.details) {

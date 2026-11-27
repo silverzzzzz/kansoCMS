@@ -1,6 +1,6 @@
 import type { PageSection } from '@kanso/shared'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute, Link, useBlocker, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../../api/client.ts'
 import { ApiError } from '../../../api/errors.ts'
@@ -20,6 +20,8 @@ import {
   defaultSettings,
   SectionSettingsForm,
 } from '../../../components/customize/SectionSettingsForm.tsx'
+import { SaveBar } from '../../../components/editing/SaveBar.tsx'
+import { useEditorLeaveGuard } from '../../../components/editing/useEditorSave.ts'
 import { PageHeading } from '../../../components/PageHeading.tsx'
 import { Alert, Button, EmptyState, inputClass } from '../../../components/ui.tsx'
 
@@ -171,13 +173,6 @@ function Editor({
     return (type: string) => labels.get(type) ?? type
   }, [catalog])
 
-  // Covers in-app navigation (sidebar, page switcher) as well as tab close / reload.
-  useBlocker({
-    shouldBlockFn: () => !window.confirm('未保存の変更があります。破棄して移動しますか?'),
-    enableBeforeUnload: dirty,
-    disabled: !dirty,
-  })
-
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(async () => {
@@ -245,6 +240,10 @@ function Editor({
   const saveError = save.error instanceof ApiError && !isStaleError(save.error) ? save.error : null
   const saveThemeError = saveTheme.error instanceof ApiError ? saveTheme.error : null
 
+  const formRef = useEditorLeaveGuard(dirty || save.isPending || saveTheme.isPending)
+  const activeSave = tab === 'theme' ? saveTheme : save
+  const activeDirty = tab === 'theme' ? themeDirty : sectionsJson !== savedJson
+
   function updateThemeDraft(name: string, value: unknown) {
     setThemeDraft((current) => {
       const next = { ...current }
@@ -283,42 +282,66 @@ function Editor({
   }
 
   return (
-    <div className="mt-6">
+    <form
+      ref={formRef}
+      noValidate
+      className="mt-6"
+      onSubmit={(event) => {
+        event.preventDefault()
+        if (!activeDirty || activeSave.isPending) return
+        if (tab === 'theme') saveTheme.mutate()
+        else save.mutate({ value: sections })
+      }}
+    >
+      <SaveBar
+        save={{
+          formRef,
+          dirty: activeDirty,
+          pending: activeSave.isPending,
+          saved: activeSave.isSuccess,
+          error: activeSave.error,
+        }}
+        disabled={!activeDirty}
+        label={tab === 'theme' ? 'テーマ設定を保存' : '保存'}
+        error={
+          tab === 'theme' ? (
+            saveThemeError?.message
+          ) : isStaleError(save.error) && save.variables ? (
+            <div className="mb-4">
+              <StaleSaveNotice
+                what="ページ"
+                pending={save.isPending}
+                onReload={onReload}
+                onOverwrite={() => {
+                  if (save.variables) save.mutate({ value: save.variables.value, overwrite: true })
+                }}
+              />
+            </div>
+          ) : saveError ? (
+            <div className="mb-4">
+              <Alert tone="error">
+                保存できませんでした: {saveError.message}
+                {Array.isArray(saveError.details) && saveError.details.length > 0 && (
+                  <ul className="mt-1 list-disc pl-5">
+                    {(saveError.details as { path?: string; message?: string }[]).map(
+                      (detail, index) => (
+                        <li key={`${detail.path ?? index}`}>
+                          {detail.path}: {detail.message}
+                        </li>
+                      ),
+                    )}
+                  </ul>
+                )}
+              </Alert>
+            </div>
+          ) : undefined
+        }
+      />
       {!sectionsMode && (
         <div className="mb-4">
           <Alert tone="info">
             このページは現在リッチテキスト本文で表示されています。セクションを追加して保存すると、本文の代わりにセクションが表示されます
             (本文は保持され、いつでも戻せます)。
-          </Alert>
-        </div>
-      )}
-      {isStaleError(save.error) && save.variables && (
-        <div className="mb-4">
-          <StaleSaveNotice
-            what="ページ"
-            pending={save.isPending}
-            onReload={onReload}
-            onOverwrite={() => {
-              if (save.variables) save.mutate({ value: save.variables.value, overwrite: true })
-            }}
-          />
-        </div>
-      )}
-      {saveError && (
-        <div className="mb-4">
-          <Alert tone="error">
-            保存できませんでした: {saveError.message}
-            {Array.isArray(saveError.details) && saveError.details.length > 0 && (
-              <ul className="mt-1 list-disc pl-5">
-                {(saveError.details as { path?: string; message?: string }[]).map(
-                  (detail, index) => (
-                    <li key={`${detail.path ?? index}`}>
-                      {detail.path}: {detail.message}
-                    </li>
-                  ),
-                )}
-              </ul>
-            )}
           </Alert>
         </div>
       )}
@@ -346,40 +369,19 @@ function Editor({
             </div>
           )}
           {tab === 'theme' && themeAll !== null && (
-            <>
-              <div className="border border-neutral-200 bg-white p-4">
-                <h2 className="text-sm font-semibold text-neutral-800">テーマ設定 ({theme})</h2>
-                <p className="mt-1 text-xs text-neutral-500">
-                  サイト全体に適用されます。テーマを切り替えても他テーマの設定は保持されます。
-                </p>
-                <div className="mt-4">
-                  <SectionSettingsForm
-                    fields={settingsFields}
-                    values={themeDraft}
-                    onChange={updateThemeDraft}
-                  />
-                </div>
+            <div className="border border-neutral-200 bg-white p-4">
+              <h2 className="text-sm font-semibold text-neutral-800">テーマ設定 ({theme})</h2>
+              <p className="mt-1 text-xs text-neutral-500">
+                サイト全体に適用されます。テーマを切り替えても他テーマの設定は保持されます。
+              </p>
+              <div className="mt-4">
+                <SectionSettingsForm
+                  fields={settingsFields}
+                  values={themeDraft}
+                  onChange={updateThemeDraft}
+                />
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  disabled={!themeDirty || saveTheme.isPending}
-                  onClick={() => saveTheme.mutate()}
-                >
-                  {saveTheme.isPending ? '保存中…' : 'テーマ設定を保存'}
-                </Button>
-                {themeDirty ? (
-                  <span className="text-sm text-neutral-500">未保存の変更があります</span>
-                ) : (
-                  saveTheme.isSuccess && (
-                    <span className="text-sm text-green-700">保存しました</span>
-                  )
-                )}
-              </div>
-              {saveThemeError && (
-                <Alert tone="error">保存できませんでした: {saveThemeError.message}</Alert>
-              )}
-            </>
+            </div>
           )}
           <div className={tab === 'sections' ? 'space-y-6' : 'hidden'}>
             <div className="border border-neutral-200 bg-white p-4">
@@ -487,18 +489,6 @@ function Editor({
             )}
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button
-                type="button"
-                disabled={sectionsJson === savedJson || save.isPending}
-                onClick={() => save.mutate({ value: JSON.parse(sectionsJson) })}
-              >
-                {save.isPending ? '保存中…' : '保存'}
-              </Button>
-              {sectionsJson !== savedJson ? (
-                <span className="text-sm text-neutral-500">未保存の変更があります</span>
-              ) : (
-                save.isSuccess && <span className="text-sm text-green-700">保存しました</span>
-              )}
               {sectionsMode && (
                 <Button type="button" variant="secondary" onClick={() => setDetachOpen(true)}>
                   セクションをやめて本文に戻す
@@ -534,6 +524,6 @@ function Editor({
         onClose={() => setDetachOpen(false)}
         onConfirm={() => save.mutate({ value: null })}
       />
-    </div>
+    </form>
   )
 }

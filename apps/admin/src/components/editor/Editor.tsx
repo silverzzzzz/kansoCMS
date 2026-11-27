@@ -1,13 +1,22 @@
 import { type RichTextDoc, richTextDocSchema } from '@kanso/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import Image from '@tiptap/extension-image'
-import { EditorContent, useEditor } from '@tiptap/react'
+import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
-import { useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { ImageView } from './BlockViews.tsx'
+import { isAllowedLink } from './commands.ts'
 import { FormBlock } from './FormBlock.ts'
+import { imageTransfers } from './image-transfer.ts'
+import { LinkSelection } from './link-selection.ts'
 import { RawHtml } from './RawHtml.ts'
-import { isAllowedLink, Toolbar } from './Toolbar.tsx'
+import { Toolbar } from './Toolbar.tsx'
+import './editor.css'
 
 const SizedImage = Image.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageView)
+  },
   addAttributes() {
     return {
       ...this.parent?.(),
@@ -38,11 +47,27 @@ const SizedImage = Image.extend({
 export function Editor({
   content,
   onChange,
+  onUploadingChange,
+  onInvalidChange,
 }: {
   content: RichTextDoc
   onChange: (doc: RichTextDoc) => void
+  onUploadingChange?: (pending: boolean) => void
+  onInvalidChange?: (invalid: boolean) => void
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const callbacks = useRef({ onUploadingChange, onInvalidChange })
+  callbacks.current = { onUploadingChange, onInvalidChange }
+  useEffect(
+    () => () => {
+      callbacks.current.onUploadingChange?.(false)
+      callbacks.current.onInvalidChange?.(false)
+    },
+    [],
+  )
+  const queryClient = useQueryClient()
+  const hint = useId()
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -50,19 +75,39 @@ export function Editor({
         link: {
           openOnClick: false,
           autolink: true,
+          defaultProtocol: 'https',
+          HTMLAttributes: { target: null, rel: null },
           isAllowedUri: (url) => isAllowedLink(url),
           shouldAutoLink: (url) => isAllowedLink(url),
         },
       }),
       SizedImage,
+      LinkSelection,
       RawHtml,
       FormBlock,
+      imageTransfers(
+        setUploadError,
+        (pending) => callbacks.current.onUploadingChange?.(pending),
+        () => {
+          void queryClient.invalidateQueries({ queryKey: ['media'] })
+        },
+      ),
     ],
-    content,
+    // Older empty documents may have no paragraphs. Seed the editable view
+    // with its default paragraph without writing a change back on mount.
+    content: content.content.length ? content : undefined,
     // The editable area is a textbox to assistive technology; it needs a name.
-    editorProps: { attributes: { 'aria-label': '本文' } },
+    editorProps: {
+      attributes: {
+        role: 'textbox',
+        'aria-label': '本文',
+        'aria-multiline': 'true',
+        'aria-describedby': hint,
+      },
+    },
     onUpdate: ({ editor: current }) => {
       const parsed = richTextDocSchema.safeParse(current.getJSON())
+      callbacks.current.onInvalidChange?.(!parsed.success)
       if (!parsed.success) {
         setError('エディタの内容を保存できない形式です')
         return
@@ -75,17 +120,12 @@ export function Editor({
   if (!editor) return <div className="border border-neutral-300 p-4 text-sm">読み込み中…</div>
 
   return (
-    <div className="border border-neutral-300 bg-white">
-      <Toolbar editor={editor} />
+    <div className="editor-frame">
+      <Toolbar editor={editor} error={error ?? uploadError} />
       <EditorContent editor={editor} className="editor-content" />
-      {error && (
-        <p
-          role="alert"
-          className="border-t border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
-        >
-          {error}
-        </p>
-      )}
+      <p id={hint} className="editor-hint">
+        空の段落で「/」または「／」を入力すると、見出しや画像を挿入できます。
+      </p>
     </div>
   )
 }

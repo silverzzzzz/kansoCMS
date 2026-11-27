@@ -1,117 +1,205 @@
-import type { Editor } from '@tiptap/react'
-import { useState } from 'react'
+import { type Editor, useEditorState } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
+import { type KeyboardEvent, useCallback, useEffect, useState } from 'react'
 import { FormPicker } from '../forms/FormPicker.tsx'
 import { MediaPicker } from '../media/MediaPicker.tsx'
+import { commands, type EditorCommand, type EditorPanel } from './commands.ts'
+import { imageContent } from './image-transfer.ts'
+import { LinkPanel } from './LinkPanel.tsx'
+import { linkSelection, selectLinkTarget } from './link-selection.ts'
+import { SlashMenu } from './SlashMenu.tsx'
 
-export function isAllowedLink(value: string): boolean {
-  return /^(?:https?:\/\/|mailto:|tel:|\/|#)/i.test(value)
-}
+const styles = commands.filter((command) => command.group === 'style')
+const insertions = commands.filter((command) => command.group === 'insert')
+const buttons = commands.filter(
+  (command) => command.group !== 'style' && command.group !== 'insert',
+)
 
-export function Toolbar({ editor }: { editor: Editor }) {
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [formPickerOpen, setFormPickerOpen] = useState(false)
-  const buttonClass =
-    'border border-neutral-300 bg-white px-2 py-1 text-xs font-medium text-neutral-800 ' +
-    'outline-none hover:border-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-950 ' +
-    'aria-pressed:border-neutral-950 aria-pressed:bg-neutral-950 aria-pressed:text-white'
+export function Toolbar({ editor, error }: { editor: Editor; error: string | null }) {
+  const [panel, setPanel] = useState<EditorPanel | null>(null)
+  const [tabStop, setTabStop] = useState('bold')
+  const state = useEditorState({
+    editor,
+    selector: ({ editor }) =>
+      Object.fromEntries(
+        commands.map((command) => [
+          command.id,
+          { pressed: command.active?.(editor), enabled: command.enabled?.(editor) ?? true },
+        ]),
+      ),
+  })
+  const style = styles.find((command) => state[command.id]?.pressed)?.id ?? ''
 
-  function setLink() {
-    const current = editor.getAttributes('link').href
-    const value = window.prompt('リンク先 URL', typeof current === 'string' ? current : '')
-    if (value === null) return
-    const href = value.trim()
-    if (!href) {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run()
-      return
+  const closeLink = useCallback(() => {
+    editor.commands.setMeta(linkSelection, false)
+    setPanel(null)
+  }, [editor])
+  const openPanel = useCallback(
+    (next: EditorPanel) => {
+      if (next === 'link') selectLinkTarget(editor)
+      setPanel(next)
+    },
+    [editor],
+  )
+  useEffect(() => {
+    const dom = editor.view.dom
+    function shortcut(event: globalThis.KeyboardEvent) {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.keyCode === 229 ||
+        editor.view.composing ||
+        event.altKey ||
+        event.shiftKey ||
+        !(event.ctrlKey || event.metaKey) ||
+        event.key.toLowerCase() !== 'k' ||
+        event.target !== dom
+      )
+        return
+      event.preventDefault()
+      openPanel('link')
     }
-    if (!isAllowedLink(href)) {
-      window.alert('リンクは /、#、http(s)、mailto、tel で始まる URL を指定してください')
-      return
-    }
-    editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
+    dom.addEventListener('keydown', shortcut)
+    return () => dom.removeEventListener('keydown', shortcut)
+  }, [editor, openPanel])
+  function run(command: EditorCommand) {
+    command.run(editor, openPanel)
+  }
+  function commandButton(command: EditorCommand, inToolbar: boolean) {
+    const title = command.shortcut ? `${command.label} (${command.shortcut})` : command.label
+    return (
+      <button
+        key={command.id}
+        type="button"
+        aria-label={command.label}
+        title={title}
+        aria-pressed={state[command.id]?.pressed}
+        aria-disabled={!state[command.id]?.enabled || undefined}
+        tabIndex={inToolbar && command.id !== tabStop ? -1 : 0}
+        onFocus={inToolbar ? () => setTabStop(command.id) : undefined}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => {
+          if (state[command.id]?.enabled) run(command)
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d={command.icon} />
+        </svg>
+      </button>
+    )
   }
 
-  const action = (label: string, pressed: boolean, onClick: () => void, disabled = false) => (
-    <button
-      key={label}
-      type="button"
-      className={buttonClass}
-      aria-pressed={pressed}
-      disabled={disabled}
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  )
+  function moveFocus(event: KeyboardEvent<HTMLDivElement>) {
+    if (!(event.target instanceof HTMLButtonElement)) return
+    const controls = Array.from(event.currentTarget.querySelectorAll('button'))
+    const index = controls.indexOf(event.target)
+    const destinations: Record<string, number> = {
+      Home: 0,
+      End: controls.length - 1,
+      ArrowRight: (index + 1) % controls.length,
+      ArrowLeft: (index + controls.length - 1) % controls.length,
+    }
+    const next = destinations[event.key]
+    if (next !== undefined) {
+      event.preventDefault()
+      controls[next]?.focus()
+    }
+  }
 
   return (
     <>
-      <div className="flex flex-wrap gap-1 border-b border-neutral-200 bg-neutral-50 p-2">
-        {action('段落', editor.isActive('paragraph'), () =>
-          editor.chain().focus().setParagraph().run(),
+      <div className="editor-sticky-tools">
+        <div
+          className="editor-tool-scroll editor-tool-buttons"
+          role="toolbar"
+          aria-label="本文の編集"
+          onKeyDown={moveFocus}
+        >
+          <select
+            aria-label="段落の種類"
+            value={style}
+            onChange={(event) => {
+              const selected = styles.find((command) => command.id === event.target.value)
+              if (selected) run(selected)
+            }}
+          >
+            {!style && <option value="">書式</option>}
+            {styles.map((command) => (
+              <option key={command.id} value={command.id}>
+                {command.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="挿入"
+            className="editor-insert-select"
+            value=""
+            onChange={(event) => {
+              const command = insertions.find((entry) => entry.id === event.target.value)
+              if (command) run(command)
+            }}
+          >
+            <option value="" disabled>
+              ＋ 挿入
+            </option>
+            {insertions.map((command) => (
+              <option key={command.id} value={command.id}>
+                {command.label}
+              </option>
+            ))}
+          </select>
+          {buttons.map((command) => commandButton(command, true))}
+        </div>
+        {error && (
+          <p
+            role="alert"
+            className="border-t border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          >
+            {error}
+          </p>
         )}
-        {[2, 3, 4].map((level) =>
-          action(`H${level}`, editor.isActive('heading', { level }), () =>
-            editor
-              .chain()
-              .focus()
-              .toggleHeading({ level: level as 2 | 3 | 4 })
-              .run(),
-          ),
-        )}
-        {action('太字', editor.isActive('bold'), () => editor.chain().focus().toggleBold().run())}
-        {action('斜体', editor.isActive('italic'), () =>
-          editor.chain().focus().toggleItalic().run(),
-        )}
-        {action('下線', editor.isActive('underline'), () =>
-          editor.chain().focus().toggleUnderline().run(),
-        )}
-        {action('打ち消し', editor.isActive('strike'), () =>
-          editor.chain().focus().toggleStrike().run(),
-        )}
-        {action('コード', editor.isActive('code'), () => editor.chain().focus().toggleCode().run())}
-        {action('リンク', editor.isActive('link'), setLink)}
-        {action('箇条書き', editor.isActive('bulletList'), () =>
-          editor.chain().focus().toggleBulletList().run(),
-        )}
-        {action('番号付き', editor.isActive('orderedList'), () =>
-          editor.chain().focus().toggleOrderedList().run(),
-        )}
-        {action('引用', editor.isActive('blockquote'), () =>
-          editor.chain().focus().toggleBlockquote().run(),
-        )}
-        {action('コードブロック', editor.isActive('codeBlock'), () =>
-          editor.chain().focus().toggleCodeBlock().run(),
-        )}
-        {action('区切り線', false, () => editor.chain().focus().setHorizontalRule().run())}
-        {action('画像', false, () => setPickerOpen(true))}
-        {action('フォーム', false, () => setFormPickerOpen(true))}
-        {action('元に戻す', false, () => editor.chain().focus().undo().run(), !editor.can().undo())}
-        {action('やり直す', false, () => editor.chain().focus().redo().run(), !editor.can().redo())}
       </div>
+      {panel === 'link' && <LinkPanel editor={editor} close={closeLink} />}
+      {!panel && <SlashMenu editor={editor} run={run} />}
+      <BubbleMenu
+        editor={editor}
+        className="editor-selection-menu"
+        updateDelay={80}
+        shouldShow={({ view, state, from, to }) =>
+          view.hasFocus() &&
+          !view.composing &&
+          from !== to &&
+          !!state.doc.textBetween(from, to).trim()
+        }
+      >
+        <fieldset aria-label="選択した文字の書式" className="editor-tool-buttons">
+          {commands
+            .filter((command) => command.group === 'inline')
+            .map((command) => commandButton(command, false))}
+        </fieldset>
+      </BubbleMenu>
       <MediaPicker
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
+        open={panel === 'image'}
+        onClose={() => setPanel(null)}
         onSelect={(item) => {
-          // Insert with the size in one go: after insertion the cursor sits past
-          // the node, so a follow-up `updateAttributes('image')` would not reach it.
-          editor
-            .chain()
-            .focus()
-            .insertContent({
-              type: 'image',
-              attrs: { src: item.url, alt: item.alt ?? '', width: item.width, height: item.height },
-            })
-            .run()
-          setPickerOpen(false)
+          editor.chain().focus().insertContent(imageContent(item)).run()
+          setPanel(null)
         }}
       />
       <FormPicker
-        open={formPickerOpen}
-        onClose={() => setFormPickerOpen(false)}
+        open={panel === 'form'}
+        onClose={() => setPanel(null)}
         onSelect={(slug) => {
           editor.chain().focus().insertContent({ type: 'form', attrs: { slug } }).run()
-          setFormPickerOpen(false)
+          setPanel(null)
         }}
       />
     </>

@@ -1,9 +1,13 @@
-import { mergeAttributes, Node } from '@tiptap/react'
+import { mergeAttributes, Node, ReactNodeViewRenderer } from '@tiptap/react'
+import { HtmlView } from './BlockViews.tsx'
 
 export const RawHtml = Node.create({
   name: 'rawHtml',
   group: 'block',
   atom: true,
+  addNodeView() {
+    return ReactNodeViewRenderer(HtmlView)
+  },
   addAttributes() {
     return { html: { default: '' } }
   },

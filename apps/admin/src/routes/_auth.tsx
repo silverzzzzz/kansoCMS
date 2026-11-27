@@ -7,6 +7,7 @@ import { meQueryOptions, setupStatusQueryOptions } from '../api/queries.ts'
 import { unwrap } from '../api/request.ts'
 import { AdminNavigation, NavigationIcon } from '../components/AdminNavigation.tsx'
 import { BrandLogo } from '../components/BrandLogo.tsx'
+import { confirmEditorLeave } from '../components/editing/useEditorSave.ts'
 import { MobileNavigation } from '../components/MobileNavigation.tsx'
 import { toAdminHref } from '../routing.ts'
 
@@ -58,7 +59,7 @@ function AuthLayout() {
     mutationFn: () => unwrap(api.auth.logout.$post()),
     onSuccess: async () => {
       queryClient.clear()
-      await navigate({ to: '/login' })
+      await navigate({ to: '/login', ignoreBlocker: true })
     },
   })
   const logoutError = logout.error instanceof ApiError ? logout.error.message : null
@@ -96,7 +97,9 @@ function AuthLayout() {
             <button
               type="button"
               disabled={logout.isPending}
-              onClick={() => logout.mutate()}
+              onClick={() => {
+                if (confirmEditorLeave()) logout.mutate()
+              }}
               className="min-h-11 shrink-0 border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-800 outline-none hover:border-neutral-950 hover:text-neutral-950 focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:text-neutral-400"
             >
               {logout.isPending ? 'ログアウト中…' : 'ログアウト'}

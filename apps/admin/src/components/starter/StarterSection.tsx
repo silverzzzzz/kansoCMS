@@ -50,7 +50,17 @@ function errorMessage(error: unknown, fallback: string): string {
  * caches are invalidated, so the page can re-seed forms that show settings
  * the starter site writes (the site description).
  */
-export function StarterSection({ onChanged }: { onChanged: () => void }) {
+export function StarterSection({
+  onChanged,
+  beforeChange,
+  disabled,
+  onPending,
+}: {
+  onChanged: () => void
+  beforeChange: () => boolean
+  disabled: boolean
+  onPending: (pending: boolean) => void
+}) {
   const queryClient = useQueryClient()
   const status = useQuery(starterQuery)
   const [confirming, setConfirming] = useState(false)
@@ -65,20 +75,28 @@ export function StarterSection({ onChanged }: { onChanged: () => void }) {
 
   const install = useMutation({
     mutationFn: () => unwrap(api.starter.$post()),
-    onMutate: () => setLast('install'),
+    onMutate: () => {
+      onPending(true)
+      setLast('install')
+    },
     onSuccess: refresh,
+    onSettled: () => onPending(false),
   })
   const remove = useMutation({
     mutationFn: () => unwrap(api.starter.$delete()),
-    onMutate: () => setLast('remove'),
+    onMutate: () => {
+      onPending(true)
+      setLast('remove')
+    },
     onSuccess: async () => {
       setConfirming(false)
       await refresh()
     },
+    onSettled: () => onPending(false),
   })
 
   const data = status.data
-  const busy = install.isPending || remove.isPending
+  const busy = disabled || install.isPending || remove.isPending
 
   return (
     <section className="mt-8 space-y-5 border border-neutral-200 bg-white p-5">
@@ -152,7 +170,12 @@ export function StarterSection({ onChanged }: { onChanged: () => void }) {
             件と画像を作成します。同じ URL やスラッグのものが既にある項目は作成しません。
           </p>
           <div className="flex justify-end border-t border-neutral-200 pt-5">
-            <Button disabled={busy} onClick={() => install.mutate()}>
+            <Button
+              disabled={busy}
+              onClick={() => {
+                if (beforeChange()) install.mutate()
+              }}
+            >
               {install.isPending ? '作成中…' : 'サンプルサイトを入れる'}
             </Button>
           </div>
@@ -167,7 +190,9 @@ export function StarterSection({ onChanged }: { onChanged: () => void }) {
         description="まだ編集していないサンプルのページ・記事・フォーム・画像を削除します。編集したもの、使用中の画像、送信のあるフォームは残ります。この操作は元に戻せません。"
         confirmLabel="削除"
         pending={remove.isPending}
-        onConfirm={() => remove.mutate()}
+        onConfirm={() => {
+          if (!busy && beforeChange()) remove.mutate()
+        }}
         onClose={() => setConfirming(false)}
       />
     </section>

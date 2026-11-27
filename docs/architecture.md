@@ -423,6 +423,9 @@ pnpm db:migrate                                             # 本番 D1 へ適�
 | 12. 運用機能 | **done (2026-11-12)** | ユーザーの招待と権限管理 (登録リンク方式)、Cron Trigger による定期処理 (ゴミ箱 30 日・期限切れデータ)、画像の最適化 (縮小版をブラウザで作って R2 に保存、`srcset`)、Phase 7〜12 の E2E、バックアップ手順 ([tasks/phase-12.md](tasks/phase-12.md)) | 複数人で運用でき、放置しても溜まり続けるものがない |
 | 13. 守りと運用 | **done (2026-11-20)** | EmDash との比較から: 公開エンドポイントのレート制限 (D1)、管理画面の CSP とメディアの sandbox・CORP、上書き事故の防止 (`baseUpdatedAt`)、404 の記録と 410、robots.txt の AI 学習拒否、R2 への毎日のバックアップ、依存と CI の強化 (pnpm の公開日・信頼度、SHA 固定、Dependabot、CodeQL、zizmor、SECURITY.md)、D1 / R2 のデプロイ時自動作成 (wrangler 4.160)、axe のアクセシビリティ検査 ([tasks/phase-13.md](tasks/phase-13.md)) | 公開したサイトが荒らされにくく、壊れにくく、戻しやすい |
 
+管理画面の保存操作、ブラウザ内の下書き復元、本文エディターと入力部品の仕様は [Phase 15 タスクボード](tasks/phase-15.md) にまとめている。
+本文の挿入メニュー、リンクの保存時の既定値、新規作成時のフォーカス、削除操作の配置は [Phase 16 タスクボード](tasks/phase-16.md) にまとめている。
+
 フォーム送信の CSV は `GET /api/v1/forms/:id/submissions/export.csv` から取得する。UTF-8
 BOM 付き・CRLF 区切りで、古い順に最大 10,000 行を出力し、数式として解釈される値を
 保護する。IP、User-Agent、リファラー、国などのメタ情報は含めない。

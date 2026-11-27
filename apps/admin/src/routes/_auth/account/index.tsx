@@ -1,14 +1,18 @@
-import { PASSKEY_LIMIT, type PasskeySummary, SLUG_PATTERN } from '@kanso/shared'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { PASSKEY_LIMIT, type PasskeySummary } from '@kanso/shared'
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { api } from '../../../api/client.ts'
+import { ApiError, fieldErrors } from '../../../api/errors.ts'
 import { passkeysQuery, profileQuery } from '../../../api/queries.ts'
 import { unwrap } from '../../../api/request.ts'
 import { ConfirmDialog } from '../../../components/ConfirmDialog.tsx'
+import { SaveBar } from '../../../components/editing/SaveBar.tsx'
+import { useEditorSave } from '../../../components/editing/useEditorSave.ts'
+import { SlugField, TextareaField } from '../../../components/fields.tsx'
 import { MediaField } from '../../../components/media/MediaField.tsx'
 import { PageHeading } from '../../../components/PageHeading.tsx'
-import { Alert, Button, Field, inputClass } from '../../../components/ui.tsx'
+import { Alert, Button, inputClass } from '../../../components/ui.tsx'
 import {
   createPasskey,
   defaultPasskeyName,
@@ -39,33 +43,11 @@ function AccountPage() {
   const { user } = Route.useRouteContext()
   const queryClient = useQueryClient()
   const passkeys = useQuery(passkeysQuery)
-  const profile = useQuery(profileQuery)
   const items = passkeys.data?.items ?? []
   const [notice, setNotice] = useState<string | null>(null)
   const [editing, setEditing] = useState<{ id: number; name: string } | null>(null)
   const [deleting, setDeleting] = useState<PasskeySummary | null>(null)
-  const [slug, setSlug] = useState<string | null>(null)
-  const [bio, setBio] = useState<string | null>(null)
-  const [avatar, setAvatar] = useState<number | null | undefined>(undefined)
-
   const refresh = () => queryClient.invalidateQueries({ queryKey: passkeysQuery.queryKey })
-
-  const saveProfile = useMutation({
-    mutationFn: () =>
-      unwrap(
-        api.auth.profile.$patch({
-          json: {
-            slug: slug ?? profile.data?.slug ?? undefined,
-            bio: bio ?? profile.data?.bio ?? null,
-            avatarMediaId: avatar === undefined ? (profile.data?.avatarMediaId ?? null) : avatar,
-          },
-        }),
-      ),
-    onSuccess: async () => {
-      setNotice('プロフィールを保存しました。')
-      await queryClient.invalidateQueries({ queryKey: profileQuery.queryKey })
-    },
-  })
 
   const add = useMutation({
     mutationFn: async () => {
@@ -121,56 +103,7 @@ function AccountPage() {
         </div>
       </dl>
 
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold">著者プロフィール</h2>
-        <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600">
-          著者アーカイブページ（/{'{type}'}/author/{'{slug}'}
-          ）に表示される情報です。投稿の著者名からリンクされます。
-        </p>
-        <form
-          className="mt-4 grid max-w-2xl gap-5 border border-neutral-200 bg-white p-5"
-          onSubmit={(event) => {
-            event.preventDefault()
-            setNotice(null)
-            saveProfile.mutate()
-          }}
-        >
-          <Field
-            label="著者スラッグ"
-            hint="著者アーカイブの URL 末尾です。小文字・数字・ハイフンのみ。"
-          >
-            <input
-              className={inputClass}
-              value={slug ?? profile.data?.slug ?? ''}
-              pattern={SLUG_PATTERN.source}
-              onChange={(event) => setSlug(event.target.value)}
-            />
-          </Field>
-          <Field label="プロフィール文 (bio)">
-            <textarea
-              className={inputClass}
-              rows={4}
-              value={bio ?? profile.data?.bio ?? ''}
-              onChange={(event) => setBio(event.target.value)}
-            />
-          </Field>
-          <MediaField
-            label="アバター画像"
-            value={avatar === undefined ? (profile.data?.avatarMediaId ?? null) : avatar}
-            onChange={setAvatar}
-          />
-          {saveProfile.isError && (
-            <Alert tone="error">
-              プロフィールの保存に失敗しました。スラッグの重複がないか確認してください。
-            </Alert>
-          )}
-          <div className="flex justify-end">
-            <Button type="submit" disabled={saveProfile.isPending}>
-              {saveProfile.isPending ? '保存中…' : 'プロフィールを保存'}
-            </Button>
-          </div>
-        </form>
-      </section>
+      <AuthorProfileForm />
 
       <section className="mt-8">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -302,5 +235,89 @@ function AccountPage() {
         onClose={() => setDeleting(null)}
       />
     </div>
+  )
+}
+function AuthorProfileForm() {
+  const { data: initial } = useSuspenseQuery(profileQuery)
+  const queryClient = useQueryClient()
+  const [profile, setProfile] = useState(initial)
+  const [previous, setPrevious] = useState(initial)
+  const save = useEditorSave({
+    value: profile,
+    onSave: async (value) => {
+      // Send only changed fields so an avatar or bio saved from another tab survives.
+      const { profile: updated } = await unwrap(
+        api.auth.profile.$patch({
+          json: {
+            ...(value.slug !== previous.slug && value.slug ? { slug: value.slug } : {}),
+            ...(value.bio !== previous.bio ? { bio: value.bio } : {}),
+            ...(value.avatarMediaId !== previous.avatarMediaId
+              ? { avatarMediaId: value.avatarMediaId }
+              : {}),
+          },
+        }),
+      )
+      setPrevious(value)
+      queryClient.setQueryData(profileQuery.queryKey, updated)
+      return {
+        value: updated,
+        apply: () => {
+          setProfile(updated)
+          setPrevious(updated)
+        },
+      }
+    },
+  })
+  const errors = fieldErrors(save.error)
+  if (save.error instanceof ApiError && save.error.message === 'Author slug already exists') {
+    errors.slug = 'この著者スラッグは使用されています。別のスラッグを入力してください。'
+  }
+  return (
+    <section className="mt-8">
+      <h2 id="author-profile-title" className="text-lg font-semibold">
+        著者プロフィール
+      </h2>
+      <p className="mt-1 max-w-2xl text-sm leading-6 text-neutral-600">
+        著者アーカイブページ（/{'{type}'}/author/{'{slug}'}
+        ）に表示される情報です。投稿の著者名からリンクされます。
+      </p>
+      <form
+        ref={save.formRef}
+        aria-labelledby="author-profile-title"
+        className="mt-4 grid max-w-2xl gap-5 border border-neutral-200 bg-white p-5"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save.submit()
+        }}
+      >
+        <SaveBar save={save} label="プロフィールを保存" error={Object.values(errors)[0]} />
+        <SlugField
+          label="著者スラッグ"
+          name="slug"
+          hint="著者アーカイブの URL 末尾です。小文字・数字・ハイフンのみ。"
+          value={profile.slug ?? ''}
+          required={previous.slug !== null}
+          maxLength={120}
+          error={errors.slug}
+          onChange={(event) => setProfile({ ...profile, slug: event.target.value || null })}
+        />
+        <TextareaField
+          label="プロフィール文 (bio)"
+          name="bio"
+          rows={4}
+          maxLength={1000}
+          showCount
+          value={profile.bio ?? ''}
+          error={errors.bio}
+          onChange={(event) => setProfile({ ...profile, bio: event.target.value || null })}
+        />
+        <MediaField
+          label="アバター画像"
+          error={errors.avatarMediaId}
+          value={profile.avatarMediaId}
+          onChange={(avatarMediaId) => setProfile({ ...profile, avatarMediaId })}
+        />
+      </form>
+    </section>
   )
 }

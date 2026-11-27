@@ -1,10 +1,8 @@
-import { MEDIA_MAX_BYTES, MEDIA_MIME_TYPES } from '@kanso/shared'
+import { MEDIA_MIME_TYPES } from '@kanso/shared'
 import { useQueryClient } from '@tanstack/react-query'
 import { useId, useState } from 'react'
-import { api } from '../../api/client.ts'
 import type { MediaItem } from '../../api/queries.ts'
-import { unwrap } from '../../api/request.ts'
-import { uploadImageVariants } from '../../lib/image-variants.ts'
+import { mediaFileError, uploadMediaFile } from '../../lib/upload-media.ts'
 import { Alert, Button } from '../ui.tsx'
 
 export function UploadDropzone({ onUploaded }: { onUploaded?: (item: MediaItem) => void }) {
@@ -15,28 +13,21 @@ export function UploadDropzone({ onUploaded }: { onUploaded?: (item: MediaItem) 
   const [failures, setFailures] = useState<string[]>([])
 
   async function upload(files: File[]) {
-    const rejected = files.filter(
-      (file) =>
-        file.size > MEDIA_MAX_BYTES ||
-        !MEDIA_MIME_TYPES.includes(file.type as (typeof MEDIA_MIME_TYPES)[number]),
-    )
-    const accepted = files.filter((file) => !rejected.includes(file))
+    const accepted: File[] = []
+    const messages: string[] = []
+    for (const file of files) {
+      const error = mediaFileError(file)
+      if (error) messages.push(`${file.name}: ${error}`)
+      else accepted.push(file)
+    }
     let successCount = 0
-    const messages = rejected.map((file) =>
-      file.size > MEDIA_MAX_BYTES
-        ? `${file.name}: 20 MB を超えています`
-        : `${file.name}: 対応していない形式です`,
-    )
 
     for (const [index, file] of accepted.entries()) {
       setProgress(`${index + 1} / ${accepted.length}`)
       try {
-        const data = await unwrap(api.media.$post({ form: { file } }))
+        const item = await uploadMediaFile(file)
         successCount += 1
-        // Smaller copies for responsive images. The original is already
-        // stored; if this step fails they can be made later from the library.
-        const withVariants = await uploadImageVariants(data.item, file).catch(() => null)
-        onUploaded?.(withVariants ?? data.item)
+        onUploaded?.(item)
       } catch (error) {
         messages.push(
           `${file.name}: ${error instanceof Error ? error.message : 'アップロード失敗'}`,

@@ -75,8 +75,12 @@ test.describe('editorial operations', () => {
     const created = await createPage({ title, slug, status: 'published', bodyJson: body('trash') })
 
     await page.goto(`/_admin/pages/${created.id}`)
-    await page.getByRole('button', { name: '削除', exact: true }).click()
-    await page.getByRole('dialog').getByRole('button', { name: '削除', exact: true }).click()
+    await page.getByRole('button', { name: '固定ページのその他の操作' }).click()
+    await page.getByRole('button', { name: 'ゴミ箱へ移動', exact: true }).click()
+    await page
+      .getByRole('dialog')
+      .getByRole('button', { name: 'ゴミ箱へ移動', exact: true })
+      .click()
     await expect(page).toHaveURL(/\/_admin\/pages\/?$/)
     await expect(page.getByRole('link', { name: title, exact: true })).toHaveCount(0)
     expect((await apiRequest.get(`/${slug}`)).status()).toBe(404)
@@ -146,7 +150,7 @@ test.describe('editorial operations', () => {
     await page.getByLabel('項目 1 のラベル', { exact: true }).fill(label)
     await page.getByLabel('項目 1 のリンク先', { exact: true }).fill('/search')
     await page.getByRole('button', { name: '保存', exact: true }).click()
-    await expect(page).toHaveURL(/\/_admin\/menus\/?$/)
+    await expect(page).toHaveURL(/\/_admin\/menus\/\d+\/?$/)
 
     const visitor = await browser.newContext({ baseURL })
     try {
@@ -303,6 +307,14 @@ test.describe('editorial operations', () => {
     const card = page.locator('article').filter({ hasText: filename })
     await expect(card).toContainText('1200×600', { timeout: 20_000 })
     await expect(card).toContainText('縮小版 2 種', { timeout: 20_000 })
+    await expect(card.getByRole('button', { name: '削除' })).toBeHidden()
+    const more = card.getByRole('button', { name: `${filename} のその他の操作` })
+    await more.click()
+    await expect(card.getByRole('button', { name: '削除' })).toBeVisible()
+    await expect(card.getByRole('button', { name: 'URL コピー' })).toBeVisible()
+    await card.getByRole('button', { name: 'alt 編集' }).press('Escape')
+    await expect(more).toBeFocused()
+    await expect(card.getByRole('button', { name: '削除' })).toBeHidden()
 
     const listed = (await (
       await apiRequest.get('/api/v1/media', { params: { q: filename } })

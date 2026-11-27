@@ -1,37 +1,14 @@
-import { type APIRequestContext, expect, test } from '@playwright/test'
-import { apiLogin, cleanupE2E, ensureAdmin, shareSession, uniqueSuffix } from './helpers.ts'
+import { expect } from '@playwright/test'
+import { test } from './editor-fixtures.ts'
+import { uniqueSuffix } from './helpers.ts'
 
 type FormListResponse = { items: { id: number; slug: string }[] }
 
 test.describe('admin form publishing and submission', () => {
-  let apiRequest: APIRequestContext
-  let apiAuthenticated = false
-
-  test.beforeAll(async ({ playwright }, testInfo) => {
-    const baseURL = testInfo.project.use.baseURL
-    if (typeof baseURL !== 'string') throw new Error('Playwright baseURL is not configured')
-    // A dedicated context: the built-in `request` fixture does not keep its cookie across hooks.
-    apiRequest = await playwright.request.newContext({
-      baseURL,
-      extraHTTPHeaders: { origin: baseURL },
-    })
-    await ensureAdmin(apiRequest)
-    await apiLogin(apiRequest)
-    apiAuthenticated = true
-    await cleanupE2E(apiRequest)
-  })
-
-  test.afterAll(async () => {
-    try {
-      if (apiAuthenticated) await cleanupE2E(apiRequest)
-    } finally {
-      await apiRequest?.dispose()
-    }
-  })
-
   test('publishes and submits an embedded form without JavaScript', async ({
     browser,
     page,
+    api: apiRequest,
   }, testInfo) => {
     const suffix = uniqueSuffix()
     const formName = `E2E Contact ${suffix}`
@@ -40,23 +17,31 @@ test.describe('admin form publishing and submission', () => {
     const pageSlug = `e2e-page-${suffix}`
 
     await test.step('open the admin signed in', async () => {
-      await shareSession(page.context(), apiRequest)
       await page.goto('/_admin/')
       await expect(page.getByRole('heading', { level: 1, name: 'ダッシュボード' })).toBeAttached()
     })
 
     await test.step('create a form with two fields', async () => {
       await page.goto('/_admin/forms/new')
-      await page.getByLabel('名前', { exact: true }).fill(formName)
+      const basics = page
+        .locator('section')
+        .filter({ has: page.getByRole('heading', { name: '基本設定' }) })
+      await basics.getByLabel('名前', { exact: true }).fill(formName)
       await page.getByLabel(/^スラッグ/).fill(formSlug)
       await page.getByLabel('完了メッセージ', { exact: true }).fill('E2E thanks')
       // The empty draft already has one field; add the second one.
       await page.getByRole('button', { name: 'フィールドを追加', exact: true }).click()
 
-      // Per-field labels (名前, 種類, …) carry hints in their accessible names, so scope by row.
+      // Each field row has its own 名前 and 種類.
       const fieldRows = page.locator(
         'div.mt-4.space-y-4 > div.border.border-neutral-200.bg-white.p-5',
       )
+      await expect(fieldRows).toHaveCount(2)
+      await page.getByRole('button', { name: 'フィールドを追加', exact: true }).click()
+      const extra = fieldRows.nth(2)
+      await expect(extra.getByRole('button', { name: 'フィールドを削除' })).toBeHidden()
+      await extra.getByRole('button', { name: 'フィールド 3 のその他の操作' }).click()
+      await extra.getByRole('button', { name: 'フィールドを削除' }).click()
       await expect(fieldRows).toHaveCount(2)
 
       const nameField = fieldRows.nth(0)
@@ -70,8 +55,8 @@ test.describe('admin form publishing and submission', () => {
       await emailField.getByLabel(/^名前/).fill('email')
 
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await expect(page).toHaveURL(/\/_admin\/forms\/?$/)
-      await expect(page.getByRole('link', { name: formName, exact: true })).toBeVisible()
+      await expect(page).toHaveURL(/\/_admin\/forms\/\d+\/?$/)
+      await expect(page.getByText('保存しました', { exact: true })).toBeVisible()
     })
 
     await test.step('publish a page with the form-picker dialog', async () => {
@@ -82,7 +67,7 @@ test.describe('admin form publishing and submission', () => {
 
       const editor = page.locator('.editor-content .ProseMirror')
       await editor.fill('Contact us')
-      await page.getByRole('button', { name: 'フォーム', exact: true }).click()
+      await page.getByRole('combobox', { name: '挿入', exact: true }).selectOption('form')
 
       const dialog = page.getByRole('dialog')
       await expect(dialog).toBeVisible()
@@ -91,8 +76,8 @@ test.describe('admin form publishing and submission', () => {
       await expect(page.locator('.editor-form-block')).toHaveText(`フォーム: ${formSlug}`)
 
       await page.getByRole('button', { name: '保存', exact: true }).click()
-      await expect(page).toHaveURL(/\/_admin\/pages\/?$/)
-      await expect(page.getByRole('link', { name: pageTitle, exact: true })).toBeVisible()
+      await expect(page).toHaveURL(/\/_admin\/pages\/\d+\/?$/)
+      await expect(page.getByLabel('タイトル', { exact: true })).toHaveValue(pageTitle)
     })
 
     await test.step('validate and submit the public form without page JavaScript', async () => {

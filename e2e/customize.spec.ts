@@ -113,7 +113,7 @@ test.describe('customize editor', () => {
       const footerText = `E2E footer ${suffix}`
       await page.getByRole('button', { name: 'テーマ設定', exact: true }).click()
       await page.getByLabel('Footer text', { exact: true }).fill(footerText)
-      await page.getByRole('button', { name: 'テーマ設定を保存', exact: true }).click()
+      await page.getByLabel('Footer text', { exact: true }).press('Control+s')
       // Saving clears the dirty state, which disables the save button again.
       await expect(
         page.getByRole('button', { name: 'テーマ設定を保存', exact: true }),
